@@ -4,10 +4,10 @@
 name = "pks"
 version = "0.2.16"
 edition = "2021"
-description = "Welcome! Please see https://github.com/alexevanczuk/packs for more information!"
+description = "Welcome! Please see https://github.com/rubyatscale/pks for more information!"
 license = "MIT"
 default-run = "pks"
-repository = "https://github.com/alexevanczuk/packs"
+repository = "https://github.com/rubyatscale/pks"
 
 # This runs all of the optimizations, but doesn't strip debug symbols,
 # such as the name of the methods
