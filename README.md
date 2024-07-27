@@ -6,6 +6,9 @@
 
 A 100% Rust implementation of [packwerk](https://github.com/Shopify/packwerk), a gradual modularization platform for Ruby.
 
+# Fork
+This repo was forked directly from https://github.com/alexevanczuk/packs
+
 # Goals:
 ## Serve as a drop-in replacement for `packwerk` on most projects
 - Currently can serve as a drop-in replacement on Gusto's extra-large Rails monolith
@@ -101,7 +104,7 @@ There are still some known behavioral differences between `pks` and `packwerk`. 
 ## Default Namespaces
 `pks` supports Zeitwerk default namespaces. However, since it doesn't have access to the Rails runtime, you need to explicitly specify the namespaces in `packwerk.yml`.
 
-For example, if you're using [`pks-rails`](https://github.com/rubyatscale/packs-rails) and [`automatic_namespaces`](https://github.com/gap777/automatic_namespaces) to configure your default namespaces, and you have
+For example, if you're using [`packs-rails`](https://github.com/rubyatscale/packs-rails) and [`automatic_namespaces`](https://github.com/gap777/automatic_namespaces) to configure your default namespaces, and you have
 - `pks/foo/app/models/bar.rb` which is configured to define `Foo::Bar`
 - `pks/foo/app/domain/baz.rb` which is configured to define `Foo::Baz`
 
