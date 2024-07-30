@@ -30,6 +30,7 @@ use crate::packs::pack::write_pack_to_disk;
 
 // Internal imports
 pub(crate) use self::checker::Violation;
+use self::creator::CreateResult;
 pub(crate) use self::pack_set::PackSet;
 pub(crate) use self::parsing::process_files_with_cache;
 pub(crate) use self::parsing::ruby::experimental::get_experimental_constant_resolver;
@@ -54,7 +55,15 @@ pub fn create(
     configuration: &Configuration,
     name: String,
 ) -> anyhow::Result<()> {
-    creator::create(configuration, name)
+    match creator::create(configuration, &name)? {
+        CreateResult::AlreadyExists => {
+            println!("`{}` already exists!", &name);
+        }
+        CreateResult::Success => {
+            println!("Successfully created `{}`!", &name);
+        }
+    }
+    Ok(())
 }
 
 pub fn check(

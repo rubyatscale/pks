@@ -7,14 +7,19 @@ use crate::packs::{
 
 use super::Configuration;
 
+pub enum CreateResult {
+    Success,
+    AlreadyExists,
+}
+
 pub fn create(
     configuration: &Configuration,
-    name: String,
-) -> anyhow::Result<()> {
+    name: &str,
+) -> anyhow::Result<CreateResult> {
     let existing_pack = configuration.pack_set.for_pack(&name);
     if existing_pack.is_ok() {
         println!("`{}` already exists!", &name);
-        return Ok(());
+        return Ok(CreateResult::AlreadyExists);
     }
     let new_pack_path =
         configuration.absolute_root.join(&name).join("package.yml");
@@ -50,6 +55,5 @@ See https://github.com/rubyatscale/packs#readme for more info!",
     let readme_path = configuration.absolute_root.join(&name).join("README.md");
     std::fs::write(readme_path, readme).context("Failed to write README.md")?;
 
-    println!("Successfully created `{}`!", name);
-    Ok(())
+    Ok(CreateResult::Success)
 }
