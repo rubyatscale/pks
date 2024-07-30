@@ -180,35 +180,64 @@ fn build_violation_checker_configuration(
     violation_checker_overrides: Option<&CheckerOverrides>,
 ) -> HashMap<CheckerType, CheckerConfiguration> {
     let mut checker_configurations = HashMap::new();
-    checker_configurations.insert(
-        CheckerType::Dependency,
-        CheckerConfiguration::new(CheckerType::Dependency),
-    );
-    checker_configurations.insert(
-        CheckerType::Privacy,
-        CheckerConfiguration::new(CheckerType::Privacy),
-    );
-    checker_configurations.insert(
-        CheckerType::Layer,
-        CheckerConfiguration::new(CheckerType::Layer),
-    );
-    checker_configurations.insert(
-        CheckerType::Visibility,
-        CheckerConfiguration::new(CheckerType::Visibility),
-    );
-    let mut checker_configuration =
+    let mut folder_privacy_checker_configuration =
         CheckerConfiguration::new(CheckerType::FolderPrivacy);
+    let mut privacy_checker_configuration =
+        CheckerConfiguration::new(CheckerType::Privacy);
+    let mut dependency_checker_configuration =
+        CheckerConfiguration::new(CheckerType::Dependency);
+    let mut layer_checker_configuration =
+        CheckerConfiguration::new(CheckerType::Layer);
+    let mut visibility_checker_configuration =
+        CheckerConfiguration::new(CheckerType::Visibility);
+
     if let Some(violation_checker_overrides) = violation_checker_overrides {
         if let Some(error_template) = violation_checker_overrides
             .folder_privacy_error_template
             .clone()
         {
-            checker_configuration.override_error_template =
+            folder_privacy_checker_configuration.override_error_template =
+                Some(error_template);
+        }
+        if let Some(error_template) =
+            violation_checker_overrides.privacy_error_template.clone()
+        {
+            privacy_checker_configuration.override_error_template =
+                Some(error_template);
+        }
+        if let Some(error_template) =
+            violation_checker_overrides.layer_error_template.clone()
+        {
+            layer_checker_configuration.override_error_template =
+                Some(error_template);
+        }
+        if let Some(error_template) = violation_checker_overrides
+            .visibility_error_template
+            .clone()
+        {
+            visibility_checker_configuration.override_error_template =
+                Some(error_template);
+        }
+        if let Some(error_template) = violation_checker_overrides
+            .dependency_error_template
+            .clone()
+        {
+            dependency_checker_configuration.override_error_template =
                 Some(error_template);
         }
     }
+    checker_configurations.insert(
+        CheckerType::FolderPrivacy,
+        folder_privacy_checker_configuration,
+    );
     checker_configurations
-        .insert(CheckerType::FolderPrivacy, checker_configuration);
+        .insert(CheckerType::Dependency, dependency_checker_configuration);
+    checker_configurations
+        .insert(CheckerType::Privacy, privacy_checker_configuration);
+    checker_configurations
+        .insert(CheckerType::Layer, layer_checker_configuration);
+    checker_configurations
+        .insert(CheckerType::Visibility, visibility_checker_configuration);
 
     checker_configurations
 }

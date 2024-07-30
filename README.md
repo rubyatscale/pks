@@ -82,6 +82,7 @@ Instructions:
 - Confirm the output of `git diff` is empty
 - Please file an issue if it's not!
 
+
 # New to Rust?
 Me too! This is my first Rust project, so I'd love to have feedback, advice, and contributions!
 
@@ -154,6 +155,32 @@ enforcement_globs_ignore:
   - "!packs/pack3/**/*"
   reason: "The other dependency violations are fine as those packs will be absorbed into this one."
 ```
+
+## "check" error messages
+The error messages resulting from running `pks check` can be customized with mustache-style interpolation. The available
+variables are:
+- violation_name
+- referencing_pack_name
+- defining_pack_name
+- constant_name
+- reference_location
+- referencing_pack_relative_yml
+
+Layer violations also have 
+- defining_layer
+- referencing_layer
+
+Example:
+packwerk.yml
+```yml
+checker_overrides:
+  folder_privacy_error_template: "{{reference_location}} {{violation_name}} / Product Service Privacy Violation: `{{constant_name}}` belongs to the `{{defining_pack_name}}` product service, which is not visible to `{{referencing_pack_name}}` as it is a different product service. See https://go/pks-folder-privacy"
+  layer_error_template: "{{reference_location}}Layer violation: `{{constant_name}}` belongs to `{{defining_pack_name}}` (whose layer is `{{defining_layer}}`) cannot be accessed from `{{referencing_pack_name}}` (whose layer is `{{referencing_layer}}`). See https://go/pks-layer"
+  visibility_error_template: "{{reference_location}}Visibility violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is not visible to `{{referencing_pack_name}}`. See https://go/pks-visibility"
+  privacy_error_template: "{{reference_location}}Privacy violation: `{{constant_name}}` is private to `{{defining_pack_name}}`, but referenced from `{{referencing_pack_name}}`. See https://go/pks-privacy"
+  dependency_error_template: "{{reference_location}}Dependency violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, but `{{referencing_pack_relative_yml}}` does not specify a dependency on `{{defining_pack_name}}`. See https://go/pks-dependency"
+```
+
 
 # Benchmarks
 See [BENCHMARKS.md](https://github.com/rubyatscale/pks/blob/main/BENCHMARKS.md)
