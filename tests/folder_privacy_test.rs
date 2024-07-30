@@ -19,7 +19,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_check_with_overrides() -> Result<(), Box<dyn Error>> {
+fn test_check_with_error_template_overrides() -> Result<(), Box<dyn Error>> {
     Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/folder_privacy_violations_with_overrides")

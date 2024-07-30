@@ -80,6 +80,10 @@ pub(crate) struct RawConfiguration {
 pub struct CheckerOverrides {
     /// Mustache style error message template
     pub folder_privacy_error_template: Option<String>,
+    pub privacy_error_template: Option<String>,
+    pub layer_error_template: Option<String>,
+    pub visibility_error_template: Option<String>,
+    pub dependency_error_template: Option<String>,
 }
 
 pub(crate) fn get(absolute_root: &Path) -> anyhow::Result<RawConfiguration> {
