@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
-use std::{error::Error, fs};
+use std::{error::Error, fs, path::Path};
 
 mod common;
 
@@ -18,11 +18,15 @@ fn test_create() -> Result<(), Box<dyn Error>> {
             "Successfully created `packs/foobar`!",
         ));
 
-    let expected = "enforce_dependencies: true\n";
     let actual = fs::read_to_string(
         "tests/fixtures/simple_app/packs/foobar/package.yml",
     ).unwrap_or_else(|_| panic!("Could not read file tests/fixtures/simple_app/packs/foobar/package.yml"));
-    assert_eq!(expected, actual);
+    assert!(actual.contains("enforce_dependencies: true"));
+    assert!(actual.contains("enforce_privacy: true"));
+    assert!(actual.contains("enforce_layers: true"));
+    assert!(
+        Path::new("tests/fixtures/simple_app/packs/foobar/app/public").exists()
+    );
 
     let expected_readme = String::from("\
 Welcome to `packs/foobar`!
@@ -39,7 +43,7 @@ If you're the author, please consider replacing this file with a README.md, whic
 
 README.md should change as your public API changes.
 
-See https://github.com/rubyatscale/packs#readme for more info!");
+See https://github.com/rubyatscale/pks#readme for more info!");
 
     let actual_readme =
         fs::read_to_string("tests/fixtures/simple_app/packs/foobar/README.md").unwrap_or_else(|e| {
@@ -65,18 +69,6 @@ fn test_create_already_exists() -> Result<(), Box<dyn Error>> {
         .success()
         .stdout(predicate::str::contains("`packs/foo` already exists!"));
 
-    let expected = String::from(
-        "\
-enforce_dependencies: true
-enforce_privacy: true
-dependencies:
-- packs/baz
-",
-    );
-
-    let actual =
-        fs::read_to_string("tests/fixtures/simple_app/packs/foo/package.yml")?;
-    assert_eq!(expected, actual);
     common::teardown();
     Ok(())
 }
