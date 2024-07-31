@@ -35,8 +35,22 @@ pub fn create(
     )?;
 
     write_pack_to_disk(&new_pack)?;
-    std::fs::create_dir_all(new_pack_path.join("app/public/"))
-        .context("failed to create app/public")?;
+    let pack_name =
+        &name.split('/').last().context("unable to find pack name")?;
+    std::fs::create_dir_all(new_pack_path.join("app/public/").join(pack_name))
+        .context(format!("failed to create app/public/{}", &name))?;
+    std::fs::create_dir_all(
+        new_pack_path.join("app/services/").join(pack_name),
+    )
+    .context(format!("failed to create app/services/{}", &name))?;
+    if is_rails(configuration) {
+        std::fs::create_dir_all(new_pack_path.join("app/controllers/"))
+            .context("failed to create app/controllers")?;
+    }
+    if is_rspec(configuration) {
+        std::fs::create_dir_all(new_pack_path.join("spec"))
+            .context("failed to create spec")?;
+    }
 
     let readme = readme(name);
     let readme_path = &new_pack_path.join("README.md");
@@ -64,4 +78,19 @@ README.md should change as your public API changes.
 See https://github.com/rubyatscale/pks#readme for more info!",
     pack_name
 )
+}
+
+fn is_rails(configuration: &Configuration) -> bool {
+    gemfile_contains(configuration, "rails")
+}
+
+fn is_rspec(configuration: &Configuration) -> bool {
+    gemfile_contains(configuration, "rspec")
+}
+
+fn gemfile_contains(configuration: &Configuration, val: &str) -> bool {
+    match std::fs::read_to_string(configuration.absolute_root.join("Gemfile")) {
+        Ok(as_string) => as_string.contains(val),
+        _ => false,
+    }
 }
