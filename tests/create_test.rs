@@ -24,9 +24,15 @@ fn test_create() -> Result<(), Box<dyn Error>> {
     assert!(actual.contains("enforce_dependencies: true"));
     assert!(actual.contains("enforce_privacy: true"));
     assert!(actual.contains("enforce_layers: true"));
-    assert!(
-        Path::new("tests/fixtures/simple_app/packs/foobar/app/public").exists()
-    );
+    assert!(Path::new(
+        "tests/fixtures/simple_app/packs/foobar/app/public/foobar"
+    )
+    .exists());
+    assert!(Path::new(
+        "tests/fixtures/simple_app/packs/foobar/app/services/foobar"
+    )
+    .exists());
+    assert!(Path::new("tests/fixtures/simple_app/packs/foobar/spec").exists());
 
     let expected_readme = String::from("\
 Welcome to `packs/foobar`!
