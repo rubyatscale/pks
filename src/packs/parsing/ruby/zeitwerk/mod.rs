@@ -186,13 +186,15 @@ struct ConstantResolverCache {
 fn get_constant_resolver_cache(cache_dir: &Path) -> ConstantResolverCache {
     let path = cache_dir.join("constant_resolver.json");
     if path.exists() {
-        let file = std::fs::File::open(path).unwrap();
-        let reader = std::io::BufReader::new(file);
-        serde_json::from_reader(reader).unwrap()
-    } else {
-        ConstantResolverCache {
-            file_definition_map: HashMap::new(),
+        if let Ok(file) = std::fs::File::open(path) {
+            let reader = std::io::BufReader::new(file);
+            if let Ok(cache) = serde_json::from_reader(reader) {
+                cache
+            }
         }
+    }
+    ConstantResolverCache {
+        file_definition_map: HashMap::new(),
     }
 }
 
