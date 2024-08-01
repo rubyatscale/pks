@@ -62,6 +62,9 @@ Options:
 # Installation
 See [INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md)
 
+# Violation types
+See [VIOLATION_TYPES.md](https://github.com/rubyatscale/pks/blob/main/VIOLATION_TYPES.md)
+
 # Using with VSCode/RubyMine Extension
 `packwerk` has a VSCode Extension: https://github.com/rubyatscale/packwerk-vscode/tree/main
 
