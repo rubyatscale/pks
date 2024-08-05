@@ -12,7 +12,7 @@ use super::{checker::ViolationIdentifier, pack::Pack, Configuration};
 pub struct PackSet {
     pub packs: Vec<Pack>,
     indexed_packs: HashMap<String, Pack>,
-    owning_pack_name_for_file: HashMap<PathBuf, String>,
+    pub owning_pack_name_for_file: HashMap<PathBuf, String>,
     // For now, we keep track of all violations so that we can diff them and only
     // present the ones that are not recorded.
     // Eventually, we'll need to rewrite these to disk, in which case we'll need

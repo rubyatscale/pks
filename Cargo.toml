@@ -30,8 +30,9 @@ clap_derive = "4.2.0" # cli
 itertools = "0.13.0" # tools for iterating over iterable things
 jwalk = "0.8.1" # for walking the file tree
 path-clean = "1.0.1" # Pathname#cleaname in Ruby
-rayon = "1.7.0" # for parallel iteration
+rayon = "1.10.0" # for parallel iteration
 regex = "1.7.3"
+ruby-references = { path = "../ruby-references" }
 serde = { version = "~1", features = ["derive"] } # de(serialization)
 serde_yaml = "0.9.19" # de(serialization)
 serde_json = "1.0.96" # de(serialization)
