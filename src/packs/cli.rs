@@ -83,7 +83,8 @@ enum Command {
     },
 
     #[clap(
-        about = "Update package_todo.yml files with the current violations"
+        about = "Update package_todo.yml files with the current violations",
+        alias = "update-todo"
     )]
     Update,
 
