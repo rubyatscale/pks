@@ -6,14 +6,24 @@ mod common;
 use pretty_assertions::assert_eq;
 
 #[test]
-// This and the next test are run in serial because they both use the same fixtures.
 #[serial]
-fn test_update() -> Result<(), Box<dyn Error>> {
+// This and the next test are run in serial because they both use the same fixtures.
+fn update() -> Result<(), Box<dyn Error>> {
+    test_update("update")
+}
+
+#[test]
+#[serial]
+fn update_todo() -> Result<(), Box<dyn Error>> {
+    test_update("update-todo")
+}
+
+fn test_update(command: &str) -> Result<(), Box<dyn Error>> {
     Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
-        .arg("update")
+        .arg(command)
         .assert()
         .success()
         .stdout(predicate::str::contains(
