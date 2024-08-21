@@ -8,7 +8,7 @@ fn assert_check_unused_dependencies(cmd: &str) -> Result<(), Box<dyn Error>> {
         .arg("--project-root")
         .arg("tests/fixtures/app_with_dependency_cycles")
         .arg("--debug")
-        .arg(&cmd)
+        .arg(cmd)
         .assert()
         .failure()
         .stdout(predicate::str::contains(
@@ -18,8 +18,8 @@ fn assert_check_unused_dependencies(cmd: &str) -> Result<(), Box<dyn Error>> {
             "packs/foo depends on packs/bar but does not use it",
         ))
         .stderr(predicate::str::contains(
-           format!("Error: Found 3 unnecessary dependencies. Run `packs {}| --auto-correct` to remove them.", &cmd),
-        ));
+           "Error: Found 3 unused dependencies. Run `packs check-unused-dependencies --auto-correct` to remove them.")
+        );
     Ok(())
 }
 
@@ -33,14 +33,30 @@ fn test_check_unused_dependencies() -> Result<(), Box<dyn Error>> {
     assert_check_unused_dependencies("check-unused-dependencies")
 }
 
+fn assert_auto_correct_unused_dependencies(
+    cmd: &str,
+    flag: &str,
+) -> Result<(), Box<dyn Error>> {
+    common::set_up_fixtures();
 
-fn assert_auto_correct_unused_dependencies(cmd: &str, flag: &str) -> Result<(), Box<dyn Error>> {
+    let expected_before_autocorrect = [
+        "enforce_dependencies: true",
+        "enforce_privacy: true",
+        "layer: technical_services",
+        "dependencies:",
+        "- packs/bar",
+        "- packs/baz\n",
+    ]
+    .join("\n");
+    let foo_package_yml = fs::read_to_string("tests/fixtures/app_with_unnecessary_dependencies/packs/foo/package.yml").unwrap();
+    assert_eq!(foo_package_yml, expected_before_autocorrect);
+
     Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_unnecessary_dependencies")
         .arg("--debug")
-        .arg(&cmd)
-        .arg(&flag)
+        .arg(cmd)
+        .arg(flag)
         .assert()
         .success();
 
@@ -60,10 +76,19 @@ fn assert_auto_correct_unused_dependencies(cmd: &str, flag: &str) -> Result<(), 
 
 #[test]
 fn test_auto_correct_unnecessary_dependencies() -> Result<(), Box<dyn Error>> {
-    assert_auto_correct_unused_dependencies("check-unused-dependencies", "--auto-correct")?;
+    assert_auto_correct_unused_dependencies(
+        "check-unused-dependencies",
+        "--auto-correct",
+    )?;
     assert_auto_correct_unused_dependencies("check-unused-dependencies", "-a")?;
-    assert_auto_correct_unused_dependencies("check-unnecessary-dependencies", "-a")?;
-    assert_auto_correct_unused_dependencies("check-unnecessary-dependencies", "--auto-correct")
+    assert_auto_correct_unused_dependencies(
+        "check-unnecessary-dependencies",
+        "-a",
+    )?;
+    assert_auto_correct_unused_dependencies(
+        "check-unnecessary-dependencies",
+        "--auto-correct",
+    )
 }
 
 #[test]
