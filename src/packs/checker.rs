@@ -381,13 +381,14 @@ pub(crate) fn check_unnecessary_dependencies(
             "Found 1 unnecessary dependency".to_string()
         } else {
             format!(
-                "Found {} unnecessary dependencies",
+                "Found {} unused dependencies",
                 unnecessary_dependencies.len()
             )
         };
         bail!(
-            "{}. Run command with `--auto-correct` to remove them.",
+            "{}. Run `{} check-unused-dependencies --auto-correct` to remove them.",
             found_message,
+            bin_locater::packs_bin_name(),
         );
     }
 }

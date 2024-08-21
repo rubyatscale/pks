@@ -109,10 +109,11 @@ enum Command {
     },
 
     #[clap(
-        about = "Check for dependencies that when removed produce no violations."
+        about = "Check for dependencies that when removed produce no violations.",
+        alias = "check-unnecessary-dependencies"
     )]
-    CheckUnnecessaryDependencies {
-        #[arg(long)]
+    CheckUnusedDependencies {
+        #[arg(short, long)]
         auto_correct: bool,
     },
 
@@ -263,7 +264,7 @@ pub fn run() -> anyhow::Result<()> {
             packs::validate(&configuration)
             // Err("💡 Please use `packs check` to detect dependency cycles and run other configuration validations".into())
         }
-        Command::CheckUnnecessaryDependencies { auto_correct } => {
+        Command::CheckUnusedDependencies { auto_correct } => {
             packs::check_unnecessary_dependencies(&configuration, auto_correct)
         }
         Command::UpdateDependenciesForConstant { constant } => Ok(
