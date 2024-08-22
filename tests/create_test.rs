@@ -7,6 +7,8 @@ mod common;
 
 #[test]
 fn test_create() -> Result<(), Box<dyn Error>> {
+    common::delete_foobar();
+
     Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
