@@ -61,9 +61,9 @@ fn assert_auto_correct_unused_dependencies(
         .success();
 
     let expected_autocorrect = [
-        "enforce_dependencies: true",
         "enforce_privacy: true",
         "layer: technical_services",
+        "enforce_dependencies: true",
         "dependencies:",
         "- packs/bar\n",
     ]

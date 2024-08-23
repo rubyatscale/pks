@@ -17,6 +17,9 @@ use super::{
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Pack {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+
     #[serde(skip)]
     pub yml: PathBuf,
 
@@ -32,7 +35,7 @@ pub struct Pack {
         serialize_with = "serialize_checker_setting",
         deserialize_with = "deserialize_checker_setting"
     )]
-    pub enforce_dependencies: Option<CheckerSetting>,
+    pub enforce_folder_privacy: Option<CheckerSetting>,
 
     #[serde(
         default,
@@ -59,10 +62,15 @@ pub struct Pack {
     pub enforce_layers: Option<CheckerSetting>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner: Option<String>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_checker_setting",
+        deserialize_with = "deserialize_checker_setting"
+    )]
+    pub enforce_dependencies: Option<CheckerSetting>,
 
     #[serde(
         default,
@@ -101,14 +109,6 @@ pub struct Pack {
         serialize_with = "serialize_sorted_option_hashset_of_strings"
     )]
     pub visible_to: Option<HashSet<String>>,
-
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_checker_setting",
-        deserialize_with = "deserialize_checker_setting"
-    )]
-    pub enforce_folder_privacy: Option<CheckerSetting>,
 
     #[serde(
         default,
@@ -513,8 +513,8 @@ foobar: true
         let actual = reserialize_pack(pack_yml);
 
         let expected = r#"
-enforce_dependencies: strict
 enforce_privacy: true
+enforce_dependencies: strict
 dependencies:
 - packs/a
 - packs/b
@@ -626,8 +626,8 @@ enforce_dependencies: true
         let actual = reserialize_pack(pack_yml);
 
         let expected = r#"
-enforce_dependencies: true
 owner: Foobar
+enforce_dependencies: true
 "#
         .trim_start();
 
