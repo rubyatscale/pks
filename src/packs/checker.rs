@@ -44,7 +44,7 @@ pub struct ViolationIdentifier {
 }
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
-    message: String,
+    pub message: String,
     pub identifier: ViolationIdentifier,
 }
 
@@ -66,7 +66,7 @@ pub(crate) trait ValidatorInterface {
 pub struct CheckAllResult {
     reportable_violations: HashSet<Violation>,
     stale_violations: Vec<ViolationIdentifier>,
-    strict_mode_violations: Vec<ViolationIdentifier>,
+    strict_mode_violations: HashSet<Violation>,
 }
 
 impl CheckAllResult {
@@ -99,7 +99,8 @@ impl CheckAllResult {
 
         if !self.strict_mode_violations.is_empty() {
             for v in self.strict_mode_violations.iter() {
-                let error_message = build_strict_violation_message(v);
+                let error_message =
+                    build_strict_violation_message(&v.identifier);
                 writeln!(f, "{}", error_message)?;
             }
         }
@@ -154,7 +155,6 @@ impl<'a> CheckAllBuilder<'a> {
             strict_mode_violations: self
                 .build_strict_mode_violations()
                 .into_iter()
-                .cloned()
                 .collect(),
         })
     }
@@ -239,12 +239,12 @@ impl<'a> CheckAllBuilder<'a> {
         }
     }
 
-    fn build_strict_mode_violations(&self) -> Vec<&'a ViolationIdentifier> {
+    fn build_strict_mode_violations(&self) -> Vec<Violation> {
         self.found_violations
             .violations
             .iter()
             .filter(|v| v.identifier.strict)
-            .map(|v| &v.identifier)
+            .cloned()
             .collect()
     }
 }
@@ -508,6 +508,8 @@ fn remove_reference_to_dependency(
 }
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::packs::checker::{
         CheckAllResult, Violation, ViolationIdentifier,
     };
@@ -540,7 +542,7 @@ mod tests {
                 }
             ].iter().cloned().collect(),
             stale_violations: Vec::new(),
-            strict_mode_violations: Vec::new(),
+            strict_mode_violations: HashSet::new(),
         };
 
         let expected_output = "2 violation(s) detected:
