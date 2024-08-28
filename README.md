@@ -4,15 +4,21 @@
 [![CI](https://github.com/rubyatscale/pks/actions/workflows/ci.yml/badge.svg)](https://github.com/rubyatscale/pks/actions)
 [![Security Audit](https://github.com/rubyatscale/pks/actions/workflows/audit.yml/badge.svg)](https://github.com/rubyatscale/pks/actions?query=workflow%3A%22Security+audit%22++)
 
-A 100% Rust implementation of [packwerk](https://github.com/Shopify/packwerk), a gradual modularization platform for Ruby.
+A 100% Rust implementation of [packwerk](https://github.com/Shopify/packwerk) and [packwerk-extensions](https://github.com/rubyatscale/packwerk-extensions), a gradual modularization platform for Ruby.
+
+Currently, it ships the following checkers to help improve the boundaries between packages. These checkers are:
+- A `dependency` checker requires that a pack specifies packs on which it depends. Cyclic dependencies are not allowed. See [packwerk](https://github.com/Shopify/packwerk)
+- A `privacy` checker that ensures other packages are using your package's public API
+- A `visibility` checker that allows packages to be private except to an explicit group of other packages.
+- A `folder_privacy` checker that allows packages to their sibling packs and parent pack (to be used in an application that uses folder packs)
+- A `layer` (formerly `architecture`) checker that allows packages to specify their "layer" and requires that each layer only communicate with layers below it.
+
+See [Checkers](CHECKERS.md) for detailed descriptions.
 
 # Fork
 This repo was forked directly from https://github.com/alexevanczuk/packs
 
 # Goals:
-## Serve as a drop-in replacement for `packwerk` on most projects
-- Currently can serve as a drop-in replacement on Gusto's extra-large Rails monolith
-- This is a work in progress! Please see [Verification](#verification) for instructions on how to verify the output of `pks` is the same as `packwerk`.
 
 ## Run 20x faster than `packwerk` on most projects
 - Currently ~10-20x as fast as the ruby implementation. See [BENCHMARKS.md](https://github.com/rubyatscale/pks/blob/main/BENCHMARKS.md).
@@ -40,7 +46,7 @@ Commands:
   update                          Update package_todo.yml files with the current violations
   validate                        Look for validation errors in the codebase
   add-dependency                  Add a dependency from one pack to another
-  check-unnecessary-dependencies  Check for dependencies that when removed produce no violations.
+  check-unused-dependencies       Check for dependencies that when removed produce no violations.
   lint-package-yml-files          Lint package.yml files
   expose-monkey-patches           Expose monkey patches of the Ruby stdlib, gems your app uses, and your application itself
   delete-cache                    `rm -rf` on your cache directory, default `tmp/cache/packwerk`
@@ -59,6 +65,11 @@ Options:
   -V, --version                      Print version
 ```
 
+
+# Fixing `pks check` privacy and dependency violations
+[Violation Flow Chart](https://drive.google.com/file/d/1Y1x0ncF6EsJxj9fM2wm-k35auXaxRjEB/view)
+
+
 # Installation
 See [INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md)
 
@@ -72,25 +83,6 @@ Using the extension with `pks` is straightforward and results in a much more res
 Directions:
 - Follow [INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md) instructions to install `pks`
 - Follow the [configuration](https://github.com/rubyatscale/packwerk-vscode/tree/main#configuration) directions to configure the extension to use `pks` instead of the ruby gem by setting the executable to `pks check`
-
-# Verification
-As `pks` is still a work-in-progress, it's possible it will not produce the same results as the ruby implementation (see [Not Yet Supported](#not-yet-supported)). If so, please file an issue – I'd love to try to support your use case!
-
-Instructions:
-- Follow the directions above to install `pks`
-- Run `pks update`
-- Confirm the output of `git diff` is empty
-- Please file an issue if it's not!
-
-
-# New to Rust?
-Me too! This is my first Rust project, so I'd love to have feedback, advice, and contributions!
-
-Rust is a low-level language with high-level abstractions, a rich type system, with a focus on memory safety through innovative compile-time checks on memory usage.
-
-If you're new to Rust, don't be intimidated! [https://www.rust-lang.org](https://www.rust-lang.org/learn) has tons of great learning resources.
-
-If you'd like to contribute but don't know where to start, please reach out! I'd love to help you get started.
 
 # Not yet supported
 - custom inflections
@@ -114,46 +106,6 @@ You'll need to specify the default namespaces in `packwerk.yml` like so:
 autoload_roots:
   packs/foo/app/models: "::Foo"
   packs/foo/app/domain: "::Foo"
-```
-
-## Enforcement Globs Ignore
-`enforcement_globs_ignore` can be used to specify gitignore-style rules for not enforcing violations.
-
-### Examples
-
-```yml
-# packs/product_services/serv1/foo/package.yml
-enforce_privacy: true
-enforce_visibility: true
-
-enforcement_globs_ignore:
-- enforcements:
-  - privacy
-  - visiblity
-  ignores:
-  - "**/*"
-  # Enforce incoming privacy and visibility violation references _only_ in `pks/product_services/serv1/**/*`
-  - "!packs/product_services/serv1/**/*"
-  reason: "It was decided only to fix incoming violations from serv1. See ticket #232"
-```
-
-```yml
-# packs/pack2/package.yml
-enforce_dependencies: true
-dependencies:
-# not required because of the below enforcement_globs_ignore
-# - packs/pack1 
-# required because of the enforcement_globs_ignore exception line 
-  - packs/pack3 
-
-enforcement_globs_ignore:
-- enforcements:
-  - dependency
-  ignores:
-  - "**/*"
-  # Enforce outgoing dependency violation references _only_ to `pks/pack3/**/*`
-  - "!packs/pack3/**/*"
-  reason: "The other dependency violations are fine as those packs will be absorbed into this one."
 ```
 
 ## "check" error messages
@@ -186,6 +138,7 @@ checker_overrides:
 See [BENCHMARKS.md](https://github.com/rubyatscale/pks/blob/main/BENCHMARKS.md)
 
 # Kudos
+- @alexevanczuk for https://github.com/alexevanczuk/packs
 - Current (@gmcgibbon, @rafaelfranca), and Ex-Shopifolks (@exterm, @wildmaples) for open-sourcing and maintaining `packwerk`
 - Gusties, and the [Ruby/Rails Modularity Slack Server](https://join.slack.com/t/rubymod/shared_invite/zt-1dgyrxji9-sihGNX43mVh5T6tw18hFaQ), for continued feedback and support
 - @mzruya for the initial implementation and Rust inspiration

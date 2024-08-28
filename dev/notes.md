@@ -5,8 +5,8 @@
 - Privacy violation inversion?
 
 ## Performance
-Although `packs` is intended to be fast, there are ways it can be made a lot faster!
-- Conditional cache usage. For example, implemented as an LSP, packs could always use cache and only bust specific caches (asychronously) when certain events (e.g. file changes) are received.
+Although `pks` is intended to be fast, there are ways it can be made a lot faster!
+- Conditional cache usage. For example, implemented as an LSP, pks could always use cache and only bust specific caches (asychronously) when certain events (e.g. file changes) are received.
 - By using modified time, we can avoid opening the entire file and parsing it and calculating the md5 hash. It's possible this would not be a meaningful performance improvement.
 
 ### Improved use of references (less cloning)
