@@ -66,10 +66,6 @@ Options:
 ```
 
 
-# Fixing `pks check` privacy and dependency violations
-[Violation Flow Chart](https://drive.google.com/file/d/1Y1x0ncF6EsJxj9fM2wm-k35auXaxRjEB/view)
-
-
 # Installation
 See [INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md)
 
