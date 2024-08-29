@@ -167,6 +167,25 @@ fn test_check_with_package_todo_file() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_check_with_package_todo_file_csv() -> Result<(), Box<dyn Error>> {
+    Command::cargo_bin("pks")?
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_package_todo")
+        .arg("--debug")
+        .arg("check")
+        .arg("-o")
+        .arg("csv")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
+        .stdout(predicate::str::contains("No violations detected!"));
+
+    common::teardown();
+
+    Ok(())
+}
+
+#[test]
 fn test_check_with_package_todo_file_ignoring_recorded_violations(
 ) -> Result<(), Box<dyn Error>> {
     let output = Command::cargo_bin("pks")?
@@ -302,6 +321,26 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
         ))
         .stdout(predicate::str::contains(
             "packs/foo cannot have dependency violations on packs/bar because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
+        ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
+    Command::cargo_bin("pks")
+        .unwrap()
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("-o")
+        .arg("csv")
+        .assert()
+        .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
+        .stdout(predicate::str::contains("privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file"))
+        .stdout(predicate::str::contains(
+            "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file",
         ));
 
     common::teardown();

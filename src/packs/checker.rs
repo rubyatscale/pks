@@ -64,9 +64,9 @@ pub(crate) trait ValidatorInterface {
 
 #[derive(Debug, PartialEq)]
 pub struct CheckAllResult {
-    reportable_violations: HashSet<Violation>,
-    stale_violations: Vec<ViolationIdentifier>,
-    strict_mode_violations: HashSet<Violation>,
+    pub reportable_violations: HashSet<Violation>,
+    pub stale_violations: Vec<ViolationIdentifier>,
+    pub strict_mode_violations: HashSet<Violation>,
 }
 
 impl CheckAllResult {

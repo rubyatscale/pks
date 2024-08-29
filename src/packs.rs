@@ -10,6 +10,7 @@ pub(crate) mod checker_configuration;
 pub(crate) mod configuration;
 pub(crate) mod constant_resolver;
 pub(crate) mod creator;
+pub(crate) mod csv;
 pub(crate) mod dependencies;
 pub(crate) mod ignored;
 pub(crate) mod monkey_patch_detection;
@@ -38,6 +39,7 @@ pub(crate) use self::parsing::ruby::zeitwerk::get_zeitwerk_constant_resolver;
 pub(crate) use self::parsing::ParsedDefinition;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
+use cli::OutputFormat;
 pub(crate) use configuration::Configuration;
 pub(crate) use package_todo::PackageTodo;
 
@@ -68,14 +70,24 @@ pub fn create(
 
 pub fn check(
     configuration: &Configuration,
+    output_format: OutputFormat,
     files: Vec<String>,
 ) -> anyhow::Result<()> {
     let result = checker::check_all(configuration, files)
         .context("Failed to check files")?;
-    println!("{}", result);
-    if result.has_violations() {
-        bail!("Violations found!")
+
+    match output_format {
+        OutputFormat::Packwerk => {
+            println!("{}", result);
+            if result.has_violations() {
+                bail!("Violations found!")
+            }
+        }
+        OutputFormat::CSV => {
+            csv::write_csv(&result, std::io::stdout())?;
+        }
     }
+
     Ok(())
 }
 
