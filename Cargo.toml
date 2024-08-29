@@ -2,7 +2,7 @@
 
 [package]
 name = "pks"
-version = "0.2.21"
+version = "0.2.22"
 edition = "2021"
 description = "Welcome! Please see https://github.com/rubyatscale/pks for more information!"
 license = "MIT"
@@ -27,7 +27,7 @@ path = "src/lib.rs"
 anyhow = { version = "1.0.75", features = [] } # for error handling
 clap = { version = "4.2.1", features = ["derive"] } # cli
 clap_derive = "4.2.0" # cli
-csv = "1.3.0"
+csv = "1.3.0" # csv de/serialize
 itertools = "0.13.0" # tools for iterating over iterable things
 jwalk = "0.8.1" # for walking the file tree
 path-clean = "1.0.1" # Pathname#cleaname in Ruby
