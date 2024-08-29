@@ -1,7 +1,7 @@
 use crate::packs;
 
 use crate::packs::file_utils::get_absolute_path;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use clap_derive::Args;
 use std::path::PathBuf;
 use tracing::debug;
@@ -69,6 +69,9 @@ enum Command {
         /// Ignore recorded violations when reporting violations
         #[arg(long)]
         ignore_recorded_violations: bool,
+
+        #[arg(short, long, default_value = "packwerk")]
+        output_format: OutputFormat,
 
         files: Vec<String>,
     },
@@ -150,6 +153,12 @@ enum Command {
         about = "List the constants that packs sees and where it sees them (for debugging purposes)"
     )]
     ListDefinitions(ListDefinitionsArgs),
+}
+
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum OutputFormat {
+    Packwerk,
+    CSV,
 }
 
 #[derive(Debug, Args)]
@@ -242,11 +251,12 @@ pub fn run() -> anyhow::Result<()> {
         Command::ListIncludedFiles => packs::list_included_files(configuration),
         Command::Check {
             ignore_recorded_violations,
+            output_format,
             files,
         } => {
             configuration.ignore_recorded_violations =
                 ignore_recorded_violations;
-            packs::check(&configuration, files)
+            packs::check(&configuration, output_format, files)
         }
         Command::CheckContents {
             ignore_recorded_violations,
@@ -257,7 +267,7 @@ pub fn run() -> anyhow::Result<()> {
 
             let absolute_path = get_absolute_path(file.clone(), &configuration);
             configuration.stdin_file_path = Some(absolute_path);
-            packs::check(&configuration, vec![file])
+            packs::check(&configuration, OutputFormat::Packwerk, vec![file])
         }
         Command::Update => packs::update(&configuration),
         Command::Validate => {
