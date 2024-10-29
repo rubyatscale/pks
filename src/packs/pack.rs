@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::Context;
 use core::hash::Hash;
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_yaml::Value;
 
@@ -395,17 +396,24 @@ fn is_default_public_folder(value: &Option<PathBuf>) -> bool {
     }
 }
 
-pub fn serialize_pack(pack: &Pack) -> String {
+pub fn serialize_pack(pack: &Pack) -> anyhow::Result<String> {
     let serialized_pack = serde_yaml::to_string(&pack).unwrap();
     if serialized_pack == "{}\n" {
-        "".to_owned()
+        Ok("".to_owned())
     } else {
-        serialized_pack
+        add_back_necessary_quotes(serialized_pack)
     }
 }
 
+fn add_back_necessary_quotes(
+    serialized_pack: String,
+) -> anyhow::Result<String> {
+    let re = Regex::new("- (::.+)")?;
+    Ok(re.replace_all(&serialized_pack, "- \"$1\"").to_string())
+}
+
 pub fn write_pack_to_disk(pack: &Pack) -> anyhow::Result<()> {
-    let serialized_pack = serialize_pack(pack);
+    let serialized_pack = serialize_pack(pack)?;
     let pack_dir = pack.yml.parent().ok_or_else(|| {
         anyhow::Error::new(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -469,13 +477,13 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    fn reserialize_pack(pack_yml: &str) -> String {
+    fn reserialize_pack(pack_yml: &str) -> anyhow::Result<String> {
         let deserialized_pack = serde_yaml::from_str::<Pack>(pack_yml).unwrap();
         serialize_pack(&deserialized_pack)
     }
 
     #[test]
-    fn test_serde_sorted_dependencies() {
+    fn test_serde_sorted_dependencies() -> anyhow::Result<()> {
         let pack_yml = r#"
 # some comment
 dependencies:
@@ -484,7 +492,7 @@ dependencies:
   - packs/b
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 dependencies:
@@ -494,11 +502,12 @@ dependencies:
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_enforcements() {
+    fn test_serde_with_enforcements() -> anyhow::Result<()> {
         let pack_yml = r#"
 # some comment
 enforce_privacy: true
@@ -510,7 +519,7 @@ dependencies:
 foobar: true
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 enforce_privacy: true
@@ -523,11 +532,12 @@ foobar: true
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_arbitrary_client_keys() {
+    fn test_serde_with_arbitrary_client_keys() -> anyhow::Result<()> {
         let pack_yml = r#"
 # some comment
 dependencies:
@@ -537,7 +547,7 @@ dependencies:
 foobar: true
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 dependencies:
@@ -548,11 +558,12 @@ foobar: true
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_duplicate_dependencies() {
+    fn test_serde_with_duplicate_dependencies() -> anyhow::Result<()> {
         let pack_yml = r#"
 dependencies:
   - packs/a
@@ -562,7 +573,7 @@ dependencies:
   - packs/a
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 dependencies:
@@ -571,11 +582,12 @@ dependencies:
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_explicitly_empty_visible() {
+    fn test_serde_with_explicitly_empty_visible() -> anyhow::Result<()> {
         let pack_yml = r#"
 visible_to:
   - packs/c
@@ -583,7 +595,7 @@ visible_to:
   - packs/b
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 visible_to:
@@ -593,18 +605,19 @@ visible_to:
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_metadata() {
+    fn test_serde_with_metadata() -> anyhow::Result<()> {
         let pack_yml = r#"
 enforce_dependencies: false
 metadata:
   foobar: true
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 enforce_dependencies: false
@@ -613,17 +626,18 @@ metadata:
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_owner() {
+    fn test_serde_with_owner() -> anyhow::Result<()> {
         let pack_yml = r#"
 owner: Foobar
 enforce_dependencies: true
 "#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#"
 owner: Foobar
@@ -631,11 +645,12 @@ enforce_dependencies: true
 "#
         .trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_enforcement_globs() {
+    fn test_serde_with_enforcement_globs() -> anyhow::Result<()> {
         let pack_yml = r#"
 enforcement_globs_ignore:
   - enforcements:
@@ -682,7 +697,7 @@ enforcement_globs_ignore:
             ]
         );
 
-        let reserialized = reserialize_pack(pack_yml);
+        let reserialized = reserialize_pack(pack_yml)?;
         let re_pack: Result<Pack, _> = serde_yaml::from_str(&reserialized);
         let re_pack = re_pack.unwrap();
         assert_eq!(pack, re_pack);
@@ -697,17 +712,19 @@ enforcement_globs_ignore:
             })
         );
         assert_eq!(pack.ignores_for_enforcement("nope"), None);
+        Ok(())
     }
 
     #[test]
-    fn test_serde_with_empty_pack() {
+    fn test_serde_with_empty_pack() -> anyhow::Result<()> {
         let pack_yml = r#""#;
 
-        let actual = reserialize_pack(pack_yml);
+        let actual = reserialize_pack(pack_yml)?;
 
         let expected = r#""#.trim_start();
 
-        assert_eq!(expected, actual)
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
@@ -721,6 +738,31 @@ enforcement_globs_ignore:
         let expected =
             vec![root.join("app/company_data"), root.join("app/services")];
         assert_eq!(expected, actual)
+    }
+
+    #[test]
+    fn test_serde_with_necessary_quotes_in_ignored_private_constants(
+    ) -> anyhow::Result<()> {
+        let pack_yml = r#"
+ignored_private_constants:
+- "::Necessary::Quotes::Constant"
+- "Unnecessary::Quotes::Constant"
+- "::Another::Necessary::Last::Necessary::Constant"
+- "::Necessary"
+"#;
+
+        let actual = reserialize_pack(pack_yml)?;
+        let expected = r#"
+ignored_private_constants:
+- "::Another::Necessary::Last::Necessary::Constant"
+- "::Necessary"
+- "::Necessary::Quotes::Constant"
+- Unnecessary::Quotes::Constant
+"#
+        .trim_start();
+
+        assert_eq!(expected, actual);
+        Ok(())
     }
 
     #[test]
