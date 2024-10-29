@@ -405,6 +405,8 @@ pub fn serialize_pack(pack: &Pack) -> anyhow::Result<String> {
     }
 }
 
+// serde_yaml doesn't add quotes around all constants, which isn't a problem
+//unless the constant starts with ::
 fn add_back_necessary_quotes(
     serialized_pack: String,
 ) -> anyhow::Result<String> {
