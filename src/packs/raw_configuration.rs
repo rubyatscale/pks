@@ -52,6 +52,10 @@ pub(crate) struct RawConfiguration {
     #[serde(default)]
     pub layers: Vec<String>,
 
+    // Path to the README template
+    #[serde(default)]
+    pub readme_template_path: Option<PathBuf>,
+
     // Experimental parser
     #[serde(default)]
     pub experimental_parser: bool,
