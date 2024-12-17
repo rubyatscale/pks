@@ -68,40 +68,40 @@ See https://github.com/rubyatscale/pks#readme for more info!");
 
 #[test]
 fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>> {
-    common::delete_foobar();
+    common::delete_foobaz();
 
-    fs::write("tests/fixtures/simple_app/README_TEMPLATE.md", "This is a test custom README template")?;
+    fs::write("tests/fixtures/simple_packs_first_app/README_TEMPLATE.md", "This is a test custom README template")?;
 
     Command::cargo_bin("pks")?
         .arg("--project-root")
-        .arg("tests/fixtures/simple_app")
+        .arg("tests/fixtures/simple_packs_first_app")
         .arg("create")
-        .arg("packs/foobar")
+        .arg("packs/foobaz")
         .assert()
         .success();
 
     let expected_readme = String::from("This is a test custom README template");
     let actual_readme =
-        fs::read_to_string("tests/fixtures/simple_app/packs/foobar/README.md").unwrap_or_else(|e| {
-            panic!("Could not read file tests/fixtures/simple_app/packs/foobar/README.md: {}", e)
+        fs::read_to_string("tests/fixtures/simple_packs_first_app/packs/foobaz/README.md").unwrap_or_else(|e| {
+            panic!("Could not read file tests/fixtures/simple_packs_first_app/packs/foobaz/README.md: {}", e)
         });
 
     assert_eq!(expected_readme, actual_readme);
 
     common::teardown();
-    common::delete_foobar();
-    fs::remove_file("tests/fixtures/simple_app/README_TEMPLATE.md")?;
+    common::delete_foobaz();
+    fs::remove_file("tests/fixtures/simple_packs_first_app/README_TEMPLATE.md")?;
 
     Ok(())
 }
 
 #[test]
 fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>> {
-    common::delete_foobar_packs_first();
+    common::delete_foobar_app_with_custom_readme();
 
     Command::cargo_bin("pks")?
         .arg("--project-root")
-        .arg("tests/fixtures/simple_packs_first_app")
+        .arg("tests/fixtures/app_with_custom_readme")
         .arg("create")
         .arg("packs/foobar")
         .assert()
@@ -110,14 +110,14 @@ fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>> 
     let expected_readme = String::from("README template\n\nThis is a test\n");
 
     let actual_readme =
-        fs::read_to_string("tests/fixtures/simple_packs_first_app/packs/foobar/README.md").unwrap_or_else(|e| {
-            panic!("Could not read file tests/fixtures/simple_packs_first_app/packs/foobar/README.md: {}", e)
+        fs::read_to_string("tests/fixtures/app_with_custom_readme/packs/foobar/README.md").unwrap_or_else(|e| {
+            panic!("Could not read file tests/fixtures/app_with_custom_readme/packs/foobar/README.md: {}", e)
         });
 
     assert_eq!(expected_readme, actual_readme);
 
     common::teardown();
-    common::delete_foobar_packs_first();
+    common::delete_foobar_app_with_custom_readme();
 
     Ok(())
 }

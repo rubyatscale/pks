@@ -21,3 +21,5 @@ cache: false
 
 # Where you want the cache to be stored (default below)
 # cache_directory: 'tmp/cache/packwerk'
+
+readme_template_path: config/packs/README_EXAMPLE.md

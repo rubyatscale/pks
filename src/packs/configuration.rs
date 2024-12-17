@@ -470,7 +470,7 @@ mod tests {
 
     #[test]
     fn with_readme_template_path() {
-        let absolute_root = PathBuf::from("tests/fixtures/simple_packs_first_app");
+        let absolute_root = PathBuf::from("tests/fixtures/app_with_custom_readme");
         let actual = configuration::get(&absolute_root).unwrap();
 
         let actual_readme_template_path = actual.readme_template_path;
