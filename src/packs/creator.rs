@@ -62,7 +62,7 @@ pub fn create(
 fn readme(configuration: &Configuration, pack_name: &str) -> String {
     let readme_template_path = configuration.readme_template_path.clone();
 
-    let readme_template = if readme_template_path.exists() {
+    if readme_template_path.exists() {
         std::fs::read_to_string(readme_template_path).unwrap()
     } else {
         format!(
@@ -83,9 +83,7 @@ README.md should change as your public API changes.
 See https://github.com/rubyatscale/pks#readme for more info!",
             pack_name
         )
-    };
-
-    readme_template
+    }
 }
 
 fn is_rails(configuration: &Configuration) -> bool {

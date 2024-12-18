@@ -380,7 +380,8 @@ mod tests {
 
         assert!(!actual.cache_enabled);
 
-        let expected_readme_template_path = absolute_root.join("README_TEMPLATE.md");
+        let expected_readme_template_path =
+            absolute_root.join("README_TEMPLATE.md");
         assert_eq!(actual.readme_template_path, expected_readme_template_path);
     }
 
@@ -470,11 +471,13 @@ mod tests {
 
     #[test]
     fn with_readme_template_path() {
-        let absolute_root = PathBuf::from("tests/fixtures/app_with_custom_readme");
+        let absolute_root =
+            PathBuf::from("tests/fixtures/app_with_custom_readme");
         let actual = configuration::get(&absolute_root).unwrap();
 
         let actual_readme_template_path = actual.readme_template_path;
-        let expected_readme_template_path = absolute_root.join("config/packs/README_EXAMPLE.md");
+        let expected_readme_template_path =
+            absolute_root.join("config/packs/README_EXAMPLE.md");
         assert_eq!(actual_readme_template_path, expected_readme_template_path);
     }
 }

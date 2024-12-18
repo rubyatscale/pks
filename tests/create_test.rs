@@ -67,10 +67,14 @@ See https://github.com/rubyatscale/pks#readme for more info!");
 }
 
 #[test]
-fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>> {
+fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
+{
     common::delete_foobaz();
 
-    fs::write("tests/fixtures/simple_packs_first_app/README_TEMPLATE.md", "This is a test custom README template")?;
+    fs::write(
+        "tests/fixtures/simple_packs_first_app/README_TEMPLATE.md",
+        "This is a test custom README template",
+    )?;
 
     Command::cargo_bin("pks")?
         .arg("--project-root")
@@ -90,13 +94,16 @@ fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 
     common::teardown();
     common::delete_foobaz();
-    fs::remove_file("tests/fixtures/simple_packs_first_app/README_TEMPLATE.md")?;
+    fs::remove_file(
+        "tests/fixtures/simple_packs_first_app/README_TEMPLATE.md",
+    )?;
 
     Ok(())
 }
 
 #[test]
-fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>> {
+fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
+{
     common::delete_foobar_app_with_custom_readme();
 
     Command::cargo_bin("pks")?

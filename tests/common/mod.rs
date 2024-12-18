@@ -33,7 +33,8 @@ pub fn delete_foobar() {
 
 #[allow(dead_code)]
 pub fn delete_foobaz() {
-    let directory = PathBuf::from("tests/fixtures/simple_packs_first_app/packs/foobaz");
+    let directory =
+        PathBuf::from("tests/fixtures/simple_packs_first_app/packs/foobaz");
     if let Err(err) = fs::remove_dir_all(directory) {
         eprintln!(
             "Failed to remove tests/fixtures/simple_packs_first_app/packs/foobaz during test teardown: {}",
@@ -44,7 +45,8 @@ pub fn delete_foobaz() {
 
 #[allow(dead_code)]
 pub fn delete_foobar_app_with_custom_readme() {
-    let directory = PathBuf::from("tests/fixtures/app_with_custom_readme/packs/foobar");
+    let directory =
+        PathBuf::from("tests/fixtures/app_with_custom_readme/packs/foobar");
     if let Err(err) = fs::remove_dir_all(directory) {
         eprintln!(
             "Failed to remove tests/fixtures/app_with_custom_readme/packs/foobar during test teardown: {}",
