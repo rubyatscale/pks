@@ -12,8 +12,10 @@ pub enum CacheResult {
 
 #[derive(Debug, Default)]
 pub struct EmptyCacheEntry {
+    #[allow(dead_code)]
     pub filepath: PathBuf,
     pub file_contents_digest: String,
+    #[allow(dead_code)]
     pub file_name_digest: String,
     pub cache_file_path: PathBuf,
 }

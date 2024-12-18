@@ -32,6 +32,7 @@ pub struct Configuration {
     pub ignored_definitions: HashMap<String, HashSet<PathBuf>>,
     pub autoload_roots: HashMap<PathBuf, String>,
     pub inflections_path: PathBuf,
+    pub readme_template_path: PathBuf,
     pub custom_associations: Vec<String>,
     pub stdin_file_path: Option<PathBuf>,
     // Note that it'd probably be better to use the logger library, `tracing` (see logger.rs)
@@ -139,6 +140,12 @@ pub(crate) fn from_raw(
             .unwrap_or(PathBuf::from("config/initializers/inflections.rb")),
     );
 
+    let readme_template_path = absolute_root.join(
+        raw_config
+            .readme_template_path
+            .unwrap_or(PathBuf::from("README_TEMPLATE.md")),
+    );
+
     let custom_associations = raw_config
         .custom_associations
         .iter()
@@ -162,6 +169,7 @@ pub(crate) fn from_raw(
         ignored_definitions,
         autoload_roots,
         inflections_path,
+        readme_template_path,
         custom_associations,
         stdin_file_path: None,
         print_files: false,
@@ -370,7 +378,11 @@ mod tests {
 
         assert_eq!(expected_packs, actual.pack_set.packs);
 
-        assert!(!actual.cache_enabled)
+        assert!(!actual.cache_enabled);
+
+        let expected_readme_template_path =
+            absolute_root.join("README_TEMPLATE.md");
+        assert_eq!(actual.readme_template_path, expected_readme_template_path);
     }
 
     #[test]
@@ -455,5 +467,17 @@ mod tests {
         let expected_paths = vec!["my_association".to_owned()];
 
         assert_eq!(actual_associations, expected_paths);
+    }
+
+    #[test]
+    fn with_readme_template_path() {
+        let absolute_root =
+            PathBuf::from("tests/fixtures/app_with_custom_readme");
+        let actual = configuration::get(&absolute_root).unwrap();
+
+        let actual_readme_template_path = actual.readme_template_path;
+        let expected_readme_template_path =
+            absolute_root.join("config/packs/README_EXAMPLE.md");
+        assert_eq!(actual_readme_template_path, expected_readme_template_path);
     }
 }

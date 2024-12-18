@@ -52,15 +52,20 @@ pub fn create(
             .context("failed to create spec")?;
     }
 
-    let readme = readme(name);
+    let readme = readme(configuration, name);
     let readme_path = &new_pack_path.join("README.md");
     std::fs::write(readme_path, readme).context("Failed to write README.md")?;
 
     Ok(CreateResult::Success)
 }
 
-fn readme(pack_name: &str) -> String {
-    format!(
+fn readme(configuration: &Configuration, pack_name: &str) -> String {
+    let readme_template_path = configuration.readme_template_path.clone();
+
+    if readme_template_path.exists() {
+        std::fs::read_to_string(readme_template_path).unwrap()
+    } else {
+        format!(
 "Welcome to `{}`!
 
 If you're the author, please consider replacing this file with a README.md, which may contain:
@@ -76,8 +81,9 @@ If you're the author, please consider replacing this file with a README.md, whic
 README.md should change as your public API changes.
 
 See https://github.com/rubyatscale/pks#readme for more info!",
-    pack_name
-)
+            pack_name
+        )
+    }
 }
 
 fn is_rails(configuration: &Configuration) -> bool {

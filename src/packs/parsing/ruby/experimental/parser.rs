@@ -25,7 +25,7 @@ struct ReferenceCollector<'a> {
     pub custom_associations: Vec<String>,
 }
 
-impl<'a> Visitor for ReferenceCollector<'a> {
+impl Visitor for ReferenceCollector<'_> {
     fn on_class(&mut self, node: &nodes::Class) {
         // We're not collecting definitions, so no need to visit the class definitioname);
         let namespace_result = fetch_const_name(&node.name);
