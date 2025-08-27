@@ -16,7 +16,8 @@ mod common;
 /// the wrong order (::Baz should come after ::Bar when sorted alphabetically).
 /// The validation should fail and suggest running the appropriate update command.
 #[test]
-fn test_validate_incorrectly_formatted_package_todo() -> Result<(), Box<dyn Error>> {
+fn test_validate_incorrectly_formatted_package_todo(
+) -> Result<(), Box<dyn Error>> {
     Command::cargo_bin("pks")
         .unwrap()
         .arg("--project-root")
@@ -37,7 +38,8 @@ fn test_validate_incorrectly_formatted_package_todo() -> Result<(), Box<dyn Erro
 /// This test uses an existing fixture that has a properly formatted package_todo.yml
 /// file (with correct ordering, headers, and format). The validation should succeed.
 #[test]
-fn test_validate_correctly_formatted_package_todo() -> Result<(), Box<dyn Error>> {
+fn test_validate_correctly_formatted_package_todo() -> Result<(), Box<dyn Error>>
+{
     Command::cargo_bin("pks")
         .unwrap()
         .arg("--project-root")
@@ -50,4 +52,3 @@ fn test_validate_correctly_formatted_package_todo() -> Result<(), Box<dyn Error>
     common::teardown();
     Ok(())
 }
-

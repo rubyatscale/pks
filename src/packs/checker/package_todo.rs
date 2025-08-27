@@ -36,17 +36,25 @@ impl ValidatorInterface for Checker {
     /// - `None` if all files are correctly formatted
     /// - `Some(Vec<String>)` containing error messages for incorrectly formatted files
     fn validate(&self, configuration: &Configuration) -> Option<Vec<String>> {
-        let validation_errors: Vec<String> = configuration.pack_set.packs
+        let validation_errors: Vec<String> = configuration
+            .pack_set
+            .packs
             .par_iter()
             .filter_map(|pack| {
-                let package_todo_path = pack.yml.parent().unwrap().join("package_todo.yml");
-                
+                let package_todo_path =
+                    pack.yml.parent().unwrap().join("package_todo.yml");
+
                 // Skip packs that don't have package_todo.yml files
                 if !package_todo_path.exists() {
                     return None;
                 }
 
-                validate_package_todo_format(&package_todo_path, &pack.name, configuration.packs_first_mode).err()
+                validate_package_todo_format(
+                    &package_todo_path,
+                    &pack.name,
+                    configuration.packs_first_mode,
+                )
+                .err()
             })
             .collect();
 
@@ -86,12 +94,16 @@ fn validate_package_todo_format(
     packs_first_mode: bool,
 ) -> Result<(), String> {
     // Read the current file content
-    let current_content = fs::read_to_string(package_todo_path)
-        .map_err(|e| format!("Failed to read {}: {}", package_todo_path.display(), e))?;
+    let current_content =
+        fs::read_to_string(package_todo_path).map_err(|e| {
+            format!("Failed to read {}: {}", package_todo_path.display(), e)
+        })?;
 
     // Deserialize to ensure the file is valid and can be parsed
     let package_todo: PackageTodo = serde_yaml::from_str(&current_content)
-        .map_err(|e| format!("Failed to parse {}: {}", package_todo_path.display(), e))?;
+        .map_err(|e| {
+            format!("Failed to parse {}: {}", package_todo_path.display(), e)
+        })?;
 
     // Re-serialize using the standard serialization logic to get the expected format
     let expected_content = crate::packs::package_todo::serialize_package_todo(
