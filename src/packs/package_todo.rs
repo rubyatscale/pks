@@ -171,7 +171,7 @@ pub fn write_violations_to_disk(
     debug!("Finished writing violations to disk");
 }
 
-fn serialize_package_todo(
+pub(crate) fn serialize_package_todo(
     responsible_pack_name: &String,
     package_todo: &PackageTodo,
     packs_first_mode: bool,

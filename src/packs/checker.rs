@@ -1,6 +1,7 @@
 // Module declarations
 mod dependency;
 pub(crate) mod layer;
+mod package_todo;
 
 mod common_test;
 mod folder_privacy;
@@ -14,7 +15,7 @@ use crate::packs::checker_configuration::CheckerType;
 // Internal imports
 use crate::packs::pack::write_pack_to_disk;
 use crate::packs::pack::Pack;
-use crate::packs::package_todo;
+use crate::packs::package_todo as package_todo_module;
 use crate::packs::Configuration;
 
 use anyhow::bail;
@@ -282,6 +283,7 @@ fn validate(configuration: &Configuration) -> Vec<String> {
                 [&CheckerType::Layer]
                 .clone(),
         }),
+        Box::new(package_todo::Checker),
     ];
 
     let mut validation_errors: Vec<String> = validators
@@ -346,7 +348,7 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
             &strict_violations.len()
         );
     }
-    package_todo::write_violations_to_disk(configuration, violations);
+    package_todo_module::write_violations_to_disk(configuration, violations);
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())
