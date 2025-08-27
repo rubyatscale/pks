@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::packs::{Configuration, PackageTodo};
+use rayon::prelude::*;
 
 use super::ValidatorInterface;
 
@@ -35,20 +36,19 @@ impl ValidatorInterface for Checker {
     /// - `None` if all files are correctly formatted
     /// - `Some(Vec<String>)` containing error messages for incorrectly formatted files
     fn validate(&self, configuration: &Configuration) -> Option<Vec<String>> {
-        let mut validation_errors = Vec::new();
+        let validation_errors: Vec<String> = configuration.pack_set.packs
+            .par_iter()
+            .filter_map(|pack| {
+                let package_todo_path = pack.yml.parent().unwrap().join("package_todo.yml");
+                
+                // Skip packs that don't have package_todo.yml files
+                if !package_todo_path.exists() {
+                    return None;
+                }
 
-        for pack in &configuration.pack_set.packs {
-            let package_todo_path = pack.yml.parent().unwrap().join("package_todo.yml");
-            
-            // Skip packs that don't have package_todo.yml files
-            if !package_todo_path.exists() {
-                continue;
-            }
-
-            if let Err(error) = validate_package_todo_format(&package_todo_path, &pack.name, configuration.packs_first_mode) {
-                validation_errors.push(error);
-            }
-        }
+                validate_package_todo_format(&package_todo_path, &pack.name, configuration.packs_first_mode).err()
+            })
+            .collect();
 
         if validation_errors.is_empty() {
             None
