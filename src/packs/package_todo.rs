@@ -199,7 +199,7 @@ pub fn write_violations_to_disk(
 /// This function is used both for writing new package_todo.yml files and for
 /// format validation to ensure existing files match the expected format.
 pub(crate) fn serialize_package_todo(
-    responsible_pack_name: &String,
+    responsible_pack_name: &str,
     package_todo: &PackageTodo,
     packs_first_mode: bool,
 ) -> String {
@@ -250,7 +250,7 @@ fn delete_package_todo_from_disk(responsible_pack: &Pack) {
     }
 }
 
-fn header(responsible_pack_name: &String, packs_first_mode: bool) -> String {
+fn header(responsible_pack_name: &str, packs_first_mode: bool) -> String {
     let command = if packs_first_mode {
         "pks update"
     } else {

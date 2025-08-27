@@ -95,7 +95,7 @@ fn validate_package_todo_format(
 
     // Re-serialize using the standard serialization logic to get the expected format
     let expected_content = crate::packs::package_todo::serialize_package_todo(
-        &pack_name.to_string(),
+        pack_name,
         &package_todo,
         packs_first_mode,
     );
