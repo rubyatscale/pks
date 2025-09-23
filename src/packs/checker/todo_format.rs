@@ -8,7 +8,9 @@
 use std::fs;
 use std::path::Path;
 
+use crate::packs::bin_locater;
 use crate::packs::{Configuration, PackageTodo};
+use anyhow::{anyhow, Result};
 use rayon::prelude::*;
 
 use super::ValidatorInterface;
@@ -41,8 +43,11 @@ impl ValidatorInterface for Checker {
             .packs
             .par_iter()
             .filter_map(|pack| {
-                let package_todo_path =
-                    pack.yml.parent().expect("Pack yml file should have a parent directory").join("package_todo.yml");
+                let package_todo_path = pack
+                    .yml
+                    .parent()
+                    .expect("Pack yml file should have a parent directory")
+                    .join("package_todo.yml");
 
                 // Skip packs that don't have package_todo.yml files
                 if !package_todo_path.exists() {
@@ -55,6 +60,7 @@ impl ValidatorInterface for Checker {
                     configuration.packs_first_mode,
                 )
                 .err()
+                .map(|e| e.to_string())
             })
             .collect();
 
@@ -92,18 +98,12 @@ fn validate_package_todo_format(
     package_todo_path: &Path,
     pack_name: &str,
     packs_first_mode: bool,
-) -> Result<(), String> {
+) -> Result<()> {
     // Read the current file content
-    let current_content =
-        fs::read_to_string(package_todo_path).map_err(|e| {
-            format!("Failed to read {}: {}", package_todo_path.display(), e)
-        })?;
+    let current_content = fs::read_to_string(package_todo_path)?;
 
     // Deserialize to ensure the file is valid and can be parsed
-    let package_todo: PackageTodo = serde_yaml::from_str(&current_content)
-        .map_err(|e| {
-            format!("Failed to parse {}: {}", package_todo_path.display(), e)
-        })?;
+    let package_todo: PackageTodo = serde_yaml::from_str(&current_content)?;
 
     // Re-serialize using the standard serialization logic to get the expected format
     let expected_content = crate::packs::package_todo::serialize_package_todo(
@@ -114,10 +114,15 @@ fn validate_package_todo_format(
 
     // Compare the current content with the expected serialized format
     if current_content != expected_content {
-        return Err(format!(
+        let command = if packs_first_mode {
+            format!("{} update", bin_locater::packs_bin_name())
+        } else {
+            "bin/packwerk update-todo".to_string()
+        };
+        return Err(anyhow!(
             "Package todo file {} is not in the expected format. Please run `{}` to fix it.",
             package_todo_path.display(),
-            if packs_first_mode { "pks update" } else { "bin/packwerk update-todo" }
+            command
         ));
     }
 
