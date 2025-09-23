@@ -42,7 +42,7 @@ impl ValidatorInterface for Checker {
             .par_iter()
             .filter_map(|pack| {
                 let package_todo_path =
-                    pack.yml.parent().unwrap().join("package_todo.yml");
+                    pack.yml.parent().expect("Pack yml file should have a parent directory").join("package_todo.yml");
 
                 // Skip packs that don't have package_todo.yml files
                 if !package_todo_path.exists() {
