@@ -1,5 +1,6 @@
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
+use serial_test::serial;
 use std::{error::Error, process::Command};
 
 mod common;
@@ -290,6 +291,7 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
 /// Test that global gitignore works end-to-end.
 /// This requires temporarily setting up a global gitignore.
 #[test]
+#[serial]
 fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     use std::env;
     use std::fs;
