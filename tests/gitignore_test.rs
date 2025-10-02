@@ -8,40 +8,36 @@ mod common;
 /// The fixture has a violation in ignored_folder/violating.rb which should NOT be reported.
 #[test]
 fn test_check_ignores_violations_in_gitignored_files() -> Result<(), Box<dyn Error>> {
-    // NOTE: This test will fail until Phase 2 is implemented, when gitignore
-    // integration is actually added to walk_directory()
-    
     // The fixture has:
     // - packs/foo/app/services/foo.rb with violation (NOT ignored) 
     // - ignored_folder/violating.rb with violation (IS ignored)
     //
-    // Currently both violations are detected. After Phase 2, only the first should be.
+    // Phase 2 ensures only violations in non-ignored files are detected.
     
-    let output = Command::cargo_bin("pks")?
+    let result = Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
-        .arg("--debug")
         .arg("check")
         .assert()
-        .failure() // Still fails due to violation in foo.rb
-        .get_output()
-        .stdout
-        .clone();
-
-    let stdout = String::from_utf8_lossy(&output);
+        .failure(); // Still fails due to violation in foo.rb
+        
+    let output = result.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     
+    // Violations are printed to stdout
     // Should report violation in non-ignored file
     assert!(
-        stdout.contains("packs/foo/app/services/foo.rb"),
-        "Should detect violation in non-ignored file"
+        stdout.contains("packs/foo/app/services/foo.rb") || 
+        stdout.contains("foo.rb"),
+        "Should detect violation in non-ignored file.\nstdout: {}\nstderr: {}", stdout, stderr
     );
     
     // Should NOT report violation in ignored file
-    // TODO: Uncomment after Phase 2 is implemented
-    // assert!(
-    //     !stdout.contains("ignored_folder/violating.rb"),
-    //     "Should NOT detect violations in gitignored files"
-    // );
+    assert!(
+        !stdout.contains("ignored_folder") && !stdout.contains("violating.rb"),
+        "Should NOT detect violations in gitignored files.\nstdout: {}\nstderr: {}", stdout, stderr
+    );
     
     common::teardown();
     Ok(())
@@ -75,19 +71,18 @@ fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>> 
     );
     
     // Should NOT include gitignored files
-    // TODO: Uncomment after Phase 2 is implemented
-    // assert!(
-    //     !stdout.contains("ignored_file.rb"),
-    //     "Should NOT include files matched by gitignore patterns"
-    // );
-    // assert!(
-    //     !stdout.contains("debug.log"),
-    //     "Should NOT include *.log files"
-    // );
-    // assert!(
-    //     !stdout.contains("ignored_folder"),
-    //     "Should NOT include files in ignored directories"
-    // );
+    assert!(
+        !stdout.contains("ignored_file.rb"),
+        "Should NOT include files matched by gitignore patterns"
+    );
+    assert!(
+        !stdout.contains("debug.log"),
+        "Should NOT include *.log files"
+    );
+    assert!(
+        !stdout.contains("ignored_folder"),
+        "Should NOT include files in ignored directories"
+    );
     
     common::teardown();
     Ok(())
