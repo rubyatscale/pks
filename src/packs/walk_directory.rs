@@ -186,6 +186,22 @@ pub(crate) fn walk_directory(
     let excludes_set = build_glob_set(&raw.exclude);
     let package_paths_set = build_glob_set(&raw.package_paths);
 
+    // Build gitignore matcher if enabled
+    let gitignore_matcher = if raw.respect_gitignore {
+        match build_gitignore_matcher(&absolute_root) {
+            Ok(matcher) => Some(Arc::new(matcher)),
+            Err(e) => {
+                debug!("Failed to build gitignore matcher: {}. Continuing without gitignore support.", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let gitignore_ref = Arc::new(gitignore_matcher);
+    let gitignore_ref_for_loop = gitignore_ref.clone();
+
     // TODO: Pull directory walker into separate module. Allow it to be called with implementations of a trait
     // so separate concerns can each be in their own place.
     //
@@ -211,6 +227,7 @@ pub(crate) fn walk_directory(
                 // (with an increase to the reference count).
                 let cloned_excluded_dirs = excluded_dirs_ref.clone();
                 let cloned_absolute_root = absolute_root_ref.clone();
+                let cloned_gitignore = gitignore_ref.clone();
                 let package_yml = absolute_dirname.join("package.yml");
 
                 // Even if the parent has set this on children, the existence of a new
@@ -230,6 +247,16 @@ pub(crate) fn walk_directory(
                         let relative_path = child_absolute_dirname
                             .strip_prefix(cloned_absolute_root.as_ref())
                             .unwrap();
+                        
+                        // Check gitignore first (if enabled)
+                        if let Some(ref gitignore) = cloned_gitignore.as_ref() {
+                            let is_dir = child_dir_entry.file_type.is_dir();
+                            if gitignore.matched(relative_path, is_dir).is_ignore() {
+                                child_dir_entry.read_children_path = None;
+                            }
+                        }
+                        
+                        // Then check explicit exclusions
                         if cloned_excluded_dirs.as_ref().is_match(relative_path)
                         {
                             child_dir_entry.read_children_path = None;
@@ -271,6 +298,13 @@ pub(crate) fn walk_directory(
             .strip_prefix(&absolute_root)
             .unwrap()
             .to_owned();
+
+        // Skip gitignored files (if gitignore support is enabled)
+        if let Some(ref gitignore) = gitignore_ref_for_loop.as_ref() {
+            if gitignore.matched(&relative_path, false).is_ignore() {
+                continue;
+            }
+        }
 
         let current_package_yml =
             &unwrapped_entry.client_state.current_package_yml;
