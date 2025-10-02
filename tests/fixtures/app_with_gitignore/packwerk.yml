@@ -3,5 +3,5 @@ include:
 exclude:
   - '{tmp,node_modules,vendor}/**/*'
 package_paths:
-  - '**/packs/*'
+  - 'packs/*'
 

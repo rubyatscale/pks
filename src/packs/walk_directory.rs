@@ -321,6 +321,7 @@ mod tests {
     use crate::packs::{
         raw_configuration::RawConfiguration, walk_directory::walk_directory,
     };
+    use serial_test::serial;
 
     use super::{build_gitignore_matcher, expand_tilde, get_global_gitignore};
 
@@ -353,12 +354,23 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_expand_tilde_with_tilde() {
+        // Save and restore HOME to avoid test interaction
+        let original_home = std::env::var_os("HOME");
+        
         // Set HOME for this test
         std::env::set_var("HOME", "/test/home");
         
         let expanded = expand_tilde("~/some/path");
         assert_eq!(expanded, PathBuf::from("/test/home/some/path"));
+        
+        // Restore original HOME
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
@@ -411,6 +423,93 @@ mod tests {
         let test_path = PathBuf::from("test.rb");
         let _result = matcher.matched(&test_path, false);
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_expand_tilde_without_home_env() {
+        // Save original HOME value
+        let original_home = std::env::var_os("HOME");
+        
+        // Temporarily unset HOME
+        std::env::remove_var("HOME");
+        
+        let result = expand_tilde("~/test/path");
+        
+        // When HOME is not set, should return path as-is
+        assert_eq!(result, PathBuf::from("~/test/path"));
+        
+        // Restore HOME if it was set
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        }
+    }
+
+    #[test]
+    fn test_build_gitignore_matcher_with_malformed_gitignore() -> anyhow::Result<()> {
+        use std::fs;
+        use std::io::Write;
+        
+        // Create a temporary directory for this test
+        let temp_dir = std::env::temp_dir().join("pks_test_malformed_gitignore");
+        fs::create_dir_all(&temp_dir)?;
+        
+        // Create a gitignore with potentially problematic content
+        // Note: The ignore crate is quite permissive, so most "malformed"
+        // content is actually handled gracefully
+        let gitignore_path = temp_dir.join(".gitignore");
+        let mut file = fs::File::create(&gitignore_path)?;
+        
+        // Write some edge case patterns
+        writeln!(file, "# This is a comment")?;
+        writeln!(file, "")?;  // Blank line
+        writeln!(file, "*.log")?;
+        writeln!(file, "   ")?;  // Whitespace-only line
+        writeln!(file, "temp/")?;
+        
+        // The matcher should build successfully even with edge cases
+        let result = build_gitignore_matcher(&temp_dir);
+        assert!(
+            result.is_ok(),
+            "Should handle gitignore with comments, blank lines, and whitespace"
+        );
+        
+        // Clean up
+        fs::remove_dir_all(&temp_dir)?;
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_gitignore_matcher_with_git_info_exclude() -> anyhow::Result<()> {
+        use std::fs;
+        use std::io::Write;
+        
+        // Create a temporary directory structure
+        let temp_dir = std::env::temp_dir().join("pks_test_git_exclude");
+        let git_info_dir = temp_dir.join(".git/info");
+        fs::create_dir_all(&git_info_dir)?;
+        
+        // Create .git/info/exclude file
+        let exclude_path = git_info_dir.join("exclude");
+        let mut file = fs::File::create(&exclude_path)?;
+        writeln!(file, "excluded_by_git.txt")?;
+        
+        // Build matcher
+        let matcher = build_gitignore_matcher(&temp_dir)?;
+        
+        // Test that the pattern from .git/info/exclude is respected
+        let excluded_file = PathBuf::from("excluded_by_git.txt");
+        let result = matcher.matched(&excluded_file, false);
+        assert!(
+            result.is_ignore(),
+            "Should respect patterns from .git/info/exclude"
+        );
+        
+        // Clean up
+        fs::remove_dir_all(&temp_dir)?;
+        
         Ok(())
     }
 }
