@@ -29,10 +29,10 @@ impl jwalk::ClientState for ProcessReadDirState {
 }
 
 /// Expands tilde (~) in paths to the user's home directory.
-/// 
+///
 /// # Arguments
 /// * `path` - A path string that may contain a leading tilde
-/// 
+///
 /// # Returns
 /// A PathBuf with the tilde expanded to the home directory, or the original path if
 /// no tilde is present or HOME is not set.
@@ -46,12 +46,12 @@ pub fn expand_tilde(path: &str) -> PathBuf {
 }
 
 /// Attempts to locate the global gitignore file.
-/// 
+///
 /// This function checks multiple locations in order:
 /// 1. Git config `core.excludesFile` setting
 /// 2. `~/.gitignore_global`
 /// 3. `~/.config/git/ignore`
-/// 
+///
 /// # Returns
 /// `Some(PathBuf)` if a global gitignore file is found, `None` otherwise.
 pub fn get_global_gitignore() -> Option<PathBuf> {
@@ -61,9 +61,8 @@ pub fn get_global_gitignore() -> Option<PathBuf> {
         .output()
     {
         if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
+            let path_str =
+                String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path_str.is_empty() {
                 let expanded = expand_tilde(&path_str);
                 if expanded.exists() {
@@ -72,72 +71,77 @@ pub fn get_global_gitignore() -> Option<PathBuf> {
             }
         }
     }
-    
+
     // Fall back to standard locations
     if let Some(home) = std::env::var_os("HOME") {
         let home = PathBuf::from(home);
-        
+
         // Try ~/.gitignore_global
         let global = home.join(".gitignore_global");
         if global.exists() {
             return Some(global);
         }
-        
+
         // Try ~/.config/git/ignore
         let config_ignore = home.join(".config/git/ignore");
         if config_ignore.exists() {
             return Some(config_ignore);
         }
     }
-    
+
     None
 }
 
 /// Builds a gitignore matcher that respects local and global gitignore files.
-/// 
+///
 /// This function constructs a `Gitignore` matcher by combining:
 /// - Local `.gitignore` file in the repository root
 /// - Global gitignore file (from git config or standard locations)
 /// - `.git/info/exclude` file in the repository
-/// 
+///
 /// # Arguments
 /// * `absolute_root` - The absolute path to the repository root
-/// 
+///
 /// # Returns
 /// A `Gitignore` matcher that can be used to check if paths should be ignored,
 /// or an error if the matcher cannot be built.
-pub fn build_gitignore_matcher(absolute_root: &Path) -> anyhow::Result<Gitignore> {
+pub fn build_gitignore_matcher(
+    absolute_root: &Path,
+) -> anyhow::Result<Gitignore> {
     let mut builder = GitignoreBuilder::new(absolute_root);
-    
+
     // Add local .gitignore
     let local_gitignore = absolute_root.join(".gitignore");
     if local_gitignore.exists() {
         if let Some(err) = builder.add(&local_gitignore) {
             return Err(anyhow::anyhow!(
-                "Failed to add local .gitignore: {}", err
+                "Failed to add local .gitignore: {}",
+                err
             ));
         }
     }
-    
+
     // Add global gitignore
     if let Some(global_gitignore) = get_global_gitignore() {
         if let Some(err) = builder.add(&global_gitignore) {
             return Err(anyhow::anyhow!(
-                "Failed to add global gitignore: {}", err
+                "Failed to add global gitignore: {}",
+                err
             ));
         }
     }
-    
+
     // Add .git/info/exclude
     let git_exclude = absolute_root.join(".git/info/exclude");
     if git_exclude.exists() {
         if let Some(err) = builder.add(&git_exclude) {
             return Err(anyhow::anyhow!(
-                "Failed to add .git/info/exclude: {}", err
+                "Failed to add .git/info/exclude: {}",
+                err
             ));
         }
     }
-    
+
     Ok(builder.build()?)
 }
 
@@ -247,15 +251,18 @@ pub(crate) fn walk_directory(
                         let relative_path = child_absolute_dirname
                             .strip_prefix(cloned_absolute_root.as_ref())
                             .unwrap();
-                        
+
                         // Check gitignore first (if enabled)
                         if let Some(ref gitignore) = cloned_gitignore.as_ref() {
                             let is_dir = child_dir_entry.file_type.is_dir();
-                            if gitignore.matched(relative_path, is_dir).is_ignore() {
+                            if gitignore
+                                .matched(relative_path, is_dir)
+                                .is_ignore()
+                            {
                                 child_dir_entry.read_children_path = None;
                             }
                         }
-                        
+
                         // Then check explicit exclusions
                         if cloned_excluded_dirs.as_ref().is_match(relative_path)
                         {
@@ -392,13 +399,13 @@ mod tests {
     fn test_expand_tilde_with_tilde() {
         // Save and restore HOME to avoid test interaction
         let original_home = std::env::var_os("HOME");
-        
+
         // Set HOME for this test
         std::env::set_var("HOME", "/test/home");
-        
+
         let expanded = expand_tilde("~/some/path");
         assert_eq!(expanded, PathBuf::from("/test/home/some/path"));
-        
+
         // Restore original HOME
         if let Some(home) = original_home {
             std::env::set_var("HOME", home);
@@ -425,7 +432,7 @@ mod tests {
         // and returns the correct type. We can't guarantee what it returns
         // since it depends on the environment.
         let result = get_global_gitignore();
-        
+
         // If it returns Some, the path should exist
         if let Some(path) = result {
             assert!(path.exists());
@@ -446,13 +453,14 @@ mod tests {
     }
 
     #[test]
-    fn test_build_gitignore_matcher_returns_usable_matcher() -> anyhow::Result<()> {
+    fn test_build_gitignore_matcher_returns_usable_matcher(
+    ) -> anyhow::Result<()> {
         let absolute_path = PathBuf::from("tests/fixtures/simple_app")
             .canonicalize()
             .expect("Could not canonicalize path");
 
         let matcher = build_gitignore_matcher(&absolute_path)?;
-        
+
         // The matcher should be usable (this just tests it doesn't panic)
         let test_path = PathBuf::from("test.rb");
         let _result = matcher.matched(&test_path, false);
@@ -465,15 +473,15 @@ mod tests {
     fn test_expand_tilde_without_home_env() {
         // Save original HOME value
         let original_home = std::env::var_os("HOME");
-        
+
         // Temporarily unset HOME
         std::env::remove_var("HOME");
-        
+
         let result = expand_tilde("~/test/path");
-        
+
         // When HOME is not set, should return path as-is
         assert_eq!(result, PathBuf::from("~/test/path"));
-        
+
         // Restore HOME if it was set
         if let Some(home) = original_home {
             std::env::set_var("HOME", home);
@@ -481,58 +489,61 @@ mod tests {
     }
 
     #[test]
-    fn test_build_gitignore_matcher_with_malformed_gitignore() -> anyhow::Result<()> {
+    fn test_build_gitignore_matcher_with_malformed_gitignore(
+    ) -> anyhow::Result<()> {
         use std::fs;
         use std::io::Write;
-        
+
         // Create a temporary directory for this test
-        let temp_dir = std::env::temp_dir().join("pks_test_malformed_gitignore");
+        let temp_dir =
+            std::env::temp_dir().join("pks_test_malformed_gitignore");
         fs::create_dir_all(&temp_dir)?;
-        
+
         // Create a gitignore with potentially problematic content
         // Note: The ignore crate is quite permissive, so most "malformed"
         // content is actually handled gracefully
         let gitignore_path = temp_dir.join(".gitignore");
         let mut file = fs::File::create(&gitignore_path)?;
-        
+
         // Write some edge case patterns
         writeln!(file, "# This is a comment")?;
-        writeln!(file, "")?;  // Blank line
+        writeln!(file, "")?; // Blank line
         writeln!(file, "*.log")?;
-        writeln!(file, "   ")?;  // Whitespace-only line
+        writeln!(file, "   ")?; // Whitespace-only line
         writeln!(file, "temp/")?;
-        
+
         // The matcher should build successfully even with edge cases
         let result = build_gitignore_matcher(&temp_dir);
         assert!(
             result.is_ok(),
             "Should handle gitignore with comments, blank lines, and whitespace"
         );
-        
+
         // Clean up
         fs::remove_dir_all(&temp_dir)?;
-        
+
         Ok(())
     }
 
     #[test]
-    fn test_build_gitignore_matcher_with_git_info_exclude() -> anyhow::Result<()> {
+    fn test_build_gitignore_matcher_with_git_info_exclude() -> anyhow::Result<()>
+    {
         use std::fs;
         use std::io::Write;
-        
+
         // Create a temporary directory structure
         let temp_dir = std::env::temp_dir().join("pks_test_git_exclude");
         let git_info_dir = temp_dir.join(".git/info");
         fs::create_dir_all(&git_info_dir)?;
-        
+
         // Create .git/info/exclude file
         let exclude_path = git_info_dir.join("exclude");
         let mut file = fs::File::create(&exclude_path)?;
         writeln!(file, "excluded_by_git.txt")?;
-        
+
         // Build matcher
         let matcher = build_gitignore_matcher(&temp_dir)?;
-        
+
         // Test that the pattern from .git/info/exclude is respected
         let excluded_file = PathBuf::from("excluded_by_git.txt");
         let result = matcher.matched(&excluded_file, false);
@@ -540,10 +551,10 @@ mod tests {
             result.is_ignore(),
             "Should respect patterns from .git/info/exclude"
         );
-        
+
         // Clean up
         fs::remove_dir_all(&temp_dir)?;
-        
+
         Ok(())
     }
 }
