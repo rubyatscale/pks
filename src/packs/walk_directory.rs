@@ -507,7 +507,7 @@ mod tests {
 
         // Write some edge case patterns
         writeln!(file, "# This is a comment")?;
-        writeln!(file, "")?; // Blank line
+        writeln!(file)?; // Blank line
         writeln!(file, "*.log")?;
         writeln!(file, "   ")?; // Whitespace-only line
         writeln!(file, "temp/")?;
