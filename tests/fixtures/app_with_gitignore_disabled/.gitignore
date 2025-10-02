@@ -1,6 +1,4 @@
-# Test gitignore file for pks
 *.log
-!important.log
 *.tmp
 temp/
 ignored_folder/
