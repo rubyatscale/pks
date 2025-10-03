@@ -1,6 +1,8 @@
 use assert_cmd::prelude::*;
+use packs::packs::walk_directory::build_gitignore_matcher;
 use predicates::prelude::*;
 use serial_test::serial;
+use std::path::PathBuf;
 use std::{error::Error, process::Command};
 
 mod common;
@@ -13,8 +15,6 @@ fn test_check_ignores_violations_in_gitignored_files(
     // The fixture has:
     // - packs/foo/app/services/foo.rb with violation (NOT ignored)
     // - ignored_folder/violating.rb with violation (IS ignored)
-    //
-    // Phase 2 ensures only violations in non-ignored files are detected.
 
     let result = Command::cargo_bin("pks")?
         .arg("--project-root")
@@ -51,8 +51,6 @@ fn test_check_ignores_violations_in_gitignored_files(
 #[test]
 fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
 {
-    // NOTE: This test will fail until Phase 2 is implemented
-
     let output = Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
@@ -116,9 +114,6 @@ fn test_check_works_without_gitignore() -> Result<(), Box<dyn Error>> {
 /// This is a sanity check that our helper functions work correctly.
 #[test]
 fn test_gitignore_matcher_functions() -> Result<(), Box<dyn Error>> {
-    use packs::packs::walk_directory::build_gitignore_matcher;
-    use std::path::PathBuf;
-
     let absolute_path = PathBuf::from("tests/fixtures/app_with_gitignore")
         .canonicalize()
         .expect("Could not canonicalize path");
@@ -188,7 +183,6 @@ fn test_gitignore_matcher_without_gitignore() -> Result<(), Box<dyn Error>> {
 }
 
 /// CRITICAL: Test that respect_gitignore: false configuration disables gitignore support.
-/// This is the primary configuration option added in Phase 2.
 #[test]
 fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
     // The fixture has:
