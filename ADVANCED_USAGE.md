@@ -29,10 +29,7 @@ This feature:
 `pks` checks multiple gitignore sources in this order:
 
 1. **Local `.gitignore`** - The `.gitignore` file in your repository root
-2. **Global gitignore** - Your user-level gitignore file:
-   - From `git config core.excludesFile` if set
-   - Or `~/.gitignore_global` if it exists
-   - Or `~/.config/git/ignore` if it exists
+2. **Global gitignore** - Your user-level gitignore file from `git config --global core.excludesFile`
 3. **Git exclude file** - The `.git/info/exclude` file in your repository
 
 All standard gitignore features are supported:
@@ -146,12 +143,13 @@ If files are being ignored that shouldn't be:
    # Output: .gitignore:10:*.rb    app/models/user.rb
    ```
 
-2. **Check global gitignore** - See where your global gitignore is located:
+2. **Check global gitignore** - See where your global gitignore is configured:
    ```bash
+   # Check if core.excludesFile is set
    git config --global core.excludesFile
-   # Output: /Users/you/.gitignore_global
+   # Output: /Users/you/.config/git/ignore (or your custom path)
    
-   # View its contents
+   # View its contents if set
    cat $(git config --global core.excludesFile)
    ```
 
@@ -216,10 +214,8 @@ git check-ignore -v path/to/file.rb
 # See your global gitignore location
 git config --global core.excludesFile
 
-# View your global gitignore contents
-cat ~/.gitignore_global
-# or
-cat ~/.config/git/ignore
+# View your global gitignore contents (if core.excludesFile is set)
+cat $(git config --global core.excludesFile)
 
 # View repository-specific exclusions
 cat .git/info/exclude

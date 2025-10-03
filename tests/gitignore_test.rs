@@ -288,14 +288,15 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Test that global gitignore works end-to-end.
-/// This requires temporarily setting up a global gitignore.
+/// Test that global gitignore works end-to-end using core.excludesFile.
+/// This requires temporarily setting up git config.
 #[test]
 #[serial]
 fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     use std::env;
     use std::fs;
     use std::path::PathBuf;
+    use std::process::Command as StdCommand;
 
     // Create a temporary global gitignore
     let temp_dir = env::temp_dir();
@@ -309,24 +310,39 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     let test_file = fixture_path.join("test.global_ignore");
     fs::write(&test_file, "// Should be ignored by global gitignore\n")?;
 
-    // Set HOME to a temp location and create a .gitignore_global
-    let temp_home = temp_dir.join("test_home_for_gitignore");
-    fs::create_dir_all(&temp_home)?;
-    let home_gitignore = temp_home.join(".gitignore_global");
-    fs::write(&home_gitignore, "*.global_ignore\n")?;
+    // Save original core.excludesFile config
+    let original_excludes_file = StdCommand::new("git")
+        .args(["config", "--global", "core.excludesFile"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
 
-    // Save original HOME
-    let original_home = env::var("HOME").ok();
+    // Set core.excludesFile to our test global gitignore
+    let set_result = StdCommand::new("git")
+        .args([
+            "config",
+            "--global",
+            "core.excludesFile",
+            &global_gitignore.to_string_lossy(),
+        ])
+        .status();
 
-    // Set temporary HOME
-    env::set_var("HOME", &temp_home);
+    assert!(
+        set_result.is_ok() && set_result.unwrap().success(),
+        "Failed to set core.excludesFile"
+    );
 
     // Test that list-included-files excludes the globally ignored file
     let output = Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
         .arg("list-included-files")
-        .env("HOME", &temp_home)
         .assert()
         .success()
         .get_output()
@@ -342,18 +358,23 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
         stdout
     );
 
-    // Cleanup
+    // Cleanup: restore original core.excludesFile
+    if let Some(orig) = original_excludes_file {
+        if !orig.is_empty() {
+            StdCommand::new("git")
+                .args(["config", "--global", "core.excludesFile", &orig])
+                .status()
+                .ok();
+        }
+    } else {
+        // Unset if it wasn't set before
+        StdCommand::new("git")
+            .args(["config", "--global", "--unset", "core.excludesFile"])
+            .status()
+            .ok();
+    }
     fs::remove_file(&test_file).ok();
     fs::remove_file(&global_gitignore).ok();
-    fs::remove_file(&home_gitignore).ok();
-    fs::remove_dir(&temp_home).ok();
-
-    // Restore HOME
-    if let Some(home) = original_home {
-        env::set_var("HOME", home);
-    } else {
-        env::remove_var("HOME");
-    }
 
     common::teardown();
     Ok(())

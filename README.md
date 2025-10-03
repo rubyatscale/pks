@@ -98,7 +98,7 @@ There are still some known behavioral differences between `pks` and `packwerk`. 
 ## Gitignore Support (pks-specific feature)
 `pks` automatically respects `.gitignore` files when analyzing your codebase. This means:
 - Files listed in `.gitignore` are automatically excluded from analysis
-- Respects global gitignore (`~/.gitignore_global` or `core.excludesFile` from git config)
+- Respects global gitignore from `core.excludesFile` git config
 - Respects `.git/info/exclude`
 - Improves performance by skipping ignored directories entirely
 - Can be disabled by setting `respect_gitignore: false` in `packwerk.yml`
