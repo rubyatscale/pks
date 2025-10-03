@@ -45,17 +45,16 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// Attempts to locate the global gitignore file.
+/// Attempts to locate the global gitignore file from git config.
 ///
-/// This function checks multiple locations in order:
-/// 1. Git config `core.excludesFile` setting
-/// 2. `~/.gitignore_global`
-/// 3. `~/.config/git/ignore`
+/// This function reads the `core.excludesFile` setting from git config,
+/// which is the standard way to configure a global gitignore file.
 ///
 /// # Returns
-/// `Some(PathBuf)` if a global gitignore file is found, `None` otherwise.
+/// `Some(PathBuf)` if `core.excludesFile` is configured and the file exists,
+/// `None` otherwise.
 pub fn get_global_gitignore() -> Option<PathBuf> {
-    // Try to read from git config first
+    // Read core.excludesFile from git config
     if let Ok(output) = std::process::Command::new("git")
         .args(["config", "--global", "core.excludesFile"])
         .output()
@@ -72,23 +71,6 @@ pub fn get_global_gitignore() -> Option<PathBuf> {
         }
     }
 
-    // Fall back to standard locations
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-
-        // Try ~/.gitignore_global
-        let global = home.join(".gitignore_global");
-        if global.exists() {
-            return Some(global);
-        }
-
-        // Try ~/.config/git/ignore
-        let config_ignore = home.join(".config/git/ignore");
-        if config_ignore.exists() {
-            return Some(config_ignore);
-        }
-    }
-
     None
 }
 
@@ -96,7 +78,7 @@ pub fn get_global_gitignore() -> Option<PathBuf> {
 ///
 /// This function constructs a `Gitignore` matcher by combining:
 /// - Local `.gitignore` file in the repository root
-/// - Global gitignore file (from git config or standard locations)
+/// - Global gitignore file (from `core.excludesFile` git config)
 /// - `.git/info/exclude` file in the repository
 ///
 /// # Arguments
@@ -253,7 +235,7 @@ pub(crate) fn walk_directory(
                             .unwrap();
 
                         // Check gitignore first (if enabled)
-                        if let Some(ref gitignore) = cloned_gitignore.as_ref() {
+                        if let Some(gitignore) = cloned_gitignore.as_ref() {
                             let is_dir = child_dir_entry.file_type.is_dir();
                             if gitignore
                                 .matched(relative_path, is_dir)
@@ -307,7 +289,7 @@ pub(crate) fn walk_directory(
             .to_owned();
 
         // Skip gitignored files (if gitignore support is enabled)
-        if let Some(ref gitignore) = gitignore_ref_for_loop.as_ref() {
+        if let Some(gitignore) = gitignore_ref_for_loop.as_ref() {
             if gitignore.matched(&relative_path, false).is_ignore() {
                 continue;
             }
