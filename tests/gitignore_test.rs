@@ -4,6 +4,7 @@ use predicates::prelude::*;
 use serial_test::serial;
 use std::path::PathBuf;
 use std::{error::Error, process::Command};
+use tempfile::TempDir;
 
 mod common;
 
@@ -49,7 +50,8 @@ fn test_check_ignores_violations_in_gitignored_files(
 
 /// Test that list-included-files respects gitignore patterns.
 #[test]
-fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>> {
+fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
+{
     let output = Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
@@ -377,8 +379,6 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
 /// Gitignored files should not cause package_todo.yml updates.
 #[test]
 fn test_update_respects_gitignore() -> Result<(), Box<dyn Error>> {
-    use tempfile::TempDir;
-
     // Create a temporary copy of the fixture
     let temp_dir = TempDir::new()?;
     let temp_fixture = temp_dir.path().join("app");
