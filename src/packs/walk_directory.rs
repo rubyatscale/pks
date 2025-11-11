@@ -30,12 +30,22 @@ impl jwalk::ClientState for ProcessReadDirState {
 
 /// Expands tilde (~) in paths to the user's home directory.
 ///
+/// This function is specifically needed to handle `core.excludesFile` paths from git config,
+/// which commonly use tilde notation (e.g., `~/.gitignore_global`). Git returns the literal
+/// tilde string, but Rust's PathBuf doesn't automatically expand it.
+///
 /// # Arguments
 /// * `path` - A path string that may contain a leading tilde
 ///
 /// # Returns
 /// A PathBuf with the tilde expanded to the home directory, or the original path if
 /// no tilde is present or HOME is not set.
+///
+/// # Example
+/// ```
+/// // Git config might return "~/.gitignore_global"
+/// // This expands it to "/Users/username/.gitignore_global"
+/// ```
 pub fn expand_tilde(path: &str) -> PathBuf {
     if let Some(stripped) = path.strip_prefix("~/") {
         if let Some(home) = std::env::var_os("HOME") {
@@ -63,6 +73,8 @@ pub fn get_global_gitignore() -> Option<PathBuf> {
             let path_str =
                 String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path_str.is_empty() {
+                // Git config returns literal tilde (e.g., "~/.gitignore_global")
+                // so we need to expand it to the actual home directory path
                 let expanded = expand_tilde(&path_str);
                 if expanded.exists() {
                     return Some(expanded);
