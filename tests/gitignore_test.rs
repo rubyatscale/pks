@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use packs::packs::walk_directory::build_gitignore_matcher;
 use predicates::prelude::*;
 use serial_test::serial;
+use std::fs;
 use std::path::PathBuf;
 use std::{error::Error, process::Command};
 use tempfile::TempDir;
@@ -50,8 +51,7 @@ fn test_check_ignores_violations_in_gitignored_files(
 
 /// Test that list-included-files respects gitignore patterns.
 #[test]
-fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
-{
+fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>> {
     let output = Command::cargo_bin("pks")?
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
@@ -416,8 +416,6 @@ fn copy_dir_all(
     src: impl AsRef<std::path::Path>,
     dst: impl AsRef<std::path::Path>,
 ) -> std::io::Result<()> {
-    use std::fs;
-
     fs::create_dir_all(&dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
