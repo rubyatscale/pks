@@ -53,6 +53,17 @@ impl Cache for PerFileCache {
 
         let cache_data = serde_json::to_string(&cache_entry)
             .context("Failed to serialize references")?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = empty_cache_entry.cache_file_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                anyhow::Error::new(e).context(format!(
+                    "Failed to create cache directory {:?}",
+                    parent
+                ))
+            })?;
+        }
+
         let mut file = File::create(&empty_cache_entry.cache_file_path)
             .map_err(|e| {
                 anyhow::Error::new(e).context(format!(
