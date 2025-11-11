@@ -246,12 +246,14 @@ pub(crate) fn walk_directory(
                             .strip_prefix(cloned_absolute_root.as_ref())
                             .unwrap();
 
-                        // Check gitignore first (if enabled)
+                        // Check gitignore for directories only (optimization: prune ignored directory trees early)
+                        // Files are checked separately in the main loop below (see line ~304)
                         if let Some(gitignore) = cloned_gitignore.as_ref() {
                             let is_dir = child_dir_entry.file_type.is_dir();
-                            if gitignore
-                                .matched(relative_path, is_dir)
-                                .is_ignore()
+                            if is_dir
+                                && gitignore
+                                    .matched(relative_path, true)
+                                    .is_ignore()
                             {
                                 child_dir_entry.read_children_path = None;
                             }
