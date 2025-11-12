@@ -1,5 +1,5 @@
-use assert_cmd::prelude::*;
 use assert_cmd::cargo::cargo_bin;
+use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::{error::Error, fs, process::Command};
 mod common;

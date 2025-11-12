@@ -1,5 +1,5 @@
-use assert_cmd::prelude::*;
 use assert_cmd::cargo::cargo_bin;
+use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use serial_test::serial;
 use std::{error::Error, path::Path, process::Command};

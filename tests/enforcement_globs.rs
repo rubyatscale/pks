@@ -1,5 +1,5 @@
-use std::error::Error;
 use assert_cmd::cargo::cargo_bin;
+use std::error::Error;
 
 use assert_cmd::Command;
 
