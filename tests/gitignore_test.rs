@@ -1,4 +1,3 @@
-use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
 use packs::packs::walk_directory::build_gitignore_matcher;
 use predicates::prelude::*;
@@ -19,7 +18,7 @@ fn test_check_ignores_violations_in_gitignored_files(
     // - packs/foo/app/services/foo.rb with violation (NOT ignored)
     // - ignored_folder/violating.rb with violation (IS ignored)
 
-    let result = Command::new(cargo_bin!("pks"))
+    let result = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
         .arg("check")
@@ -54,7 +53,7 @@ fn test_check_ignores_violations_in_gitignored_files(
 #[test]
 fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
 {
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
         .arg("list-included-files")
@@ -100,7 +99,7 @@ fn test_check_works_without_gitignore() -> Result<(), Box<dyn Error>> {
     // simple_app doesn't have a .gitignore file
     // This should still work (and report violations as usual)
 
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -195,7 +194,7 @@ fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
     //
     // With respect_gitignore: false, the violation SHOULD be detected.
 
-    let result = Command::new(cargo_bin!("pks"))
+    let result = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore_disabled")
         .arg("check")
@@ -263,7 +262,7 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
     // since they don't match the Ruby file patterns.
 
     // Just verify the basic behavior still works
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
         .arg("list-included-files")
@@ -336,7 +335,7 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     );
 
     // Test that list-included-files excludes the globally ignored file
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_gitignore")
         .arg("list-included-files")
@@ -390,7 +389,7 @@ fn test_update_respects_gitignore() -> Result<(), Box<dyn Error>> {
     copy_dir_all(fixture_path, &temp_fixture)?;
 
     // Run update command
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg(&temp_fixture)
         .arg("update")
