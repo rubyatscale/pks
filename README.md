@@ -15,6 +15,11 @@ Currently, it ships the following checkers to help improve the boundaries betwee
 
 See [Checkers](CHECKERS.md) for detailed descriptions.
 
+## Automatic Gitignore Support
+- Automatically respects `.gitignore` files (both local and global)
+- Improves performance by skipping ignored directories during traversal
+- Can be disabled via `respect_gitignore: false` configuration if needed
+
 # Fork
 This repo was forked directly from https://github.com/alexevanczuk/packs
 
@@ -89,6 +94,18 @@ Directions:
 There are still some known behavioral differences between `pks` and `packwerk`. If you find any, please file an issue!
 - `package_paths` must not end in a slash, e.g. `pks/*/` is not supported, but `pks/*` is.
 - A `**` in `package_paths` is supported, but is not a substitute for a single `*`, e.g. `pks/**` is supported and will match `pks/*/*/package.yml`, but will not match `pks/*/package.yml`. `pks/*` must be used to match that.
+
+## Gitignore Support (pks-specific feature)
+`pks` automatically respects `.gitignore` files when analyzing your codebase. This means:
+- Files listed in `.gitignore` are automatically excluded from analysis
+- Respects global gitignore from `core.excludesFile` git config
+- Respects `.git/info/exclude`
+- Improves performance by skipping ignored directories entirely
+- Can be disabled by setting `respect_gitignore: false` in `packwerk.yml`
+
+This feature is **enabled by default**. If you need behavior identical to `packwerk`, set `respect_gitignore: false`.
+
+For detailed configuration, precedence rules, and troubleshooting, see [ADVANCED_USAGE.md](ADVANCED_USAGE.md).
 
 ## Default Namespaces
 `pks` supports Zeitwerk default namespaces. However, since it doesn't have access to the Rails runtime, you need to explicitly specify the namespaces in `packwerk.yml`.

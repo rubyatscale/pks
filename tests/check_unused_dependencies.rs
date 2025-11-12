@@ -4,7 +4,7 @@ use std::{error::Error, fs, process::Command};
 mod common;
 
 fn assert_check_unused_dependencies(cmd: &str) -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_dependency_cycles")
         .arg("--debug")
@@ -51,7 +51,7 @@ fn assert_auto_correct_unused_dependencies(
     let foo_package_yml = fs::read_to_string("tests/fixtures/app_with_unnecessary_dependencies/packs/foo/package.yml").unwrap();
     assert_eq!(foo_package_yml, expected_before_autocorrect);
 
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_unnecessary_dependencies")
         .arg("--debug")
@@ -94,7 +94,7 @@ fn test_auto_correct_unnecessary_dependencies() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_check_unnecessary_dependencies_no_issue() -> Result<(), Box<dyn Error>>
 {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")

@@ -9,7 +9,7 @@ mod common;
 fn test_create() -> Result<(), Box<dyn Error>> {
     common::delete_foobar();
 
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("create")
@@ -76,7 +76,7 @@ fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
         "This is a test custom README template",
     )?;
 
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_packs_first_app")
         .arg("create")
@@ -106,7 +106,7 @@ fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
 {
     common::delete_foobar_app_with_custom_readme();
 
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_custom_readme")
         .arg("create")
@@ -131,7 +131,7 @@ fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
 
 #[test]
 fn test_create_already_exists() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_packs_first_app")
         .arg("create")

@@ -11,7 +11,7 @@ pub fn stripped_output(output: Vec<u8>) -> String {
 #[test]
 fn test_check_with_privacy_dependency_error_template_overrides(
 ) -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/privacy_violation_overrides")
         .arg("--debug")
@@ -33,7 +33,7 @@ fn test_check_with_privacy_dependency_error_template_overrides(
 }
 #[test]
 fn test_check() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -56,7 +56,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_enforce_privacy_disabled() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -79,7 +79,7 @@ fn test_check_enforce_privacy_disabled() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_enforce_dependency_disabled() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -102,7 +102,7 @@ fn test_check_enforce_dependency_disabled() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_single_file() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -127,7 +127,7 @@ fn test_check_with_single_file() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_check_with_single_file_experimental_parser(
 ) -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -152,7 +152,7 @@ fn test_check_with_single_file_experimental_parser(
 
 #[test]
 fn test_check_with_package_todo_file() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_package_todo")
         .arg("--debug")
@@ -168,7 +168,7 @@ fn test_check_with_package_todo_file() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_package_todo_file_csv() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_package_todo")
         .arg("--debug")
@@ -188,7 +188,7 @@ fn test_check_with_package_todo_file_csv() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_check_with_package_todo_file_ignoring_recorded_violations(
 ) -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_package_todo")
         .arg("--debug")
@@ -212,8 +212,7 @@ fn test_check_with_package_todo_file_ignoring_recorded_violations(
 
 #[test]
 fn test_check_with_experimental_parser() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")
-        .unwrap()
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--experimental-parser")
@@ -237,8 +236,7 @@ fn test_check_with_experimental_parser() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_stale_violations() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_stale_violations")
         .arg("check")
@@ -255,8 +253,7 @@ fn test_check_with_stale_violations() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_check_with_stale_violations_when_file_no_longer_exists(
 ) -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_stale_violations_no_file")
         .arg("check")
@@ -272,8 +269,7 @@ fn test_check_with_stale_violations_when_file_no_longer_exists(
 
 #[test]
 fn test_check_with_relationship_violations() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_rails_relationships")
         .arg("check")
@@ -289,8 +285,7 @@ fn test_check_with_relationship_violations() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_package_todo")
         .arg("check")
@@ -309,8 +304,7 @@ fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
@@ -329,8 +323,7 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
@@ -354,7 +347,7 @@ fn test_check_contents() -> Result<(), Box<dyn Error>> {
     let foo_rb_contents =
         fs::read_to_string(format!("{}/{}", project_root, relative_path))?;
 
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg(project_root)
         .arg("--debug")
@@ -385,7 +378,7 @@ fn test_check_contents_ignoring_recorded_violations(
     let foo_rb_contents =
         fs::read_to_string(format!("{}/{}", project_root, relative_path))?;
 
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg(project_root)
         .arg("--debug")

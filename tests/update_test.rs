@@ -19,7 +19,7 @@ fn update_todo() -> Result<(), Box<dyn Error>> {
 }
 
 fn test_update(command: &str) -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -63,8 +63,7 @@ packs/bar:
 #[test]
 #[serial]
 fn test_update_with_experimental_parser() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -110,8 +109,7 @@ packs/bar:
 fn test_update_with_stale_violations() -> Result<(), Box<dyn Error>> {
     common::set_up_fixtures();
 
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_stale_violations")
         .arg("update")
@@ -157,7 +155,7 @@ packs/bar:
 
 #[test]
 fn test_update_with_packs_first_app() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_packs_first_app")
         .arg("update")
@@ -205,7 +203,7 @@ fn test_update_with_strict_violations() -> anyhow::Result<()> {
     );
     let _ignore = std::fs::remove_file(path);
 
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_strict_violations")
         .arg("update")

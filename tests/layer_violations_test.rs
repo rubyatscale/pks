@@ -5,7 +5,7 @@ mod common;
 
 #[test]
 fn test_check_with_error_template_overrides() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/layer_violations_with_overrides")
         .arg("--debug")
@@ -27,7 +27,7 @@ fn test_check_with_error_template_overrides() -> Result<(), Box<dyn Error>> {
 }
 #[test]
 fn test_check() -> Result<(), Box<dyn Error>> {
-    let output = Command::cargo_bin("pks")?
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/layer_violations")
         .arg("--debug")
@@ -50,7 +50,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_enforce_layers_disabled() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/layer_violations")
         .arg("--debug")

@@ -4,7 +4,7 @@ mod common;
 
 #[test]
 fn test_check_with_corrupt_todo() -> anyhow::Result<()> {
-    Command::cargo_bin("pks")?
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_corrupt_todo")
         .arg("--debug")

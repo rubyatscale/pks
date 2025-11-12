@@ -1,0 +1,7 @@
+include:
+  - '**/*.rb'
+exclude:
+  - '{tmp,node_modules,vendor}/**/*'
+package_paths:
+  - 'packs/*'
+
