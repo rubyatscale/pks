@@ -1,4 +1,3 @@
-use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::{error::Error, process::Command};
@@ -6,7 +5,7 @@ mod common;
 
 #[test]
 fn test_check() -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/folder_privacy_violations")
         .arg("--debug")
@@ -21,7 +20,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_error_template_overrides() -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/folder_privacy_violations_with_overrides")
         .arg("--debug")
@@ -36,7 +35,7 @@ fn test_check_with_error_template_overrides() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_enforce_folder_privacy_disabled() -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/folder_privacy_violations")
         .arg("--debug")
@@ -52,7 +51,7 @@ fn test_check_enforce_folder_privacy_disabled() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_invisible_pack_violation_with_deprecated_enforce_folder_visibility(
 ) -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/folder_visibility_violations")
         .arg("--debug")

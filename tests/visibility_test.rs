@@ -1,4 +1,3 @@
-use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
 use std::{error::Error, process::Command};
 
@@ -7,7 +6,7 @@ mod common;
 #[test]
 fn test_check_with_visibility_violation_template_overrides(
 ) -> Result<(), Box<dyn Error>> {
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/visibility_violations_with_overrides")
         .arg("--debug")
@@ -31,7 +30,7 @@ fn test_check_with_visibility_violation_template_overrides(
 
 #[test]
 fn test_check() -> Result<(), Box<dyn Error>> {
-    let output = Command::new(cargo_bin!("pks"))
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/visibility_violations")
         .arg("--debug")
@@ -55,7 +54,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_disabled_enforce_visibility() -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/visibility_violations")
         .arg("--debug")

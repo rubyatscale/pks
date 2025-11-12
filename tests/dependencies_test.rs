@@ -1,4 +1,3 @@
-use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::{error::Error, process::Command};
@@ -8,7 +7,7 @@ mod common;
 #[test]
 fn test_list_pack_dependencies_with_explicit_dependencies(
 ) -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")
@@ -26,7 +25,7 @@ fn test_list_pack_dependencies_with_explicit_dependencies(
 #[test]
 fn list_pack_dependencies_with_implicit_dependencies(
 ) -> Result<(), Box<dyn Error>> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_package_todo")
         .arg("--debug")

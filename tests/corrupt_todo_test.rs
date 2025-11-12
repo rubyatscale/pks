@@ -1,11 +1,10 @@
-use assert_cmd::cargo::cargo_bin;
 use assert_cmd::Command;
 use predicates::prelude::*;
 mod common;
 
 #[test]
 fn test_check_with_corrupt_todo() -> anyhow::Result<()> {
-    Command::new(cargo_bin!("pks"))
+    Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/contains_corrupt_todo")
         .arg("--debug")
