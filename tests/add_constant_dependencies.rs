@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin;
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
@@ -9,7 +10,7 @@ mod common;
 #[test]
 #[serial]
 fn test_add_constant_dependencies() -> anyhow::Result<()> {
-    Command::cargo_bin("pks")?
+    Command::new(cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_missing_dependencies")
         .arg("update-dependencies-for-constant")
@@ -43,7 +44,7 @@ fn test_add_constant_dependencies() -> anyhow::Result<()> {
 #[test]
 #[serial]
 fn test_add_constant_dependencies_no_dependencies() -> anyhow::Result<()> {
-    Command::cargo_bin("pks")?
+    Command::new(cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_missing_dependencies")
         .arg("update-dependencies-for-constant")

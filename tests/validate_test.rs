@@ -1,4 +1,5 @@
 use assert_cmd::prelude::*;
+use assert_cmd::cargo::cargo_bin;
 use predicates::prelude::*;
 use std::{error::Error, process::Command};
 
@@ -14,8 +15,7 @@ The following groups of packages form a cycle:
 packs/foo, packs/bar",
     );
 
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_dependency_cycles")
         .arg("--debug")
@@ -41,8 +41,7 @@ fn test_validate_layer() -> Result<(), Box<dyn Error>> {
         "Invalid \'layer\' option in \'packs/foo/package.yml\'. `layer` must be one of the layers defined in `packwerk.yml`"
     );
 
-    Command::cargo_bin("pks")
-        .unwrap()
+    Command::new(cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/app_with_layer_violations_in_yml")
         .arg("validate")
@@ -58,7 +57,7 @@ fn test_validate_layer() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_validate_with_referencing_unknown_pack() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    Command::new(cargo_bin!("pks"))
         .arg("--project-root")
         .arg("tests/fixtures/references_unknown_pack")
         .arg("--debug")
