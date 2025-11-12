@@ -1,5 +1,5 @@
-use assert_cmd::prelude::*;
 use assert_cmd::cargo::cargo_bin;
+use assert_cmd::prelude::*;
 use packs::packs::walk_directory::build_gitignore_matcher;
 use predicates::prelude::*;
 use serial_test::serial;
