@@ -1,5 +1,5 @@
-use assert_cmd::prelude::*;
-use std::{error::Error, fs, path::PathBuf, process::Command};
+use assert_cmd::cargo::cargo_bin_cmd;
+use std::{error::Error, fs, path::PathBuf};
 mod common;
 
 fn is_tmp_cache_packwerk_empty() -> Result<bool, std::io::Error> {
@@ -34,7 +34,7 @@ fn test_delete_cache() -> Result<(), Box<dyn Error>> {
 
     assert!(!is_tmp_cache_packwerk_empty().unwrap());
 
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--debug")
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")

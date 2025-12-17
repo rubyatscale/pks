@@ -1,6 +1,6 @@
-use assert_cmd::prelude::*;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use std::{error::Error, process::Command};
+use std::error::Error;
 mod common;
 
 #[test]
@@ -10,7 +10,7 @@ fn test_expose_monkey_patches() -> Result<(), Box<dyn Error>> {
     let expected_message_portion = String::from(
         "The following is a list of constants that are redefined by your app.",
     );
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_monkey_patches")
         .arg("--experimental-parser")
