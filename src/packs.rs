@@ -234,10 +234,12 @@ pub struct ProcessedFile {
     pub definitions: Vec<ParsedDefinition>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Eq, Clone)]
+#[derive(
+    Debug, PartialEq, Serialize, Deserialize, Default, Eq, Clone, Hash,
+)]
 pub struct SourceLocation {
-    line: usize,
-    column: usize,
+    pub line: usize,
+    pub column: usize,
 }
 
 pub(crate) fn list_definitions(

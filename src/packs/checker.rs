@@ -16,6 +16,7 @@ use crate::packs::pack::write_pack_to_disk;
 use crate::packs::pack::Pack;
 use crate::packs::package_todo;
 use crate::packs::Configuration;
+use crate::packs::SourceLocation;
 
 use anyhow::bail;
 // External imports
@@ -42,10 +43,20 @@ pub struct ViolationIdentifier {
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
+/// A violation combines an identifier with display metadata.
+///
+/// `source_location` is intentionally separate from `ViolationIdentifier` because:
+/// - The identifier defines "sameness" for deduplication and comparison with
+///   recorded violations in `package_todo.yml`, which doesn't store line/column
+/// - Multiple references to the same constant in the same file are considered
+///   one violation, even if they occur at different lines
+/// - Keeping line/column out of the identity makes violations stable across
+///   minor code movements that shift line numbers
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
     pub message: String,
     pub identifier: ViolationIdentifier,
+    pub source_location: SourceLocation,
 }
 
 pub(crate) trait CheckerInterface {
@@ -513,6 +524,7 @@ mod tests {
     use crate::packs::checker::{
         CheckAllResult, Violation, ViolationIdentifier,
     };
+    use crate::packs::SourceLocation;
 
     #[test]
     fn test_write_violations() {
@@ -526,7 +538,8 @@ mod tests {
                         constant_name: "::Foo::PrivateClass".to_string(),
                         referencing_pack_name: "bar".to_string(),
                         defining_pack_name: "foo".to_string(),
-                    }
+                    },
+                    source_location: SourceLocation { line: 10, column: 5 },
                 },
                 Violation {
                     message: "foo/bar/file2.rb:15:3\nDependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`".to_string(),
@@ -537,7 +550,8 @@ mod tests {
                         constant_name: "::Foo::AnotherClass".to_string(),
                         referencing_pack_name: "foo".to_string(),
                         defining_pack_name: "bar".to_string(),
-                    }
+                     },
+                     source_location: SourceLocation { line: 15, column: 3 },
                 }].iter().cloned().collect(),
             stale_violations: Vec::new(),
             strict_mode_violations: HashSet::new(),

@@ -14,6 +14,8 @@ struct JsonOutput<'a> {
 struct JsonViolation<'a> {
     violation_type: &'a str,
     file: &'a str,
+    line: usize,
+    column: usize,
     constant_name: &'a str,
     referencing_pack_name: &'a str,
     defining_pack_name: &'a str,
@@ -57,6 +59,8 @@ pub fn write_json<W: std::io::Write>(
             JsonViolation {
                 violation_type: &v.identifier.violation_type,
                 file: &v.identifier.file,
+                line: v.source_location.line,
+                column: v.source_location.column,
                 constant_name: &v.identifier.constant_name,
                 referencing_pack_name: &v.identifier.referencing_pack_name,
                 defining_pack_name: &v.identifier.defining_pack_name,
