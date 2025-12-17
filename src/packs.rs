@@ -13,6 +13,7 @@ pub(crate) mod creator;
 pub(crate) mod csv;
 pub(crate) mod dependencies;
 pub(crate) mod ignored;
+pub(crate) mod json;
 pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
@@ -85,6 +86,9 @@ pub fn check(
         }
         OutputFormat::CSV => {
             csv::write_csv(&result, std::io::stdout())?;
+        }
+        OutputFormat::JSON => {
+            json::write_json(&result, std::io::stdout())?;
         }
     }
 

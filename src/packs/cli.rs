@@ -159,6 +159,7 @@ enum Command {
 pub enum OutputFormat {
     Packwerk,
     CSV,
+    JSON,
 }
 
 #[derive(Debug, Args)]

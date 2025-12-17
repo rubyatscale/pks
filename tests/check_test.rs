@@ -1,8 +1,25 @@
 use assert_cmd::cargo::cargo_bin_cmd;
+use jsonschema::Validator;
 use predicates::prelude::*;
 use std::{error::Error, fs};
 
 mod common;
+
+fn validate_check_output_schema(json_value: &serde_json::Value) {
+    let schema_str = fs::read_to_string("schema/check-output.json")
+        .expect("Failed to read schema file");
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema_str).expect("Schema should be valid JSON");
+    let validator =
+        Validator::new(&schema).expect("Schema should be valid JSON Schema");
+    if !validator.is_valid(json_value) {
+        let errors: Vec<String> = validator
+            .iter_errors(json_value)
+            .map(|e| format!("  - {}", e))
+            .collect();
+        panic!("JSON output does not match schema:\n{}", errors.join("\n"));
+    }
+}
 
 pub fn stripped_output(output: Vec<u8>) -> String {
     String::from_utf8_lossy(&strip_ansi_escapes::strip(output)).to_string()
@@ -395,6 +412,203 @@ fn test_check_contents_ignoring_recorded_violations(
     let stripped_output = stripped_output(output);
     assert!(stripped_output.contains("1 violation(s) detected:"));
     assert!(stripped_output.contains("packs/foo/app/services/foo.rb:6:4\nDependency violation: `::Bar` belongs to `packs/bar`, but `packs/foo/package.yml` does not specify a dependency on `packs/bar`."));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_json_output_format_violations() -> Result<(), Box<dyn Error>>
+{
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/simple_app")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["violation_count"], 2);
+    assert_eq!(json_output["summary"]["stale_todo_count"], 0);
+    assert_eq!(json_output["summary"]["strict_violation_count"], 0);
+    assert_eq!(json_output["summary"]["success"], false);
+
+    let violations = json_output["violations"].as_array().unwrap();
+    assert_eq!(violations.len(), 2);
+
+    let dependency_violation = violations
+        .iter()
+        .find(|v| v["violation_type"].as_str().unwrap() == "dependency")
+        .expect("Should have a dependency violation");
+
+    assert_eq!(
+        dependency_violation["file"].as_str().unwrap(),
+        "packs/foo/app/services/foo.rb"
+    );
+    assert_eq!(
+        dependency_violation["constant_name"].as_str().unwrap(),
+        "::Bar"
+    );
+    assert_eq!(
+        dependency_violation["referencing_pack_name"]
+            .as_str()
+            .unwrap(),
+        "packs/foo"
+    );
+    assert_eq!(
+        dependency_violation["defining_pack_name"].as_str().unwrap(),
+        "packs/bar"
+    );
+    assert_eq!(dependency_violation["strict"].as_bool().unwrap(), false);
+    assert!(dependency_violation["message"]
+        .as_str()
+        .unwrap()
+        .contains("Dependency violation"));
+
+    let privacy_violation = violations
+        .iter()
+        .find(|v| v["violation_type"].as_str().unwrap() == "privacy")
+        .expect("Should have a privacy violation");
+
+    assert_eq!(
+        privacy_violation["file"].as_str().unwrap(),
+        "packs/foo/app/services/foo.rb"
+    );
+    assert_eq!(
+        privacy_violation["constant_name"].as_str().unwrap(),
+        "::Bar"
+    );
+    assert_eq!(
+        privacy_violation["referencing_pack_name"].as_str().unwrap(),
+        "packs/foo"
+    );
+    assert_eq!(
+        privacy_violation["defining_pack_name"].as_str().unwrap(),
+        "packs/bar"
+    );
+    assert_eq!(privacy_violation["strict"].as_bool().unwrap(), false);
+    assert!(privacy_violation["message"]
+        .as_str()
+        .unwrap()
+        .contains("Privacy violation"));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_json_output_format_stale_todos() -> Result<(), Box<dyn Error>>
+{
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_stale_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    // The fixture has multiple stale todos
+    assert_eq!(json_output["summary"]["stale_todo_count"], 3);
+    assert_eq!(json_output["summary"]["violation_count"], 0);
+    assert_eq!(json_output["summary"]["strict_violation_count"], 0);
+    assert_eq!(json_output["summary"]["success"], false);
+
+    let stale_todos = json_output["stale_todos"].as_array().unwrap();
+    assert_eq!(stale_todos.len(), 3);
+
+    // Find the specific stale todo for ::Bar dependency violation
+    let bar_dependency_stale = stale_todos
+        .iter()
+        .find(|t| {
+            t["constant_name"].as_str().unwrap() == "::Bar"
+                && t["violation_type"].as_str().unwrap() == "dependency"
+        })
+        .expect("Should have stale dependency todo for ::Bar");
+
+    assert_eq!(
+        bar_dependency_stale["file"].as_str().unwrap(),
+        "packs/foo/app/services/foo.rb"
+    );
+    assert_eq!(
+        bar_dependency_stale["referencing_pack_name"]
+            .as_str()
+            .unwrap(),
+        "packs/foo"
+    );
+    assert_eq!(
+        bar_dependency_stale["defining_pack_name"].as_str().unwrap(),
+        "packs/bar"
+    );
+
+    // Find the stale todo for ::Foo privacy violation
+    let foo_privacy_stale = stale_todos
+        .iter()
+        .find(|t| {
+            t["constant_name"].as_str().unwrap() == "::Foo"
+                && t["violation_type"].as_str().unwrap() == "privacy"
+        })
+        .expect("Should have stale privacy todo for ::Foo");
+
+    assert_eq!(
+        foo_privacy_stale["file"].as_str().unwrap(),
+        "packs/bar/app/services/bar.rb"
+    );
+    assert_eq!(
+        foo_privacy_stale["referencing_pack_name"].as_str().unwrap(),
+        "packs/bar"
+    );
+    assert_eq!(
+        foo_privacy_stale["defining_pack_name"].as_str().unwrap(),
+        "packs/foo"
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_json_output_format_empty() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_package_todo")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["violation_count"], 0);
+    assert_eq!(json_output["summary"]["stale_todo_count"], 0);
+    assert_eq!(json_output["summary"]["strict_violation_count"], 0);
+    assert_eq!(json_output["summary"]["success"], true);
+    assert!(json_output["violations"].as_array().unwrap().is_empty());
+    assert!(json_output["stale_todos"].as_array().unwrap().is_empty());
 
     common::teardown();
     Ok(())
