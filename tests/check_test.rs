@@ -34,7 +34,7 @@ fn test_check_with_privacy_dependency_error_template_overrides(
         .arg("--debug")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -56,7 +56,7 @@ fn test_check() -> Result<(), Box<dyn Error>> {
         .arg("--debug")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -80,7 +80,7 @@ fn test_check_enforce_privacy_disabled() -> Result<(), Box<dyn Error>> {
         .arg("--disable-enforce-privacy")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -103,7 +103,7 @@ fn test_check_enforce_dependency_disabled() -> Result<(), Box<dyn Error>> {
         .arg("--disable-enforce-dependencies")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -126,7 +126,7 @@ fn test_check_with_single_file() -> Result<(), Box<dyn Error>> {
         .arg("check")
         .arg("packs/foo/app/services/foo.rb")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -152,7 +152,7 @@ fn test_check_with_single_file_experimental_parser(
         .arg("check")
         .arg("packs/foo/app/services/foo.rb")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -175,7 +175,7 @@ fn test_check_with_package_todo_file() -> Result<(), Box<dyn Error>> {
         .arg("--debug")
         .arg("check")
         .assert()
-        .success()
+        .code(0)
         .stdout(predicate::str::contains("No violations detected!"));
 
     common::teardown();
@@ -193,7 +193,7 @@ fn test_check_with_package_todo_file_csv() -> Result<(), Box<dyn Error>> {
         .arg("-o")
         .arg("csv")
         .assert()
-        .success()
+        .code(0)
         .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
         .stdout(predicate::str::contains("No violations detected!"));
 
@@ -212,7 +212,7 @@ fn test_check_with_package_todo_file_ignoring_recorded_violations(
         .arg("check")
         .arg("--ignore-recorded-violations")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -236,7 +236,7 @@ fn test_check_with_experimental_parser() -> Result<(), Box<dyn Error>> {
         .arg("--debug")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -258,7 +258,7 @@ fn test_check_with_stale_violations() -> Result<(), Box<dyn Error>> {
         .arg("tests/fixtures/contains_stale_violations")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains(
             "There were stale violations found, please run `packs update`",
         ));
@@ -275,7 +275,7 @@ fn test_check_with_stale_violations_when_file_no_longer_exists(
         .arg("tests/fixtures/contains_stale_violations_no_file")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains(
             "There were stale violations found, please run `packs update`",
         ));
@@ -291,7 +291,7 @@ fn test_check_with_relationship_violations() -> Result<(), Box<dyn Error>> {
         .arg("tests/fixtures/app_with_rails_relationships")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains("2 violation(s) detected:"))
         .stdout(predicate::str::contains("Privacy violation: `::Taco` is private to `packs/baz`, but referenced from `packs/bar`"))
         .stdout(predicate::str::contains("Privacy violation: `::Census` is private to `packs/baz`, but referenced from `packs/bar`"));
@@ -307,7 +307,7 @@ fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
         .arg("tests/fixtures/contains_package_todo")
         .arg("check")
         .assert()
-        .success()
+        .code(0)
         .stdout(
             predicate::str::contains(
                 "There were stale violations found, please run `packs update`",
@@ -326,7 +326,7 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
         .assert()
-        .failure()
+        .code(1)
         .stdout(predicate::str::contains(
             "packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
         ))
@@ -347,6 +347,7 @@ fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
         .arg("-o")
         .arg("csv")
         .assert()
+        .code(1)
         .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
         .stdout(predicate::str::contains("privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file"))
         .stdout(predicate::str::contains(
@@ -372,7 +373,7 @@ fn test_check_contents() -> Result<(), Box<dyn Error>> {
         .arg(relative_path)
         .write_stdin(format!("\n\n\n{}", foo_rb_contents))
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -404,7 +405,7 @@ fn test_check_contents_ignoring_recorded_violations(
         .arg(relative_path)
         .write_stdin(format!("\n\n\n{}", foo_rb_contents))
         .assert()
-        .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -427,7 +428,7 @@ fn test_check_with_json_output_format_violations() -> Result<(), Box<dyn Error>>
         .arg("-o")
         .arg("json")
         .assert()
-        .success()
+        .code(1)
         .get_output()
         .stdout
         .clone();
@@ -515,7 +516,7 @@ fn test_check_with_json_output_format_stale_todos() -> Result<(), Box<dyn Error>
         .arg("-o")
         .arg("json")
         .assert()
-        .success()
+        .code(1) // Stale todos are violations that should fail
         .get_output()
         .stdout
         .clone();
@@ -593,7 +594,7 @@ fn test_check_with_json_output_format_empty() -> Result<(), Box<dyn Error>> {
         .arg("-o")
         .arg("json")
         .assert()
-        .success()
+        .code(0)
         .get_output()
         .stdout
         .clone();
@@ -611,5 +612,35 @@ fn test_check_with_json_output_format_empty() -> Result<(), Box<dyn Error>> {
     assert!(json_output["stale_todos"].as_array().unwrap().is_empty());
 
     common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_nonexistent_project_root() -> Result<(), Box<dyn Error>> {
+    // Exit code 2 for internal errors (non-existent project root)
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/does_not_exist")
+        .arg("check")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("Error:"));
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_invalid_output_format() -> Result<(), Box<dyn Error>> {
+    // Exit code 2 for argument parsing errors (clap's default)
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/simple_app")
+        .arg("check")
+        .arg("-o")
+        .arg("invalid_format")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("invalid value 'invalid_format'"));
+
     Ok(())
 }

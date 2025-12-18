@@ -41,6 +41,7 @@ pub(crate) use self::parsing::ParsedDefinition;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
 use cli::OutputFormat;
+use cli::ViolationsFound;
 pub(crate) use configuration::Configuration;
 pub(crate) use package_todo::PackageTodo;
 
@@ -80,9 +81,6 @@ pub fn check(
     match output_format {
         OutputFormat::Packwerk => {
             println!("{}", result);
-            if result.has_violations() {
-                bail!("Violations found!")
-            }
         }
         OutputFormat::CSV => {
             csv::write_csv(&result, std::io::stdout())?;
@@ -90,6 +88,10 @@ pub fn check(
         OutputFormat::JSON => {
             json::write_json(&result, std::io::stdout())?;
         }
+    }
+
+    if result.has_violations() {
+        return Err(ViolationsFound.into());
     }
 
     Ok(())
