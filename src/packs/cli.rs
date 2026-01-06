@@ -208,9 +208,9 @@ impl Args {
 
 pub fn run() -> anyhow::Result<()> {
     let args = Args::parse();
-    let absolute_root = args
-        .absolute_project_root()
-        .map_err(|e| anyhow::anyhow!("Issue getting absolute_project_root: {}", e))?;
+    let absolute_root = args.absolute_project_root().map_err(|e| {
+        anyhow::anyhow!("Issue getting absolute_project_root: {}", e)
+    })?;
 
     install_logger(args.debug);
 
