@@ -1,3 +1,8 @@
+//! JSON output formatter for `pks check -o json`.
+//!
+//! Serializes check results (violations, stale TODOs, and summary) to JSON.
+//! See `schema/check-output.json` for the JSON Schema specification.
+
 use itertools::chain;
 use serde::Serialize;
 
