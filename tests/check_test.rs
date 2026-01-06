@@ -469,7 +469,7 @@ fn test_check_with_json_output_format_violations() -> Result<(), Box<dyn Error>>
         dependency_violation["defining_pack_name"].as_str().unwrap(),
         "packs/bar"
     );
-    assert_eq!(dependency_violation["strict"].as_bool().unwrap(), false);
+    assert!(!dependency_violation["strict"].as_bool().unwrap());
     assert!(dependency_violation["message"]
         .as_str()
         .unwrap()
@@ -496,7 +496,7 @@ fn test_check_with_json_output_format_violations() -> Result<(), Box<dyn Error>>
         privacy_violation["defining_pack_name"].as_str().unwrap(),
         "packs/bar"
     );
-    assert_eq!(privacy_violation["strict"].as_bool().unwrap(), false);
+    assert!(!privacy_violation["strict"].as_bool().unwrap());
     assert!(privacy_violation["message"]
         .as_str()
         .unwrap()
