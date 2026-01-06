@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pks check JSON output",
+  "type": "object",
+  "required": ["violations", "stale_todos", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "violations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Violation" }
+    },
+    "stale_todos": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/StaleTodo" }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "violation_count",
+        "stale_todo_count",
+        "strict_violation_count",
+        "success"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "violation_count": { "type": "integer", "minimum": 0 },
+        "stale_todo_count": { "type": "integer", "minimum": 0 },
+        "strict_violation_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of violations where strict=true (subset of violation_count)"
+        },
+        "success": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "ViolationType": {
+      "type": "string",
+      "enum": ["dependency", "privacy", "visibility", "layer", "folder_privacy"]
+    },
+    "Violation": {
+      "type": "object",
+      "required": [
+        "violation_type",
+        "file",
+        "line",
+        "column",
+        "constant_name",
+        "referencing_pack_name",
+        "defining_pack_name",
+        "strict",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "violation_type": { "$ref": "#/$defs/ViolationType" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 0 },
+        "constant_name": { "type": "string" },
+        "referencing_pack_name": { "type": "string" },
+        "defining_pack_name": { "type": "string" },
+        "strict": { "type": "boolean" },
+        "message": { "type": "string" }
+      }
+    },
+    "StaleTodo": {
+      "type": "object",
+      "required": [
+        "violation_type",
+        "file",
+        "constant_name",
+        "referencing_pack_name",
+        "defining_pack_name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "violation_type": { "$ref": "#/$defs/ViolationType" },
+        "file": { "type": "string" },
+        "constant_name": { "type": "string" },
+        "referencing_pack_name": { "type": "string" },
+        "defining_pack_name": { "type": "string" }
+      }
+    }
+  }
+}

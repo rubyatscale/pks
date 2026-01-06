@@ -13,6 +13,7 @@ pub(crate) mod creator;
 pub(crate) mod csv;
 pub(crate) mod dependencies;
 pub(crate) mod ignored;
+pub(crate) mod json;
 pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
@@ -40,6 +41,7 @@ pub(crate) use self::parsing::ParsedDefinition;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
 use cli::OutputFormat;
+use cli::ViolationsFound;
 pub(crate) use configuration::Configuration;
 pub(crate) use package_todo::PackageTodo;
 
@@ -79,13 +81,17 @@ pub fn check(
     match output_format {
         OutputFormat::Packwerk => {
             println!("{}", result);
-            if result.has_violations() {
-                bail!("Violations found!")
-            }
         }
         OutputFormat::CSV => {
             csv::write_csv(&result, std::io::stdout())?;
         }
+        OutputFormat::JSON => {
+            json::write_json(&result, std::io::stdout())?;
+        }
+    }
+
+    if result.has_violations() {
+        return Err(ViolationsFound.into());
     }
 
     Ok(())
@@ -230,10 +236,12 @@ pub struct ProcessedFile {
     pub definitions: Vec<ParsedDefinition>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Default, Eq, Clone)]
+#[derive(
+    Debug, PartialEq, Serialize, Deserialize, Default, Eq, Clone, Hash,
+)]
 pub struct SourceLocation {
-    line: usize,
-    column: usize,
+    pub line: usize,
+    pub column: usize,
 }
 
 pub(crate) fn list_definitions(

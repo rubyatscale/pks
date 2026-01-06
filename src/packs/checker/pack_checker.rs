@@ -161,6 +161,7 @@ impl<'a> PackChecker<'a> {
         Ok(Some(Violation {
             message: self.interpolate_violation_message(extra_template_fields),
             identifier: self.violation_identifier(),
+            source_location: self.reference.source_location.clone(),
         }))
     }
 

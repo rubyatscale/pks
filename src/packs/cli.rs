@@ -8,6 +8,22 @@ use tracing::debug;
 
 use super::logger::install_logger;
 
+/// Error returned when violations are found during check.
+///
+/// This is a marker type used to distinguish "violations found" (exit 1)
+/// from internal errors (exit 2) following linter conventions (eslint, rubocop, shellcheck).
+#[derive(Debug)]
+pub struct ViolationsFound;
+
+impl std::fmt::Display for ViolationsFound {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Output is already printed; this marker carries no additional message
+        Ok(())
+    }
+}
+
+impl std::error::Error for ViolationsFound {}
+
 /// A CLI to interact with packs
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -159,6 +175,7 @@ enum Command {
 pub enum OutputFormat {
     Packwerk,
     CSV,
+    JSON,
 }
 
 #[derive(Debug, Args)]
@@ -191,9 +208,9 @@ impl Args {
 
 pub fn run() -> anyhow::Result<()> {
     let args = Args::parse();
-    let absolute_root = args
-        .absolute_project_root()
-        .expect("Issue getting absolute_project_root!");
+    let absolute_root = args.absolute_project_root().map_err(|e| {
+        anyhow::anyhow!("Issue getting absolute_project_root: {}", e)
+    })?;
 
     install_logger(args.debug);
 
