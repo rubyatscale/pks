@@ -5,13 +5,14 @@ pub fn main() -> ExitCode {
     match cli::run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            // ViolationsFound already printed its output; other errors need display
-            if e.downcast_ref::<cli::ViolationsFound>().is_none() {
+            if e.downcast_ref::<cli::ViolationsFound>().is_some() {
+                // ViolationsFound already printed its output; exit 1 for violations
+                ExitCode::from(1)
+            } else {
+                // Other errors (IO, config, etc.) exit 2; usage errors handled by clap
                 eprintln!("Error: {e:#}");
+                ExitCode::from(2)
             }
-            // Exit 1 for all application errors (violations, config, IO, etc.)
-            // Usage errors are handled by clap with exit code 2
-            ExitCode::from(1)
         }
     }
 }
