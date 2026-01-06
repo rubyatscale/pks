@@ -1,10 +1,10 @@
-use assert_cmd::prelude::*;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use std::{error::Error, process::Command};
+use std::error::Error;
 
 #[test]
 fn lint_packs() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/simple_app")
         .arg("--debug")

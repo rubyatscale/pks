@@ -1,11 +1,11 @@
-use assert_cmd::prelude::*;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use std::{error::Error, process::Command};
+use std::error::Error;
 mod common;
 
 #[test]
 fn test_list_definitions_experimental() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_monkey_patches")
         .arg("--debug")
@@ -38,7 +38,7 @@ fn test_list_definitions_experimental() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_list_definitions_with_ambiguous_experimental(
 ) -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_monkey_patches")
         .arg("--debug")

@@ -517,8 +517,7 @@ mod tests {
     #[test]
     fn test_write_violations() {
         let chec_result = CheckAllResult {
-            reportable_violations: vec![
-                Violation {
+            reportable_violations: [Violation {
                     message: "foo/bar/file1.rb:10:5\nPrivacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`".to_string(),
                     identifier: ViolationIdentifier {
                         violation_type: "Privacy".to_string(),
@@ -539,8 +538,7 @@ mod tests {
                         referencing_pack_name: "foo".to_string(),
                         defining_pack_name: "bar".to_string(),
                     }
-                }
-            ].iter().cloned().collect(),
+                }].iter().cloned().collect(),
             stale_violations: Vec::new(),
             strict_mode_violations: HashSet::new(),
         };

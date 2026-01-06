@@ -35,8 +35,10 @@ pub fn create(
     )?;
 
     write_pack_to_disk(&new_pack)?;
-    let pack_name =
-        &name.split('/').last().context("unable to find pack name")?;
+    let pack_name = &name
+        .split('/')
+        .next_back()
+        .context("unable to find pack name")?;
     std::fs::create_dir_all(new_pack_path.join("app/public/").join(pack_name))
         .context(format!("failed to create app/public/{}", &name))?;
     std::fs::create_dir_all(

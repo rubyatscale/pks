@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
@@ -9,7 +9,7 @@ mod common;
 #[test]
 #[serial]
 fn test_add_dependency() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_missing_dependency")
         .arg("add-dependency")
@@ -41,7 +41,7 @@ fn test_add_dependency() -> Result<(), Box<dyn Error>> {
 #[test]
 #[serial]
 fn test_add_dependency_creating_cycle() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_missing_dependency")
         .arg("add-dependency")
@@ -80,7 +80,7 @@ fn test_add_dependency_creating_cycle() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_add_dependency_unnecessarily() -> Result<(), Box<dyn Error>> {
-    Command::cargo_bin("pks")?
+    cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_missing_dependency")
         .arg("add-dependency")

@@ -16,9 +16,9 @@ pub(crate) fn get_acronyms_from_disk(
         let inflections_file =
             std::fs::read_to_string(inflections_path).unwrap();
         let inflections_lines = inflections_file.lines();
+        let re = Regex::new(r#"['\\"]"#).unwrap();
         for line in inflections_lines {
             if line.contains(".acronym") {
-                let re = Regex::new(r#"['\\"]"#).unwrap();
                 let acronym = re.split(line).nth(1).unwrap();
                 acronyms.insert(acronym.to_string());
             }

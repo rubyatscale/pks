@@ -86,7 +86,7 @@ impl Configuration {
 
     pub(crate) fn constant_resolver_configuration(
         &self,
-    ) -> ConstantResolverConfiguration {
+    ) -> ConstantResolverConfiguration<'_> {
         ConstantResolverConfiguration {
             absolute_root: &self.absolute_root,
             cache_directory: &self.cache_directory,
