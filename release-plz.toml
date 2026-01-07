@@ -1,0 +1,19 @@
+[workspace]
+# Don't publish to crates.io - binaries are distributed via GitHub releases
+publish = false
+# Create GitHub releases when release PR is merged
+git_release_enable = true
+# Generate changelog from conventional commits
+changelog_update = true
+
+[changelog]
+# Use conventional commits to generate changelog
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactoring" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore", group = "Miscellaneous" },
+]
