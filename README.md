@@ -1,4 +1,4 @@
-# packs
+# pks
 ![Logo](logo.png)
 
 [![CI](https://github.com/rubyatscale/pks/actions/workflows/ci.yml/badge.svg)](https://github.com/rubyatscale/pks/actions)
