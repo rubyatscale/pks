@@ -171,8 +171,35 @@ pub fn write_violations_to_disk(
     debug!("Finished writing violations to disk");
 }
 
-fn serialize_package_todo(
-    responsible_pack_name: &String,
+/// Serializes a PackageTodo struct into the standard package_todo.yml format.
+///
+/// This function generates the canonical serialized representation of a package_todo.yml file,
+/// including the standard header comments and properly formatted YAML content. The output
+/// format is deterministic and consistent, which is critical for format validation.
+///
+/// # Arguments
+/// * `responsible_pack_name` - The name of the pack that owns this package_todo.yml file
+/// * `package_todo` - The PackageTodo struct containing violation data to serialize
+/// * `packs_first_mode` - Whether the project uses packs.yml (affects header command)
+///
+/// # Returns
+/// A String containing the complete package_todo.yml file content, including:
+/// - Standard header comments explaining the file's purpose
+/// - Appropriate regeneration command based on packs_first_mode
+/// - YAML separator (`---`)
+/// - Sorted violation data in the standard format
+///
+/// # Format Details
+/// The serialized format ensures:
+/// - Violations are sorted alphabetically by defining pack, then constant name
+/// - Files within each violation are sorted alphabetically
+/// - Constant names are properly quoted (using a hack to work around serde_yaml limitations)
+/// - The header matches the project's configuration (packs_first_mode)
+///
+/// This function is used both for writing new package_todo.yml files and for
+/// format validation to ensure existing files match the expected format.
+pub(crate) fn serialize_package_todo(
+    responsible_pack_name: &str,
     package_todo: &PackageTodo,
     packs_first_mode: bool,
 ) -> String {
@@ -223,7 +250,7 @@ fn delete_package_todo_from_disk(responsible_pack: &Pack) {
     }
 }
 
-fn header(responsible_pack_name: &String, packs_first_mode: bool) -> String {
+fn header(responsible_pack_name: &str, packs_first_mode: bool) -> String {
     let command = if packs_first_mode {
         "pks update"
     } else {
