@@ -21,7 +21,13 @@ fn format_location(
     }
 }
 
-/// Format a violation message with optional colorization of the location
+const REFERENCE_LOCATION_PLACEHOLDER: &str = "{{reference_location}}";
+
+/// Format a violation message with optional colorization of the location.
+///
+/// This function is responsible for substituting `{{reference_location}}` in custom templates.
+/// - If the message contains `{{reference_location}}`, substitute it with the formatted location
+/// - Otherwise, prepend the location on its own line (default behavior)
 fn format_violation_message(violation: &Violation, colorize: bool) -> String {
     let location = format_location(
         &violation.identifier.file,
@@ -30,14 +36,15 @@ fn format_violation_message(violation: &Violation, colorize: bool) -> String {
         colorize,
     );
 
-    // The message starts with "file:line:column\n" - replace it with our formatted version
-    let message_without_location = violation
-        .message
-        .split_once('\n')
-        .map(|(_, rest)| rest)
-        .unwrap_or(&violation.message);
-
-    format!("{}\n{}", location, message_without_location)
+    if violation.message.contains(REFERENCE_LOCATION_PLACEHOLDER) {
+        // Custom template uses {{reference_location}} - substitute it
+        violation
+            .message
+            .replace(REFERENCE_LOCATION_PLACEHOLDER, &format!("{}\n", location))
+    } else {
+        // Default template - prepend location
+        format!("{}\n{}", location, violation.message)
+    }
 }
 
 pub fn write_text<W: std::io::Write>(
@@ -90,9 +97,7 @@ mod tests {
 
     fn sample_violation() -> Violation {
         Violation {
-            message:
-                "foo/bar/file.rb:10:5\nPrivacy violation: `Foo` is private"
-                    .to_string(),
+            message: "Privacy violation: `Foo` is private".to_string(),
             identifier: ViolationIdentifier {
                 violation_type: "Privacy".to_string(),
                 strict: false,
@@ -170,5 +175,45 @@ mod tests {
         assert!(text.contains("1 violation(s) detected:"));
         assert!(text.contains("foo/bar/file.rb:10:5"));
         assert!(text.contains("Privacy violation: `Foo` is private"));
+    }
+
+    fn custom_template_violation() -> Violation {
+        Violation {
+            // Message with {{reference_location}} placeholder (from custom template)
+            message: "{{reference_location}}Custom privacy error for `Foo`"
+                .to_string(),
+            identifier: ViolationIdentifier {
+                violation_type: "Privacy".to_string(),
+                strict: false,
+                file: "foo/bar/file.rb".to_string(),
+                constant_name: "Foo".to_string(),
+                referencing_pack_name: "bar".to_string(),
+                defining_pack_name: "foo".to_string(),
+            },
+            source_location: SourceLocation {
+                line: 10,
+                column: 5,
+            },
+        }
+    }
+
+    #[test]
+    fn test_format_violation_message_with_custom_template_no_color() {
+        let violation = custom_template_violation();
+        let result = format_violation_message(&violation, false);
+        assert_eq!(
+            result,
+            "foo/bar/file.rb:10:5\nCustom privacy error for `Foo`"
+        );
+    }
+
+    #[test]
+    fn test_format_violation_message_with_custom_template_with_color() {
+        let violation = custom_template_violation();
+        let result = format_violation_message(&violation, true);
+        assert_eq!(
+            result,
+            "\x1b[36mfoo/bar/file.rb:10:5\x1b[0m\nCustom privacy error for `Foo`"
+        );
     }
 }

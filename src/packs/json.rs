@@ -54,6 +54,8 @@ pub fn write_json<W: std::io::Write>(
         &result.strict_mode_violations
     );
 
+    // JSON outputs raw structured data - consumers can format as needed.
+    // Location is provided as separate file/line/column fields.
     let violations: Vec<JsonViolation> = all_violations
         .map(|v| {
             let message = if v.identifier.strict {

@@ -4,7 +4,6 @@ pub(crate) mod layer;
 
 mod common_test;
 mod folder_privacy;
-mod output_helper;
 pub(crate) mod pack_checker;
 mod privacy;
 pub(crate) mod reference;
@@ -52,6 +51,9 @@ pub struct ViolationIdentifier {
 ///   one violation, even if they occur at different lines
 /// - Keeping line/column out of the identity makes violations stable across
 ///   minor code movements that shift line numbers
+///
+/// `message` contains the violation description without the file location prefix.
+/// Formatters are responsible for combining source_location with message as needed.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
     pub message: String,
@@ -80,11 +82,34 @@ pub struct CheckAllResult {
     pub strict_mode_violations: HashSet<Violation>,
 }
 
+const REFERENCE_LOCATION_PLACEHOLDER: &str = "{{reference_location}}";
+
 impl CheckAllResult {
     pub fn has_violations(&self) -> bool {
         !self.reportable_violations.is_empty()
             || !self.stale_violations.is_empty()
             || !self.strict_mode_violations.is_empty()
+    }
+
+    /// Format a violation message, substituting `{{reference_location}}` if present.
+    fn format_violation_message(violation: &Violation) -> String {
+        let location = format!(
+            "{}:{}:{}",
+            violation.identifier.file,
+            violation.source_location.line,
+            violation.source_location.column
+        );
+
+        if violation.message.contains(REFERENCE_LOCATION_PLACEHOLDER) {
+            // Custom template uses {{reference_location}} - substitute it
+            violation.message.replace(
+                REFERENCE_LOCATION_PLACEHOLDER,
+                &format!("{}\n", location),
+            )
+        } else {
+            // Default template - prepend location
+            format!("{}\n{}", location, violation.message)
+        }
     }
 
     fn write_violations(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -96,7 +121,8 @@ impl CheckAllResult {
             writeln!(f, "{} violation(s) detected:", sorted_violations.len())?;
 
             for violation in sorted_violations {
-                writeln!(f, "{}\n", violation.message)?;
+                let formatted = Self::format_violation_message(violation);
+                writeln!(f, "{}\n", formatted)?;
             }
         }
 
@@ -528,9 +554,9 @@ mod tests {
 
     #[test]
     fn test_write_violations() {
-        let chec_result = CheckAllResult {
+        let check_result = CheckAllResult {
             reportable_violations: [Violation {
-                    message: "foo/bar/file1.rb:10:5\nPrivacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`".to_string(),
+                    message: "Privacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`".to_string(),
                     identifier: ViolationIdentifier {
                         violation_type: "Privacy".to_string(),
                         strict: false,
@@ -542,7 +568,7 @@ mod tests {
                     source_location: SourceLocation { line: 10, column: 5 },
                 },
                 Violation {
-                    message: "foo/bar/file2.rb:15:3\nDependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`".to_string(),
+                    message: "Dependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`".to_string(),
                     identifier: ViolationIdentifier {
                         violation_type: "Dependency".to_string(),
                         strict: false,
@@ -558,15 +584,15 @@ mod tests {
         };
 
         let expected_output = "2 violation(s) detected:
-foo/bar/file1.rb:10:5
-Privacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`
-
 foo/bar/file2.rb:15:3
 Dependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`
 
+foo/bar/file1.rb:10:5
+Privacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`
+
 ";
 
-        let actual = format!("{}", chec_result);
+        let actual = format!("{}", check_result);
 
         assert_eq!(actual, expected_output);
     }

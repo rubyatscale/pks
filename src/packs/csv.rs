@@ -2,6 +2,16 @@ use itertools::chain;
 
 use super::checker::{build_strict_violation_message, CheckAllResult};
 
+fn format_message_with_location(v: &super::checker::Violation) -> String {
+    format!(
+        "{}:{}:{}\n{}",
+        v.identifier.file,
+        v.source_location.line,
+        v.source_location.column,
+        v.message
+    )
+}
+
 pub fn write_csv<W: std::io::Write>(
     result: &CheckAllResult,
     writer: W,
@@ -30,7 +40,7 @@ pub fn write_csv<W: std::io::Write>(
             let message = if violation.identifier.strict {
                 build_strict_violation_message(&violation.identifier)
             } else {
-                violation.message.to_string()
+                format_message_with_location(violation)
             };
             wtr.serialize((
                 &identifier.violation_type,

@@ -89,7 +89,7 @@ mod tests {
                 relative_path: PathBuf::from("packs/foo"),
                 ..default_referencing_pack()},
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nFolder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
+                "Folder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
                 "folder_privacy".to_string(), false)),
         };
         test_check(
@@ -154,7 +154,7 @@ mod tests {
                 relative_path: PathBuf::from("packs/foo"),
                 ..default_referencing_pack()},
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nFolder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
+                "Folder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
                 "folder_privacy".to_string(), true)),
         };
         test_check(

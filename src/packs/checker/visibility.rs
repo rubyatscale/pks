@@ -107,7 +107,7 @@ mod tests {
                 relative_path: PathBuf::from("packs/foo"),
                 ..default_referencing_pack()},
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nVisibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
+                "Visibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
                 "visibility".to_string(), false)),
         };
         test_check(
@@ -173,7 +173,7 @@ mod tests {
                 relative_path: PathBuf::from("packs/foo"),
                 ..default_referencing_pack()},
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nVisibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
+                "Visibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
                 "visibility".to_string(), true)),
         };
         test_check(

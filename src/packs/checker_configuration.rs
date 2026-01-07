@@ -13,11 +13,11 @@ pub struct CheckerConfiguration {
     pub override_error_template: Option<String>,
 }
 
-const DEFAULT_DEPENDENCY_TEMPLATE: &str = "{{reference_location}}Dependency violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, but `{{referencing_pack_relative_yml}}` does not specify a dependency on `{{defining_pack_name}}`.";
-const DEFAULT_FOLDER_PRIVACY_TEMPLATE: &str = "{{reference_location}}{{violation_name}} violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is private to `{{referencing_pack_name}}` as it is not a sibling pack or parent pack.";
-const DEFAULT_LAYER_TEMPLATE: &str = "{{reference_location}}Layer violation: `{{constant_name}}` belongs to `{{defining_pack_name}}` (whose layer is `{{defining_layer}}`) cannot be accessed from `{{referencing_pack_name}}` (whose layer is `{{referencing_layer}}`)";
-const DEFAULT_VISIBILITY_TEMPLATE: &str = "{{reference_location}}Visibility violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is not visible to `{{referencing_pack_name}}`";
-const DEFAULT_PRIVACY_TEMPLATE: &str = "{{reference_location}}Privacy violation: `{{constant_name}}` is private to `{{defining_pack_name}}`, but referenced from `{{referencing_pack_name}}`";
+const DEFAULT_DEPENDENCY_TEMPLATE: &str = "Dependency violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, but `{{referencing_pack_relative_yml}}` does not specify a dependency on `{{defining_pack_name}}`.";
+const DEFAULT_FOLDER_PRIVACY_TEMPLATE: &str = "{{violation_name}} violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is private to `{{referencing_pack_name}}` as it is not a sibling pack or parent pack.";
+const DEFAULT_LAYER_TEMPLATE: &str = "Layer violation: `{{constant_name}}` belongs to `{{defining_pack_name}}` (whose layer is `{{defining_layer}}`) cannot be accessed from `{{referencing_pack_name}}` (whose layer is `{{referencing_layer}}`)";
+const DEFAULT_VISIBILITY_TEMPLATE: &str = "Visibility violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is not visible to `{{referencing_pack_name}}`";
+const DEFAULT_PRIVACY_TEMPLATE: &str = "Privacy violation: `{{constant_name}}` is private to `{{defining_pack_name}}`, but referenced from `{{referencing_pack_name}}`";
 
 impl CheckerConfiguration {
     pub fn new(checker_type: CheckerType) -> Self {

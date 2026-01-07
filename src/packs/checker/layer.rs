@@ -205,7 +205,7 @@ mod tests {
                 ..default_referencing_pack()
             },
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nLayer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(), 
+                "Layer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(),
                 "layer".to_string(), false)),
         };
         test_check(&checker_with_layers(), &mut test_checker)
@@ -229,7 +229,7 @@ mod tests {
                 ..default_referencing_pack()
             },
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nLayer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(), 
+                "Layer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(),
                 "layer".to_string(), true)),
         };
         test_check(&checker_with_layers(), &mut test_checker)

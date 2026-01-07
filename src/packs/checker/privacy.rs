@@ -171,7 +171,7 @@ mod tests {
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
+                String::from("Privacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
                 String::from("privacy"), false,
             )),
         };
@@ -199,7 +199,7 @@ mod tests {
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
+                String::from("Privacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
                 String::from("privacy"), true,
             )),
         };
@@ -453,7 +453,7 @@ mod tests {
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation_with_constant(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar::BarChild` is private to `packs/bar`, but referenced from `packs/foo`"),
+                String::from("Privacy violation: `::Bar::BarChild` is private to `packs/bar`, but referenced from `packs/foo`"),
                 String::from("privacy"), false,
                 String::from("::Bar::BarChild")
             )),
