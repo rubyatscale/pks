@@ -3,24 +3,24 @@
       "pks": {
         "platforms": {
           "macos-x86_64": {
-            "regex": "^pks-mac",
+            "regex": "^pks-x86_64-apple-darwin",
             "path": "pks",
-            "format": "tar.gz"
+            "format": "tar.xz"
           },
           "macos-aarch64": {
-            "regex": "^pks-mac",
+            "regex": "^pks-aarch64-apple-darwin",
             "path": "pks",
-            "format": "tar.gz"
+            "format": "tar.xz"
           },
           "linux-x86_64": {
-            "regex": "^x86_64-unknown-linux",
+            "regex": "^pks-x86_64-unknown-linux-gnu",
             "path": "pks",
-            "format": "tar.gz"
+            "format": "tar.xz"
           },
           "linux-aarch64": {
-            "regex": "^aarch64-unknown-linux",
+            "regex": "^pks-aarch64-unknown-linux-gnu",
             "path": "pks",
-            "format": "tar.gz"
+            "format": "tar.xz"
           }
         }
       }
