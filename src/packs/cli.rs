@@ -70,6 +70,10 @@ struct Args {
     /// Globally disable enforce_visibility
     #[arg(long)]
     disable_enforce_visibility: bool,
+
+    /// When to use colors in output
+    #[arg(long, value_enum, default_value_t = ColorChoice::Auto, global = true)]
+    color: ColorChoice,
 }
 
 #[derive(Subcommand, Debug)]
@@ -178,6 +182,17 @@ pub enum OutputFormat {
     JSON,
 }
 
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum ColorChoice {
+    /// Always use colors
+    Always,
+    /// Never use colors
+    Never,
+    /// Use colors when outputting to a terminal (default)
+    #[default]
+    Auto,
+}
+
 #[derive(Debug, Args)]
 struct ListDefinitionsArgs {
     /// Show constants with multiple definitions only
@@ -273,7 +288,7 @@ pub fn run() -> anyhow::Result<()> {
         } => {
             configuration.ignore_recorded_violations =
                 ignore_recorded_violations;
-            packs::check(&configuration, output_format, files)
+            packs::check(&configuration, output_format, args.color, files)
         }
         Command::CheckContents {
             ignore_recorded_violations,
@@ -284,7 +299,12 @@ pub fn run() -> anyhow::Result<()> {
 
             let absolute_path = get_absolute_path(file.clone(), &configuration);
             configuration.stdin_file_path = Some(absolute_path);
-            packs::check(&configuration, OutputFormat::Packwerk, vec![file])
+            packs::check(
+                &configuration,
+                OutputFormat::Packwerk,
+                args.color,
+                vec![file],
+            )
         }
         Command::Update => packs::update(&configuration),
         Command::Validate => {

@@ -40,6 +40,7 @@ pub(crate) use self::parsing::ruby::zeitwerk::get_zeitwerk_constant_resolver;
 pub(crate) use self::parsing::ParsedDefinition;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
+use cli::ColorChoice;
 use cli::OutputFormat;
 use cli::ViolationsFound;
 pub(crate) use configuration::Configuration;
@@ -47,8 +48,10 @@ pub(crate) use package_todo::PackageTodo;
 
 // External imports
 use anyhow::Context;
+use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 pub fn greet() {
@@ -70,9 +73,25 @@ pub fn create(
     Ok(())
 }
 
+/// Colorize file:line:column patterns for terminal output
+fn colorize_output(s: &str) -> String {
+    let re = Regex::new(r"(?m)^(.+:\d+:\d+)$").unwrap();
+    re.replace_all(s, "\x1b[36m$1\x1b[0m").to_string()
+}
+
+/// Determine whether to use colors based on the color choice
+fn should_colorize(color: ColorChoice) -> bool {
+    match color {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => std::io::stdout().is_terminal(),
+    }
+}
+
 pub fn check(
     configuration: &Configuration,
     output_format: OutputFormat,
+    color: ColorChoice,
     files: Vec<String>,
 ) -> anyhow::Result<()> {
     let result = checker::check_all(configuration, files)
@@ -80,7 +99,12 @@ pub fn check(
 
     match output_format {
         OutputFormat::Packwerk => {
-            println!("{}", result);
+            let output = format!("{}", result);
+            if should_colorize(color) {
+                println!("{}", colorize_output(&output));
+            } else {
+                println!("{}", output);
+            }
         }
         OutputFormat::CSV => {
             csv::write_csv(&result, std::io::stdout())?;

@@ -305,7 +305,7 @@ mod tests {
         assert_eq!(checker.referencing_pack_name(), "packs/baz".to_string());
         assert_eq!(checker.rules_checker_setting(), &CheckerSetting::False);
         assert!(!checker.violation_globally_disabled());
-        let expected_violation_message: String = "\u{1b}[36mpacks/baz/public/baz.rb\u{1b}[0m:3:4\nFolder Privacy violation: `Foo` belongs to `packs/foo`, which is private to `packs/baz` as it is not a sibling pack or parent pack.".into();
+        let expected_violation_message: String = "packs/baz/public/baz.rb:3:4\nFolder Privacy violation: `Foo` belongs to `packs/foo`, which is private to `packs/baz` as it is not a sibling pack or parent pack.".into();
         assert_eq!(
             checker.interpolate_violation_message(None),
             expected_violation_message
@@ -335,7 +335,7 @@ mod tests {
         let checker = PackChecker::new(&config, CheckerType::Privacy, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Incoming);
-        let expected_violation_message: String = "\u{1b}[36mpacks/baz/public/baz.rb\u{1b}[0m:3:4\nPrivacy violation: `Foo` is private to `packs/foo`, but referenced from `packs/baz`".into();
+        let expected_violation_message: String = "packs/baz/public/baz.rb:3:4\nPrivacy violation: `Foo` is private to `packs/foo`, but referenced from `packs/baz`".into();
         assert_eq!(
             checker.interpolate_violation_message(None),
             expected_violation_message
@@ -351,7 +351,7 @@ mod tests {
             PackChecker::new(&config, CheckerType::Dependency, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Outgoing);
-        let expected_violation_message: String = "\u{1b}[36mpacks/baz/public/baz.rb\u{1b}[0m:3:4\nDependency violation: `Foo` belongs to `packs/foo`, but `package.yml` does not specify a dependency on `packs/foo`.".into();
+        let expected_violation_message: String = "packs/baz/public/baz.rb:3:4\nDependency violation: `Foo` belongs to `packs/foo`, but `package.yml` does not specify a dependency on `packs/foo`.".into();
         assert_eq!(
             checker.interpolate_violation_message(None),
             expected_violation_message
@@ -366,7 +366,7 @@ mod tests {
         let checker = PackChecker::new(&config, CheckerType::Layer, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Outgoing);
-        let expected_violation_message: String = "\u{1b}[36mpacks/baz/public/baz.rb\u{1b}[0m:3:4\nLayer violation: `Foo` belongs to `packs/foo` (whose layer is `{{defining_layer}}`) cannot be accessed from `packs/baz` (whose layer is `{{referencing_layer}}`)".into();
+        let expected_violation_message: String = "packs/baz/public/baz.rb:3:4\nLayer violation: `Foo` belongs to `packs/foo` (whose layer is `{{defining_layer}}`) cannot be accessed from `packs/baz` (whose layer is `{{referencing_layer}}`)".into();
         assert_eq!(
             checker.interpolate_violation_message(None),
             expected_violation_message
@@ -382,7 +382,7 @@ mod tests {
             PackChecker::new(&config, CheckerType::Visibility, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Incoming);
-        let expected_violation_message: String = "\u{1b}[36mpacks/baz/public/baz.rb\u{1b}[0m:3:4\nVisibility violation: `Foo` belongs to `packs/foo`, which is not visible to `packs/baz`".into();
+        let expected_violation_message: String = "packs/baz/public/baz.rb:3:4\nVisibility violation: `Foo` belongs to `packs/foo`, which is not visible to `packs/baz`".into();
         assert_eq!(
             checker.interpolate_violation_message(None),
             expected_violation_message
