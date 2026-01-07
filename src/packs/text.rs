@@ -3,6 +3,13 @@
 //! Formats check results as human-readable text with optional color output.
 
 use super::bin_locater;
+
+/// Controls whether output should include ANSI color codes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorMode {
+    Colored,
+    Plain,
+}
 use super::checker::{
     build_strict_violation_message, CheckAllResult, Violation,
 };
@@ -12,12 +19,13 @@ fn format_location(
     file: &str,
     line: usize,
     column: usize,
-    colorize: bool,
+    color_mode: ColorMode,
 ) -> String {
-    if colorize {
-        format!("\x1b[36m{}:{}:{}\x1b[0m", file, line, column)
-    } else {
-        format!("{}:{}:{}", file, line, column)
+    match color_mode {
+        ColorMode::Colored => {
+            format!("\x1b[36m{}:{}:{}\x1b[0m", file, line, column)
+        }
+        ColorMode::Plain => format!("{}:{}:{}", file, line, column),
     }
 }
 
@@ -28,12 +36,15 @@ const REFERENCE_LOCATION_PLACEHOLDER: &str = "{{reference_location}}";
 /// This function is responsible for substituting `{{reference_location}}` in custom templates.
 /// - If the message contains `{{reference_location}}`, substitute it with the formatted location
 /// - Otherwise, prepend the location on its own line (default behavior)
-fn format_violation_message(violation: &Violation, colorize: bool) -> String {
+fn format_violation_message(
+    violation: &Violation,
+    color_mode: ColorMode,
+) -> String {
     let location = format_location(
         &violation.identifier.file,
         violation.source_location.line,
         violation.source_location.column,
-        colorize,
+        color_mode,
     );
 
     if violation.message.contains(REFERENCE_LOCATION_PLACEHOLDER) {
@@ -50,7 +61,7 @@ fn format_violation_message(violation: &Violation, colorize: bool) -> String {
 pub fn write_text<W: std::io::Write>(
     result: &CheckAllResult,
     mut writer: W,
-    colorize: bool,
+    color_mode: ColorMode,
 ) -> anyhow::Result<()> {
     if !result.has_violations() {
         writeln!(writer, "No violations detected!")?;
@@ -65,7 +76,7 @@ pub fn write_text<W: std::io::Write>(
         writeln!(writer, "{} violation(s) detected:", sorted_violations.len())?;
 
         for violation in sorted_violations {
-            let formatted = format_violation_message(violation, colorize);
+            let formatted = format_violation_message(violation, color_mode);
             writeln!(writer, "{}\n", formatted)?;
         }
     }
@@ -115,20 +126,20 @@ mod tests {
 
     #[test]
     fn test_format_location_with_color() {
-        let result = format_location("foo.rb", 10, 5, true);
+        let result = format_location("foo.rb", 10, 5, ColorMode::Colored);
         assert_eq!(result, "\x1b[36mfoo.rb:10:5\x1b[0m");
     }
 
     #[test]
     fn test_format_location_without_color() {
-        let result = format_location("foo.rb", 10, 5, false);
+        let result = format_location("foo.rb", 10, 5, ColorMode::Plain);
         assert_eq!(result, "foo.rb:10:5");
     }
 
     #[test]
     fn test_format_violation_message_with_color() {
         let violation = sample_violation();
-        let result = format_violation_message(&violation, true);
+        let result = format_violation_message(&violation, ColorMode::Colored);
         assert_eq!(
             result,
             "\x1b[36mfoo/bar/file.rb:10:5\x1b[0m\nPrivacy violation: `Foo` is private"
@@ -138,7 +149,7 @@ mod tests {
     #[test]
     fn test_format_violation_message_without_color() {
         let violation = sample_violation();
-        let result = format_violation_message(&violation, false);
+        let result = format_violation_message(&violation, ColorMode::Plain);
         assert_eq!(
             result,
             "foo/bar/file.rb:10:5\nPrivacy violation: `Foo` is private"
@@ -154,7 +165,7 @@ mod tests {
         };
 
         let mut output = Vec::new();
-        write_text(&result, &mut output, false).unwrap();
+        write_text(&result, &mut output, ColorMode::Plain).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             "No violations detected!\n"
@@ -170,7 +181,7 @@ mod tests {
         };
 
         let mut output = Vec::new();
-        write_text(&result, &mut output, false).unwrap();
+        write_text(&result, &mut output, ColorMode::Plain).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert!(text.contains("1 violation(s) detected:"));
         assert!(text.contains("foo/bar/file.rb:10:5"));
@@ -200,7 +211,7 @@ mod tests {
     #[test]
     fn test_format_violation_message_with_custom_template_no_color() {
         let violation = custom_template_violation();
-        let result = format_violation_message(&violation, false);
+        let result = format_violation_message(&violation, ColorMode::Plain);
         assert_eq!(
             result,
             "foo/bar/file.rb:10:5\nCustom privacy error for `Foo`"
@@ -210,7 +221,7 @@ mod tests {
     #[test]
     fn test_format_violation_message_with_custom_template_with_color() {
         let violation = custom_template_violation();
-        let result = format_violation_message(&violation, true);
+        let result = format_violation_message(&violation, ColorMode::Colored);
         assert_eq!(
             result,
             "\x1b[36mfoo/bar/file.rb:10:5\x1b[0m\nCustom privacy error for `Foo`"

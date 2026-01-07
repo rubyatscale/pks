@@ -74,11 +74,17 @@ pub fn create(
 }
 
 /// Determine whether to use colors based on the color choice
-fn should_colorize(color: ColorChoice) -> bool {
+fn color_mode_for(color: ColorChoice) -> text::ColorMode {
     match color {
-        ColorChoice::Always => true,
-        ColorChoice::Never => false,
-        ColorChoice::Auto => std::io::stdout().is_terminal(),
+        ColorChoice::Always => text::ColorMode::Colored,
+        ColorChoice::Never => text::ColorMode::Plain,
+        ColorChoice::Auto => {
+            if std::io::stdout().is_terminal() {
+                text::ColorMode::Colored
+            } else {
+                text::ColorMode::Plain
+            }
+        }
     }
 }
 
@@ -96,7 +102,7 @@ pub fn check(
             text::write_text(
                 &result,
                 std::io::stdout(),
-                should_colorize(color),
+                color_mode_for(color),
             )?;
         }
         OutputFormat::CSV => {
