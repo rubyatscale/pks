@@ -6,7 +6,12 @@
 use itertools::chain;
 use serde::Serialize;
 
-use super::checker::{build_strict_violation_message, CheckAllResult};
+use super::checker::{
+    build_strict_violation_message, CheckAllResult, Violation,
+};
+use super::checker_configuration::CheckerType;
+use super::template::{build_violation_vars, expand};
+use super::Configuration;
 
 #[derive(Serialize)]
 struct JsonOutput<'a> {
@@ -17,7 +22,7 @@ struct JsonOutput<'a> {
 
 #[derive(Serialize)]
 struct JsonViolation<'a> {
-    violation_type: &'a str,
+    violation_type: &'a CheckerType,
     file: &'a str,
     line: usize,
     column: usize,
@@ -30,7 +35,7 @@ struct JsonViolation<'a> {
 
 #[derive(Serialize)]
 struct JsonStaleTodo<'a> {
-    violation_type: &'a str,
+    violation_type: &'a CheckerType,
     file: &'a str,
     constant_name: &'a str,
     referencing_pack_name: &'a str,
@@ -45,8 +50,25 @@ struct JsonSummary {
     success: bool,
 }
 
+/// Build message from violation using template expansion.
+/// For JSON, reference_location is cleared (location is in separate fields).
+fn build_message(v: &Violation, config: &Configuration) -> String {
+    if v.identifier.strict {
+        build_strict_violation_message(&v.identifier)
+    } else {
+        let checker_config =
+            &config.checker_configuration[&v.identifier.violation_type];
+        let template = checker_config.checker_error_template();
+        let mut vars = build_violation_vars(v, checker_config);
+        // Clear reference_location for JSON - location is in separate fields
+        vars.insert("reference_location", String::new());
+        expand(&template, &vars)
+    }
+}
+
 pub fn write_json<W: std::io::Write>(
     result: &CheckAllResult,
+    config: &Configuration,
     writer: W,
 ) -> anyhow::Result<()> {
     let all_violations = chain!(
@@ -57,23 +79,16 @@ pub fn write_json<W: std::io::Write>(
     // JSON outputs raw structured data - consumers can format as needed.
     // Location is provided as separate file/line/column fields.
     let violations: Vec<JsonViolation> = all_violations
-        .map(|v| {
-            let message = if v.identifier.strict {
-                build_strict_violation_message(&v.identifier)
-            } else {
-                v.message.clone()
-            };
-            JsonViolation {
-                violation_type: &v.identifier.violation_type,
-                file: &v.identifier.file,
-                line: v.source_location.line,
-                column: v.source_location.column,
-                constant_name: &v.identifier.constant_name,
-                referencing_pack_name: &v.identifier.referencing_pack_name,
-                defining_pack_name: &v.identifier.defining_pack_name,
-                strict: v.identifier.strict,
-                message,
-            }
+        .map(|v| JsonViolation {
+            violation_type: &v.identifier.violation_type,
+            file: &v.identifier.file,
+            line: v.source_location.line,
+            column: v.source_location.column,
+            constant_name: &v.identifier.constant_name,
+            referencing_pack_name: &v.identifier.referencing_pack_name,
+            defining_pack_name: &v.identifier.defining_pack_name,
+            strict: v.identifier.strict,
+            message: build_message(v, config),
         })
         .collect();
 

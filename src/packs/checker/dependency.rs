@@ -220,13 +220,15 @@ mod tests {
                 name: "packs/bar".to_owned(),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
                 enforce_dependencies: Some(CheckerSetting::True),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "Dependency violation: `::Bar` belongs to `packs/bar`, but `packs/foo/package.yml` does not specify a dependency on `packs/bar`.".to_string(),
-                "dependency".to_string(), false)),
+                CheckerType::Dependency,
+                false,
+            )),
         };
         test_check(
             &Checker {
@@ -248,13 +250,15 @@ mod tests {
                 name: "packs/bar".to_owned(),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
                 enforce_dependencies: Some(CheckerSetting::Strict),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "Dependency violation: `::Bar` belongs to `packs/bar`, but `packs/foo/package.yml` does not specify a dependency on `packs/bar`.".to_string(),
-                "dependency".to_string(), true)),
+                CheckerType::Dependency,
+                true,
+            )),
         };
         test_check(
             &Checker {

@@ -18,6 +18,7 @@ pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod template;
 pub(crate) mod text;
 pub(crate) mod walk_directory;
 
@@ -101,15 +102,16 @@ pub fn check(
         OutputFormat::Packwerk => {
             text::write_text(
                 &result,
+                configuration,
                 std::io::stdout(),
                 color_mode_for(color),
             )?;
         }
         OutputFormat::CSV => {
-            csv::write_csv(&result, std::io::stdout())?;
+            csv::write_csv(&result, configuration, std::io::stdout())?;
         }
         OutputFormat::JSON => {
-            json::write_json(&result, std::io::stdout())?;
+            json::write_json(&result, configuration, std::io::stdout())?;
         }
     }
 

@@ -7,6 +7,7 @@ pub mod tests {
         checker::{
             reference::Reference, CheckerInterface, ViolationIdentifier,
         },
+        checker_configuration::CheckerType,
         pack::Pack,
         Configuration, PackSet, SourceLocation, Violation,
     };
@@ -26,26 +27,46 @@ pub mod tests {
     }
 
     pub fn build_expected_violation(
-        message: String,
-        violation_type: String,
+        violation_type: CheckerType,
         strict: bool,
     ) -> Violation {
         build_expected_violation_with_constant(
-            message,
             violation_type,
             strict,
             String::from("::Bar"),
         )
     }
 
+    pub fn build_expected_violation_with_layers(
+        violation_type: CheckerType,
+        strict: bool,
+        defining_layer: &str,
+        referencing_layer: &str,
+    ) -> Violation {
+        Violation {
+            identifier: ViolationIdentifier {
+                violation_type,
+                strict,
+                file: String::from("packs/foo/app/services/foo.rb"),
+                constant_name: String::from("::Bar"),
+                referencing_pack_name: String::from("packs/foo"),
+                defining_pack_name: String::from("packs/bar"),
+            },
+            source_location: SourceLocation { line: 3, column: 1 },
+            referencing_pack_relative_yml: String::from(
+                "packs/foo/package.yml",
+            ),
+            defining_layer: Some(defining_layer.to_string()),
+            referencing_layer: Some(referencing_layer.to_string()),
+        }
+    }
+
     pub fn build_expected_violation_with_constant(
-        message: String,
-        violation_type: String,
+        violation_type: CheckerType,
         strict: bool,
         constant_name: String,
     ) -> Violation {
         Violation {
-            message,
             identifier: ViolationIdentifier {
                 violation_type,
                 strict,
@@ -55,6 +76,11 @@ pub mod tests {
                 defining_pack_name: String::from("packs/bar"),
             },
             source_location: SourceLocation { line: 3, column: 1 },
+            referencing_pack_relative_yml: String::from(
+                "packs/foo/package.yml",
+            ),
+            defining_layer: None,
+            referencing_layer: None,
         }
     }
 
@@ -79,8 +105,10 @@ pub mod tests {
     }
 
     pub fn default_referencing_pack() -> Pack {
+        use std::path::PathBuf;
         Pack {
             name: "packs/foo".to_owned(),
+            relative_path: PathBuf::from("packs/foo"),
             ..Pack::default()
         }
     }

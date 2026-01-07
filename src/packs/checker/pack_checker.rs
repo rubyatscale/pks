@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::packs::{
     checker_configuration::{CheckerConfiguration, CheckerType},
     pack::{CheckerSetting, Pack},
@@ -151,21 +149,34 @@ impl<'a> PackChecker<'a> {
             .is_ignored(file_path, &self.checker_configuration.checker_name())
     }
 
+    /// Create a violation with optional layer information.
+    /// Template expansion is deferred to formatters.
     pub fn violation(
         &self,
-        extra_template_fields: Option<HashMap<&str, String>>,
+        layer_info: Option<(&str, &str)>,
     ) -> anyhow::Result<Option<Violation>> {
+        let (defining_layer, referencing_layer) = match layer_info {
+            Some((def, ref_)) => {
+                (Some(def.to_string()), Some(ref_.to_string()))
+            }
+            None => (None, None),
+        };
         Ok(Some(Violation {
-            message: self.interpolate_violation_message(extra_template_fields),
             identifier: self.violation_identifier(),
             source_location: self.reference.source_location.clone(),
+            referencing_pack_relative_yml: self
+                .referencing_pack
+                .relative_yml()
+                .to_string_lossy()
+                .to_string(),
+            defining_layer,
+            referencing_layer,
         }))
     }
 
     pub fn violation_identifier(&self) -> ViolationIdentifier {
-        let violation_type: &str = &self.checker_configuration.checker_name();
         ViolationIdentifier {
-            violation_type: violation_type.to_string(),
+            violation_type: self.checker_type.clone(),
             strict: self.is_strict(),
             file: self.reference.relative_referencing_file.clone(),
             constant_name: self.reference.constant_name.clone(),
@@ -173,49 +184,11 @@ impl<'a> PackChecker<'a> {
             defining_pack_name: self.defining_pack.unwrap().name.clone(),
         }
     }
-
-    fn interpolate_violation_message(
-        &self,
-        extra_template_fields: Option<HashMap<&str, String>>,
-    ) -> String {
-        let mut map = extra_template_fields.unwrap_or_default();
-        map.insert(
-            "{{violation_name}}",
-            self.checker_configuration.pretty_checker_name(),
-        );
-        map.insert(
-            "{{referencing_pack_name}}",
-            self.referencing_pack.name.clone(),
-        );
-        map.insert(
-            "{{defining_pack_name}}",
-            self.defining_pack.unwrap().name.clone(),
-        );
-        map.insert("{{constant_name}}", self.reference.constant_name.clone());
-        map.insert(
-            "{{referencing_pack_relative_yml}}",
-            self.referencing_pack
-                .relative_yml()
-                .to_string_lossy()
-                .to_string(),
-        );
-        // NOTE: {{reference_location}} is NOT substituted here.
-        // Formatters are responsible for substituting it with their preferred format
-        // (colorized for text output, etc.). This allows custom templates to use
-        // {{reference_location}} while giving formatters control over presentation.
-
-        let mut interpolated_msg =
-            self.checker_configuration.checker_error_template();
-        for (key, value) in &map {
-            interpolated_msg = interpolated_msg.replace(key, value);
-        }
-        interpolated_msg
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     use crate::packs::{PackSet, SourceLocation};
 
@@ -302,26 +275,18 @@ mod tests {
         assert_eq!(checker.referencing_pack_name(), "packs/baz".to_string());
         assert_eq!(checker.rules_checker_setting(), &CheckerSetting::False);
         assert!(!checker.violation_globally_disabled());
-        let expected_violation_message: String = "Folder Privacy violation: `Foo` belongs to `packs/foo`, which is private to `packs/baz` as it is not a sibling pack or parent pack.".into();
-        assert_eq!(
-            checker.interpolate_violation_message(None),
-            expected_violation_message
-        );
 
-        let mut config = config;
-        let mut privacy_checker =
-            CheckerConfiguration::new(CheckerType::FolderPrivacy);
-        privacy_checker.override_error_template =
-            Some("{{violation_name}}".into());
-        config
-            .checker_configuration
-            .insert(CheckerType::FolderPrivacy, privacy_checker);
-        let checker =
-            PackChecker::new(&config, CheckerType::FolderPrivacy, &refer)?;
+        // Test violation() creates correct data
+        let violation = checker.violation(None)?.unwrap();
         assert_eq!(
-            checker.interpolate_violation_message(None),
-            "Folder Privacy".to_string()
+            violation.identifier.violation_type,
+            CheckerType::FolderPrivacy
         );
+        assert_eq!(violation.identifier.constant_name, "Foo");
+        assert_eq!(violation.identifier.defining_pack_name, "packs/foo");
+        assert_eq!(violation.identifier.referencing_pack_name, "packs/baz");
+        assert!(violation.defining_layer.is_none());
+        assert!(violation.referencing_layer.is_none());
 
         Ok(())
     }
@@ -332,11 +297,9 @@ mod tests {
         let checker = PackChecker::new(&config, CheckerType::Privacy, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Incoming);
-        let expected_violation_message: String = "Privacy violation: `Foo` is private to `packs/foo`, but referenced from `packs/baz`".into();
-        assert_eq!(
-            checker.interpolate_violation_message(None),
-            expected_violation_message
-        );
+
+        let violation = checker.violation(None)?.unwrap();
+        assert_eq!(violation.identifier.violation_type, CheckerType::Privacy);
 
         Ok(())
     }
@@ -348,10 +311,11 @@ mod tests {
             PackChecker::new(&config, CheckerType::Dependency, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Outgoing);
-        let expected_violation_message: String = "Dependency violation: `Foo` belongs to `packs/foo`, but `package.yml` does not specify a dependency on `packs/foo`.".into();
+
+        let violation = checker.violation(None)?.unwrap();
         assert_eq!(
-            checker.interpolate_violation_message(None),
-            expected_violation_message
+            violation.identifier.violation_type,
+            CheckerType::Dependency
         );
 
         Ok(())
@@ -363,11 +327,13 @@ mod tests {
         let checker = PackChecker::new(&config, CheckerType::Layer, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Outgoing);
-        let expected_violation_message: String = "Layer violation: `Foo` belongs to `packs/foo` (whose layer is `{{defining_layer}}`) cannot be accessed from `packs/baz` (whose layer is `{{referencing_layer}}`)".into();
-        assert_eq!(
-            checker.interpolate_violation_message(None),
-            expected_violation_message
-        );
+
+        // Layer violations include layer info
+        let violation =
+            checker.violation(Some(("product", "utilities")))?.unwrap();
+        assert_eq!(violation.identifier.violation_type, CheckerType::Layer);
+        assert_eq!(violation.defining_layer, Some("product".to_string()));
+        assert_eq!(violation.referencing_layer, Some("utilities".to_string()));
 
         Ok(())
     }
@@ -379,10 +345,11 @@ mod tests {
             PackChecker::new(&config, CheckerType::Visibility, &refer)?;
 
         assert_eq!(checker.violation_direction(), ViolationDirection::Incoming);
-        let expected_violation_message: String = "Visibility violation: `Foo` belongs to `packs/foo`, which is not visible to `packs/baz`".into();
+
+        let violation = checker.violation(None)?.unwrap();
         assert_eq!(
-            checker.interpolate_violation_message(None),
-            expected_violation_message
+            violation.identifier.violation_type,
+            CheckerType::Visibility
         );
 
         Ok(())

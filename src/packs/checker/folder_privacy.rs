@@ -85,12 +85,14 @@ mod tests {
                 enforce_folder_privacy: Some(CheckerSetting::True),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "Folder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
-                "folder_privacy".to_string(), false)),
+                CheckerType::FolderPrivacy,
+                false,
+            )),
         };
         test_check(
             &Checker {
@@ -150,12 +152,14 @@ mod tests {
                 enforce_folder_privacy: Some(CheckerSetting::Strict),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "Folder Privacy violation: `::Bar` belongs to `packs/bar`, which is private to `packs/foo` as it is not a sibling pack or parent pack.".to_string(),
-                "folder_privacy".to_string(), true)),
+                CheckerType::FolderPrivacy,
+                true,
+            )),
         };
         test_check(
             &Checker {

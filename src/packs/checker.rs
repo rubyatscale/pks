@@ -24,9 +24,6 @@ use rayon::prelude::IntoParallelRefIterator;
 use rayon::prelude::ParallelIterator;
 use reference::Reference;
 use std::collections::HashMap;
-use std::fmt;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::{collections::HashSet, path::PathBuf};
 use tracing::debug;
 
@@ -35,7 +32,7 @@ use super::reference_extractor::get_all_references;
 
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct ViolationIdentifier {
-    pub violation_type: String,
+    pub violation_type: CheckerType,
     pub strict: bool,
     pub file: String,
     pub constant_name: String,
@@ -52,13 +49,15 @@ pub struct ViolationIdentifier {
 /// - Keeping line/column out of the identity makes violations stable across
 ///   minor code movements that shift line numbers
 ///
-/// `message` contains the violation description without the file location prefix.
-/// Formatters are responsible for combining source_location with message as needed.
+/// Violations store only data - template expansion happens in formatters.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
-    pub message: String,
     pub identifier: ViolationIdentifier,
     pub source_location: SourceLocation,
+    // Additional data for template expansion:
+    pub referencing_pack_relative_yml: String,
+    pub defining_layer: Option<String>,
+    pub referencing_layer: Option<String>,
 }
 
 pub(crate) trait CheckerInterface {
@@ -82,76 +81,11 @@ pub struct CheckAllResult {
     pub strict_mode_violations: HashSet<Violation>,
 }
 
-const REFERENCE_LOCATION_PLACEHOLDER: &str = "{{reference_location}}";
-
 impl CheckAllResult {
     pub fn has_violations(&self) -> bool {
         !self.reportable_violations.is_empty()
             || !self.stale_violations.is_empty()
             || !self.strict_mode_violations.is_empty()
-    }
-
-    /// Format a violation message, substituting `{{reference_location}}` if present.
-    fn format_violation_message(violation: &Violation) -> String {
-        let location = format!(
-            "{}:{}:{}",
-            violation.identifier.file,
-            violation.source_location.line,
-            violation.source_location.column
-        );
-
-        if violation.message.contains(REFERENCE_LOCATION_PLACEHOLDER) {
-            // Custom template uses {{reference_location}} - substitute it
-            violation.message.replace(
-                REFERENCE_LOCATION_PLACEHOLDER,
-                &format!("{}\n", location),
-            )
-        } else {
-            // Default template - prepend location
-            format!("{}\n{}", location, violation.message)
-        }
-    }
-
-    fn write_violations(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if !self.reportable_violations.is_empty() {
-            let mut sorted_violations: Vec<&Violation> =
-                self.reportable_violations.iter().collect();
-            sorted_violations.sort_by(|a, b| a.message.cmp(&b.message));
-
-            writeln!(f, "{} violation(s) detected:", sorted_violations.len())?;
-
-            for violation in sorted_violations {
-                let formatted = Self::format_violation_message(violation);
-                writeln!(f, "{}\n", formatted)?;
-            }
-        }
-
-        if !self.stale_violations.is_empty() {
-            writeln!(
-                f,
-                "There were stale violations found, please run `{} update`",
-                bin_locater::packs_bin_name(),
-            )?;
-        }
-
-        if !self.strict_mode_violations.is_empty() {
-            for v in self.strict_mode_violations.iter() {
-                let error_message =
-                    build_strict_violation_message(&v.identifier);
-                writeln!(f, "{}", error_message)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for CheckAllResult {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.has_violations() {
-            self.write_violations(f)
-        } else {
-            write!(f, "No violations detected!")
-        }
     }
 }
 struct CheckAllBuilder<'a> {
@@ -543,57 +477,5 @@ fn remove_reference_to_dependency(
     write_pack_to_disk(&updated_pack)?;
     Ok(())
 }
-#[cfg(test)]
-mod tests {
-    use std::collections::HashSet;
-
-    use crate::packs::checker::{
-        CheckAllResult, Violation, ViolationIdentifier,
-    };
-    use crate::packs::SourceLocation;
-
-    #[test]
-    fn test_write_violations() {
-        let check_result = CheckAllResult {
-            reportable_violations: [Violation {
-                    message: "Privacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`".to_string(),
-                    identifier: ViolationIdentifier {
-                        violation_type: "Privacy".to_string(),
-                        strict: false,
-                        file: "foo/bar/file1.rb".to_string(),
-                        constant_name: "::Foo::PrivateClass".to_string(),
-                        referencing_pack_name: "bar".to_string(),
-                        defining_pack_name: "foo".to_string(),
-                    },
-                    source_location: SourceLocation { line: 10, column: 5 },
-                },
-                Violation {
-                    message: "Dependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`".to_string(),
-                    identifier: ViolationIdentifier {
-                        violation_type: "Dependency".to_string(),
-                        strict: false,
-                        file: "foo/bar/file2.rb".to_string(),
-                        constant_name: "::Foo::AnotherClass".to_string(),
-                        referencing_pack_name: "foo".to_string(),
-                        defining_pack_name: "bar".to_string(),
-                     },
-                     source_location: SourceLocation { line: 15, column: 3 },
-                }].iter().cloned().collect(),
-            stale_violations: Vec::new(),
-            strict_mode_violations: HashSet::new(),
-        };
-
-        let expected_output = "2 violation(s) detected:
-foo/bar/file2.rb:15:3
-Dependency violation: `::Foo::AnotherClass` is not allowed to depend on `::Bar::SomeClass`
-
-foo/bar/file1.rb:10:5
-Privacy violation: `::Foo::PrivateClass` is private to `foo`, but referenced from `bar`
-
-";
-
-        let actual = format!("{}", check_result);
-
-        assert_eq!(actual, expected_output);
-    }
-}
+// Note: Display impl was removed from CheckAllResult. Use write_text() directly with Configuration.
+// Tests for text formatting are in text.rs

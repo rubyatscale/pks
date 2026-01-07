@@ -1,4 +1,9 @@
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+use serde::Serialize;
+use std::fmt;
+use std::str::FromStr;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CheckerType {
     Dependency,
     Privacy,
@@ -7,17 +12,44 @@ pub enum CheckerType {
     Visibility,
 }
 
+impl fmt::Display for CheckerType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CheckerType::Dependency => write!(f, "dependency"),
+            CheckerType::Privacy => write!(f, "privacy"),
+            CheckerType::FolderPrivacy => write!(f, "folder_privacy"),
+            CheckerType::Layer => write!(f, "layer"),
+            CheckerType::Visibility => write!(f, "visibility"),
+        }
+    }
+}
+
+impl FromStr for CheckerType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dependency" => Ok(CheckerType::Dependency),
+            "privacy" => Ok(CheckerType::Privacy),
+            "folder_privacy" => Ok(CheckerType::FolderPrivacy),
+            "layer" => Ok(CheckerType::Layer),
+            "visibility" => Ok(CheckerType::Visibility),
+            _ => Err(format!("Unknown checker type: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct CheckerConfiguration {
     pub checker_type: CheckerType,
     pub override_error_template: Option<String>,
 }
 
-const DEFAULT_DEPENDENCY_TEMPLATE: &str = "Dependency violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, but `{{referencing_pack_relative_yml}}` does not specify a dependency on `{{defining_pack_name}}`.";
-const DEFAULT_FOLDER_PRIVACY_TEMPLATE: &str = "{{violation_name}} violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is private to `{{referencing_pack_name}}` as it is not a sibling pack or parent pack.";
-const DEFAULT_LAYER_TEMPLATE: &str = "Layer violation: `{{constant_name}}` belongs to `{{defining_pack_name}}` (whose layer is `{{defining_layer}}`) cannot be accessed from `{{referencing_pack_name}}` (whose layer is `{{referencing_layer}}`)";
-const DEFAULT_VISIBILITY_TEMPLATE: &str = "Visibility violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is not visible to `{{referencing_pack_name}}`";
-const DEFAULT_PRIVACY_TEMPLATE: &str = "Privacy violation: `{{constant_name}}` is private to `{{defining_pack_name}}`, but referenced from `{{referencing_pack_name}}`";
+const DEFAULT_DEPENDENCY_TEMPLATE: &str = "{{reference_location}}Dependency violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, but `{{referencing_pack_relative_yml}}` does not specify a dependency on `{{defining_pack_name}}`.";
+const DEFAULT_FOLDER_PRIVACY_TEMPLATE: &str = "{{reference_location}}{{violation_name}} violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is private to `{{referencing_pack_name}}` as it is not a sibling pack or parent pack.";
+const DEFAULT_LAYER_TEMPLATE: &str = "{{reference_location}}Layer violation: `{{constant_name}}` belongs to `{{defining_pack_name}}` (whose layer is `{{defining_layer}}`) cannot be accessed from `{{referencing_pack_name}}` (whose layer is `{{referencing_layer}}`)";
+const DEFAULT_VISIBILITY_TEMPLATE: &str = "{{reference_location}}Visibility violation: `{{constant_name}}` belongs to `{{defining_pack_name}}`, which is not visible to `{{referencing_pack_name}}`";
+const DEFAULT_PRIVACY_TEMPLATE: &str = "{{reference_location}}Privacy violation: `{{constant_name}}` is private to `{{defining_pack_name}}`, but referenced from `{{referencing_pack_name}}`";
 
 impl CheckerConfiguration {
     pub fn new(checker_type: CheckerType) -> Self {
