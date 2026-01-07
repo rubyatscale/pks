@@ -15,6 +15,11 @@ repository = "https://github.com/rubyatscale/pks"
 [profile.dev]
 debug = true
 
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
 [[bin]]
 name = "pks"
 path = "src/main.rs"
