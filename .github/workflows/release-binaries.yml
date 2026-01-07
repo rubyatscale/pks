@@ -1,0 +1,68 @@
+name: Release Binaries
+
+on:
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  upload-mac-universal-bin:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build macOS binaries
+        run: cargo build --release --target aarch64-apple-darwin --target x86_64-apple-darwin
+
+      - name: Create universal binary and upload
+        run: |
+          # Combine intel and m1 binaries into a single universal binary
+          lipo -create -output target/pks target/aarch64-apple-darwin/release/pks target/x86_64-apple-darwin/release/pks
+
+          # Create tarball for homebrew
+          tar -czf target/pks-mac.tar.gz -C target pks
+
+          # Upload to release
+          gh release upload ${{ github.event.release.tag_name }} target/pks-mac.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-linux-bin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross
+        run: cargo install cross
+
+      - name: Build linux binaries
+        run: |
+          cross build --release --target x86_64-unknown-linux-gnu
+          cross build --release --target aarch64-unknown-linux-gnu
+
+      - name: Upload linux binaries
+        run: |
+          tar -czf target/x86_64-unknown-linux-gnu.tar.gz -C target/x86_64-unknown-linux-gnu/release pks
+          tar -czf target/aarch64-unknown-linux-gnu.tar.gz -C target/aarch64-unknown-linux-gnu/release pks
+          gh release upload ${{ github.event.release.tag_name }} target/x86_64-unknown-linux-gnu.tar.gz
+          gh release upload ${{ github.event.release.tag_name }} target/aarch64-unknown-linux-gnu.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  generate-dotslash-files:
+    name: Generate DotSlash files
+    needs:
+      - upload-linux-bin
+      - upload-mac-universal-bin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: facebook/dotslash-publish-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config: .github/workflows/dotslash-config.json
+          tag: ${{ github.event.release.tag_name }}
