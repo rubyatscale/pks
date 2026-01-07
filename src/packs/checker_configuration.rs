@@ -1,10 +1,42 @@
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+use serde::Serialize;
+use std::fmt;
+use std::str::FromStr;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CheckerType {
     Dependency,
     Privacy,
     FolderPrivacy,
     Layer,
     Visibility,
+}
+
+impl fmt::Display for CheckerType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CheckerType::Dependency => write!(f, "dependency"),
+            CheckerType::Privacy => write!(f, "privacy"),
+            CheckerType::FolderPrivacy => write!(f, "folder_privacy"),
+            CheckerType::Layer => write!(f, "layer"),
+            CheckerType::Visibility => write!(f, "visibility"),
+        }
+    }
+}
+
+impl FromStr for CheckerType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dependency" => Ok(CheckerType::Dependency),
+            "privacy" => Ok(CheckerType::Privacy),
+            "folder_privacy" => Ok(CheckerType::FolderPrivacy),
+            "layer" => Ok(CheckerType::Layer),
+            "visibility" => Ok(CheckerType::Visibility),
+            _ => Err(format!("Unknown checker type: {}", s)),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

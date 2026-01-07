@@ -175,11 +175,20 @@ impl CheckerSetting {
 
 impl Pack {
     pub fn all_violations(&self) -> Vec<ViolationIdentifier> {
+        use super::checker_configuration::CheckerType;
+        use std::str::FromStr;
+
         let mut violations = Vec::new();
         let violations_by_pack = &self.package_todo.violations_by_defining_pack;
         for (defining_pack_name, violation_groups) in violations_by_pack {
             for (constant_name, violation_group) in violation_groups {
-                for violation_type in &violation_group.violation_types {
+                for violation_type_str in &violation_group.violation_types {
+                    // Parse the string to CheckerType, skip unknown types
+                    let Ok(violation_type) =
+                        CheckerType::from_str(violation_type_str)
+                    else {
+                        continue;
+                    };
                     for file in &violation_group.files {
                         let identifier = ViolationIdentifier {
                             violation_type: violation_type.clone(),
@@ -780,9 +789,10 @@ ignored_private_constants:
         let mut actual = pack.all_violations();
         actual.sort_by(|a, b| a.file.cmp(&b.file));
 
+        use super::super::checker_configuration::CheckerType;
         let expected = vec![
             ViolationIdentifier {
-                violation_type: "dependency".to_string(),
+                violation_type: CheckerType::Dependency,
                 strict: false,
                 file: "packs/foo/app/services/foo.rb".to_string(),
                 constant_name: "::Bar".to_string(),
@@ -790,7 +800,7 @@ ignored_private_constants:
                 defining_pack_name: "packs/bar".to_string(),
             },
             ViolationIdentifier {
-                violation_type: "dependency".to_string(),
+                violation_type: CheckerType::Dependency,
                 strict: false,
                 file: "packs/foo/app/services/other_foo.rb".to_string(),
                 constant_name: "::Bar".to_string(),

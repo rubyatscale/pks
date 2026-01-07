@@ -118,7 +118,7 @@ pub fn package_todos_for_pack_name(
                 .insert(violation.identifier.file.to_owned());
             violation_group
                 .violation_types
-                .insert(violation.identifier.violation_type.to_owned());
+                .insert(violation.identifier.violation_type.to_string());
         }
 
         let package_todo = PackageTodo {

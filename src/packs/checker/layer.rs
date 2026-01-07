@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::pack_checker::PackChecker;
 use super::{CheckerInterface, ValidatorInterface};
 use crate::packs::checker::Reference;
@@ -120,10 +118,8 @@ impl CheckerInterface for Checker {
                     return Ok(None);
                 }
 
-                let mut map: HashMap<&str, String> = HashMap::new();
-                map.insert("{{defining_layer}}", defining_layer.into());
-                map.insert("{{referencing_layer}}", referencing_layer.into());
-                pack_checker.violation(Some(map))
+                pack_checker
+                    .violation(Some((defining_layer, referencing_layer)))
             }
             _ => Ok(None),
         }
@@ -141,7 +137,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::packs::checker::common_test::tests::{
-        build_expected_violation, default_defining_pack,
+        build_expected_violation_with_layers, default_defining_pack,
         default_referencing_pack, test_check, TestChecker,
     };
     use crate::packs::checker_configuration::CheckerType;
@@ -195,7 +191,7 @@ mod tests {
             referenced_constant_name: Some(String::from("::Bar")),
             defining_pack: Some(Pack {
                 name: "packs/bar".to_owned(),
-               layer: Some("product".to_string()),
+                layer: Some("product".to_string()),
                 ..default_defining_pack()
             }),
             referencing_pack: Pack {
@@ -204,9 +200,12 @@ mod tests {
                 layer: Some("utilities".to_string()),
                 ..default_referencing_pack()
             },
-            expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nLayer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(), 
-                "layer".to_string(), false)),
+            expected_violation: Some(build_expected_violation_with_layers(
+                CheckerType::Layer,
+                false,
+                "product",
+                "utilities",
+            )),
         };
         test_check(&checker_with_layers(), &mut test_checker)
     }
@@ -219,7 +218,7 @@ mod tests {
             referenced_constant_name: Some(String::from("::Bar")),
             defining_pack: Some(Pack {
                 name: "packs/bar".to_owned(),
-               layer: Some("product".to_string()),
+                layer: Some("product".to_string()),
                 ..default_defining_pack()
             }),
             referencing_pack: Pack {
@@ -228,9 +227,12 @@ mod tests {
                 layer: Some("utilities".to_string()),
                 ..default_referencing_pack()
             },
-            expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nLayer violation: `::Bar` belongs to `packs/bar` (whose layer is `product`) cannot be accessed from `packs/foo` (whose layer is `utilities`)".to_string(), 
-                "layer".to_string(), true)),
+            expected_violation: Some(build_expected_violation_with_layers(
+                CheckerType::Layer,
+                true,
+                "product",
+                "utilities",
+            )),
         };
         test_check(&checker_with_layers(), &mut test_checker)
     }

@@ -18,6 +18,8 @@ pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod template;
+pub(crate) mod text;
 pub(crate) mod walk_directory;
 
 mod constant_dependencies;
@@ -40,6 +42,7 @@ pub(crate) use self::parsing::ruby::zeitwerk::get_zeitwerk_constant_resolver;
 pub(crate) use self::parsing::ParsedDefinition;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
+use cli::ColorChoice;
 use cli::OutputFormat;
 use cli::ViolationsFound;
 pub(crate) use configuration::Configuration;
@@ -49,6 +52,7 @@ pub(crate) use package_todo::PackageTodo;
 use anyhow::Context;
 use serde::Deserialize;
 use serde::Serialize;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 pub fn greet() {
@@ -70,9 +74,25 @@ pub fn create(
     Ok(())
 }
 
+/// Determine whether to use colors based on the color choice
+fn color_mode_for(color: ColorChoice) -> text::ColorMode {
+    match color {
+        ColorChoice::Always => text::ColorMode::Colored,
+        ColorChoice::Never => text::ColorMode::Plain,
+        ColorChoice::Auto => {
+            if std::io::stdout().is_terminal() {
+                text::ColorMode::Colored
+            } else {
+                text::ColorMode::Plain
+            }
+        }
+    }
+}
+
 pub fn check(
     configuration: &Configuration,
     output_format: OutputFormat,
+    color: ColorChoice,
     files: Vec<String>,
 ) -> anyhow::Result<()> {
     let result = checker::check_all(configuration, files)
@@ -80,13 +100,18 @@ pub fn check(
 
     match output_format {
         OutputFormat::Packwerk => {
-            println!("{}", result);
+            text::write_text(
+                &result,
+                configuration,
+                std::io::stdout(),
+                color_mode_for(color),
+            )?;
         }
         OutputFormat::CSV => {
-            csv::write_csv(&result, std::io::stdout())?;
+            csv::write_csv(&result, configuration, std::io::stdout())?;
         }
         OutputFormat::JSON => {
-            json::write_json(&result, std::io::stdout())?;
+            json::write_json(&result, configuration, std::io::stdout())?;
         }
     }
 

@@ -103,12 +103,14 @@ mod tests {
                 enforce_visibility: Some(CheckerSetting::True),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nVisibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
-                "visibility".to_string(), false)),
+                CheckerType::Visibility,
+                false,
+            )),
         };
         test_check(
             &Checker {
@@ -169,12 +171,14 @@ mod tests {
                 enforce_visibility: Some(CheckerSetting::Strict),
                 ..default_defining_pack()
             }),
-            referencing_pack: Pack{
+            referencing_pack: Pack {
                 relative_path: PathBuf::from("packs/foo"),
-                ..default_referencing_pack()},
+                ..default_referencing_pack()
+            },
             expected_violation: Some(build_expected_violation(
-                "packs/foo/app/services/foo.rb:3:1\nVisibility violation: `::Bar` belongs to `packs/bar`, which is not visible to `packs/foo`".to_string(),
-                "visibility".to_string(), true)),
+                CheckerType::Visibility,
+                true,
+            )),
         };
         test_check(
             &Checker {

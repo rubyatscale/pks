@@ -166,13 +166,15 @@ mod tests {
             defining_pack: Some(Pack {
                 name: "packs/bar".to_owned(),
                 enforce_privacy: Some(CheckerSetting::True),
-                ignored_private_constants: HashSet::from([String::from("::Taco")]),
+                ignored_private_constants: HashSet::from([String::from(
+                    "::Taco",
+                )]),
                 ..default_defining_pack()
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
-                String::from("privacy"), false,
+                CheckerType::Privacy,
+                false,
             )),
         };
         test_check(
@@ -194,13 +196,15 @@ mod tests {
             defining_pack: Some(Pack {
                 name: "packs/bar".to_owned(),
                 enforce_privacy: Some(CheckerSetting::Strict),
-                ignored_private_constants: HashSet::from([String::from("::Taco")]),
+                ignored_private_constants: HashSet::from([String::from(
+                    "::Taco",
+                )]),
                 ..default_defining_pack()
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"),
-                String::from("privacy"), true,
+                CheckerType::Privacy,
+                true,
             )),
         };
         test_check(
@@ -453,9 +457,9 @@ mod tests {
             }),
             referencing_pack: default_referencing_pack(),
             expected_violation: Some(build_expected_violation_with_constant(
-                String::from("packs/foo/app/services/foo.rb:3:1\nPrivacy violation: `::Bar::BarChild` is private to `packs/bar`, but referenced from `packs/foo`"),
-                String::from("privacy"), false,
-                String::from("::Bar::BarChild")
+                CheckerType::Privacy,
+                false,
+                String::from("::Bar::BarChild"),
             )),
             ..Default::default()
         };

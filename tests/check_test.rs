@@ -644,3 +644,61 @@ fn test_check_with_invalid_output_format() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_check_with_color_always() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/simple_app")
+        .arg("--color=always")
+        .arg("check")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let raw_output = String::from_utf8_lossy(&output).to_string();
+
+    // With --color=always, output should contain ANSI color codes
+    assert!(
+        raw_output.contains("\x1b[36m"),
+        "Output should contain cyan color code with --color=always"
+    );
+    assert!(
+        raw_output.contains("\x1b[0m"),
+        "Output should contain reset color code with --color=always"
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_color_never() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/simple_app")
+        .arg("--color=never")
+        .arg("check")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let raw_output = String::from_utf8_lossy(&output).to_string();
+
+    // With --color=never, output should not contain ANSI color codes
+    assert!(
+        !raw_output.contains("\x1b["),
+        "Output should not contain ANSI escape codes with --color=never"
+    );
+
+    // But should still contain the violation content
+    assert!(raw_output.contains("2 violation(s) detected:"));
+    assert!(raw_output.contains("Dependency violation"));
+
+    common::teardown();
+    Ok(())
+}
