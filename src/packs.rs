@@ -18,6 +18,7 @@ pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod text;
 pub(crate) mod walk_directory;
 
 mod constant_dependencies;
@@ -48,7 +49,6 @@ pub(crate) use package_todo::PackageTodo;
 
 // External imports
 use anyhow::Context;
-use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use std::io::IsTerminal;
@@ -73,12 +73,6 @@ pub fn create(
     Ok(())
 }
 
-/// Colorize file:line:column patterns for terminal output
-fn colorize_output(s: &str) -> String {
-    let re = Regex::new(r"(?m)^(.+:\d+:\d+)$").unwrap();
-    re.replace_all(s, "\x1b[36m$1\x1b[0m").to_string()
-}
-
 /// Determine whether to use colors based on the color choice
 fn should_colorize(color: ColorChoice) -> bool {
     match color {
@@ -99,12 +93,11 @@ pub fn check(
 
     match output_format {
         OutputFormat::Packwerk => {
-            let output = format!("{}", result);
-            if should_colorize(color) {
-                println!("{}", colorize_output(&output));
-            } else {
-                println!("{}", output);
-            }
+            text::write_text(
+                &result,
+                std::io::stdout(),
+                should_colorize(color),
+            )?;
         }
         OutputFormat::CSV => {
             csv::write_csv(&result, std::io::stdout())?;
