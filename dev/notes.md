@@ -41,13 +41,13 @@ time cargo run --profile=release -- --debug --project-root=../your_app check
 # Packwerk Implementation Considerations
 - See `EXPERIMENTAL_PARSER_USAGE.md` for more info
 - Packwerk considers a definition to be a reference. I explored removing this in this branch: https://github.com/alexevanczuk/packs/pull/44
-  - This results in a diff in violations, because if a class opens up a module defined by another class, its considered to be a reference to that other class.
+  - This results in a diff in violations, because if a class opens up a module defined by another class, it's considered to be a reference to that other class.
   - I think this is actually a bug in packwerk, since a definition is not really a reference. Even though monkey patching / opening up other modules is not great, we should surface that information through a different mechanism (such as allowing packs to have a monkey patches violation)
 
 # Abandoned Performance Improvement Attempts
 - In https://github.com/alexevanczuk/packs/pull/37, I looked into getting the constants *as* we are walking the directory. However, I found that this was hardly much more performant than the current implementation, and it was much more complex. I abandoned this approach in favor of caching the resolver and other performance improvements.
-- We could consider caching the RESOLVED references in a file, which would allow us to potentially skip generating the constant resolver and resolving all of the unresolved constants. This makes cache invalidation more complex though, and the flamegraph shows that most of the time is spent opening files, not resolving constants. Furthermore, the experimental constant resolver resolves constant much more quickly.
-- In https://github.com/alexevanczuk/packs/pull/98, I looked into having a single file as the cache rather than one cache file per code file. This turned out to be a *lot* slower, and I think the reason is that serialization and deserialization happens does not happen in parallel with one large file, where it does happen with lots of tiny files.
+- We could consider caching the RESOLVED references in a file, which would allow us to potentially skip generating the constant resolver and resolving all of the unresolved constants. This makes cache invalidation more complex though, and the flamegraph shows that most of the time is spent opening files, not resolving constants. Furthermore, the experimental constant resolver resolves constants much more quickly.
+- In https://github.com/alexevanczuk/packs/pull/98, I looked into having a single file as the cache rather than one cache file per code file. This turned out to be a *lot* slower, and I think the reason is that serialization and deserialization does not happen in parallel with one large file, where it does happen with lots of tiny files.
 - In https://github.com/alexevanczuk/packs/pull/99, I began (very initial stages) of integrating with SQLite to hopefully provide a faster cache. It's not clear to me if this would actually provide much of a performance improvement. It might still be worth exploring, but for now abandoning it since it introduces a lot of complexity.
 
 # Modular Architecture
