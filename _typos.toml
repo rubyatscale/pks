@@ -1,8 +1,0 @@
-[default.extend-words]
-# These are intentional regex pattern strings for Ruby inflector Status/Statuses handling
-Statu = "Statu"
-Statuse = "Statuse"
-Statuss = "Statuss"
-statuss = "statuss"
-# This is a field name from the external ruby_inflector crate
-seperator = "seperator"
