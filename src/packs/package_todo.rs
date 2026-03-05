@@ -135,7 +135,7 @@ pub fn write_violations_to_disk(
     violations: HashSet<Violation>,
 ) {
     debug!("Starting writing violations to disk");
-    // First we need to group the violations by the repsonsible pack, which today is always the referencing pack
+    // First we need to group the violations by the responsible pack, which today is always the referencing pack
     // Later if we change where a violation shows up, we should delegate to the checker
     // to decide what pack it should be in.
     let mut violations_by_responsible_pack: HashMap<String, Vec<Violation>> =

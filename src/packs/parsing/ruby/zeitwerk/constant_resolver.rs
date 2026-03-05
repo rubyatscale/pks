@@ -138,7 +138,7 @@ impl ZeitwerkConstantResolver {
     //
     // The `current_namespace_path` here is: ['Foo', 'Bar', 'Baz']
     // The `const_name` here is: `Boo`
-    // Ruby constant resolution rules dictate that `Boo` coudl refer to any of the following,
+    // Ruby constant resolution rules dictate that `Boo` could refer to any of the following,
     // in this specific order:
     //
     // ::Foo::Bar::Baz::Boo
@@ -162,7 +162,7 @@ impl ZeitwerkConstantResolver {
         if let Some(constant) =
             self.constant_for_fully_qualified_name(&fully_qualified_name_guess)
         {
-            // Since the ContantResolver might say that some constant Foo::Bar::Baz is defined in Foo::Bar,
+            // Since the ConstantResolver might say that some constant Foo::Bar::Baz is defined in Foo::Bar,
             // we want to return a ConstantDefinition that has the fully qualified name of the constant we're looking for.
             // In this case, we want to return a ConstantDefinition with the fully qualified name of Foo::Bar::Baz
             // even though the ConstantDefinition we found has the fully qualified name of Foo::Bar

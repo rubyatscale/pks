@@ -292,7 +292,7 @@ pub(crate) fn process_from_contents(
                         == r.location.start_row
                         && location.start_col == r.location.start_col;
                     // In lib/packwerk/parsed_constant_definitions.rb, we don't count references when the reference is in the same place as the definition
-                    // This is an idiosyncracy we are porting over here for behavioral alignment, although we might be doing some unnecessary work.
+                    // This is an idiosyncrasy we are porting over here for behavioral alignment, although we might be doing some unnecessary work.
                     should_ignore_local_reference = !reference_is_definition;
                 }
             }

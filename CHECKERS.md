@@ -196,7 +196,7 @@ enforce_visibility: true
 enforcement_globs_ignore:
 - enforcements:
   - privacy
-  - visiblity
+  - visibility
   ignores:
   - "**/*"
   # Enforce incoming privacy and visibility violation references _only_ in `pks/product_services/serv1/**/*`

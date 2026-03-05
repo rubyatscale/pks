@@ -6,7 +6,7 @@
 
 ## Performance
 Although `pks` is intended to be fast, there are ways it can be made a lot faster!
-- Conditional cache usage. For example, implemented as an LSP, pks could always use cache and only bust specific caches (asychronously) when certain events (e.g. file changes) are received.
+- Conditional cache usage. For example, implemented as an LSP, pks could always use cache and only bust specific caches (asynchronously) when certain events (e.g. file changes) are received.
 - By using modified time, we can avoid opening the entire file and parsing it and calculating the md5 hash. It's possible this would not be a meaningful performance improvement.
 
 ### Improved use of references (less cloning)
@@ -42,7 +42,7 @@ time cargo run --profile=release -- --debug --project-root=../your_app check
 - See `EXPERIMENTAL_PARSER_USAGE.md` for more info
 - Packwerk considers a definition to be a reference. I explored removing this in this branch: https://github.com/alexevanczuk/packs/pull/44
   - This results in a diff in violations, because if a class opens up a module defined by another class, its considered to be a reference to that other class.
-  - I think this is actually a bug in packwerk, since a definition is not really a reference. Even though monkey patching / opening up other moduels is not great, we should surface that information through a different mechanism (such as allowing packs to have a monkey patches violation)
+  - I think this is actually a bug in packwerk, since a definition is not really a reference. Even though monkey patching / opening up other modules is not great, we should surface that information through a different mechanism (such as allowing packs to have a monkey patches violation)
 
 # Abandoned Performance Improvement Attempts
 - In https://github.com/alexevanczuk/packs/pull/37, I looked into getting the constants *as* we are walking the directory. However, I found that this was hardly much more performant than the current implementation, and it was much more complex. I abandoned this approach in favor of caching the resolver and other performance improvements.

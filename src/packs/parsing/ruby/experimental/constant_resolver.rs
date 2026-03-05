@@ -118,7 +118,7 @@ impl ExperimentalConstantResolver {
     //
     // The `current_namespace_path` here is: ['Foo', 'Bar', 'Baz']
     // The `const_name` here is: `Boo`
-    // Ruby constant resolution rules dictate that `Boo` coudl refer to any of the following,
+    // Ruby constant resolution rules dictate that `Boo` could refer to any of the following,
     // in this specific order:
     //
     // ::Foo::Bar::Baz::Boo
