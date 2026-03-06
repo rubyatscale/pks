@@ -10,7 +10,7 @@ Currently, it ships the following checkers to help improve the boundaries betwee
 - A `dependency` checker requires that a pack specifies packs on which it depends. Cyclic dependencies are not allowed. See [packwerk](https://github.com/Shopify/packwerk)
 - A `privacy` checker that ensures other packages are using your package's public API
 - A `visibility` checker that allows packages to be private except to an explicit group of other packages.
-- A `folder_privacy` checker that allows packages to their sibling packs and parent pack (to be used in an application that uses folder packs)
+- A `folder_privacy` checker that allows packages to be private to their sibling packs and parent pack (to be used in an application that uses folder packs)
 - A `layer` (formerly `architecture`) checker that allows packages to specify their "layer" and requires that each layer only communicate with layers below it.
 
 See [Checkers](CHECKERS.md) for detailed descriptions.

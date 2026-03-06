@@ -33,7 +33,7 @@ public_path: my/custom/path/
 ### Defining public constants through sigil
 
 > [!WARNING]
-> This way of of defining the public API of a package should be considered WIP. It is not supported by all tooling in the RubyAtScale ecosystem, as @alexevanczuk pointed out in a [comment on the PR](https://github.com/rubyatscale/packwerk-extensions/pull/35#discussion_r1334331797):
+> This way of defining the public API of a package should be considered WIP. It is not supported by all tooling in the RubyAtScale ecosystem, as @alexevanczuk pointed out in a [comment on the PR](https://github.com/rubyatscale/packwerk-extensions/pull/35#discussion_r1334331797):
 >
 > There are a couple of other places that will require changes related to this sigil. Namely, everything that is coupled to the public folder implementation of privacy.
 >
@@ -196,7 +196,7 @@ enforce_visibility: true
 enforcement_globs_ignore:
 - enforcements:
   - privacy
-  - visiblity
+  - visibility
   ignores:
   - "**/*"
   # Enforce incoming privacy and visibility violation references _only_ in `pks/product_services/serv1/**/*`
