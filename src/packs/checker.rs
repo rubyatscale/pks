@@ -1,6 +1,7 @@
 // Module declarations
 mod dependency;
 pub(crate) mod layer;
+mod todo_format;
 
 mod common_test;
 mod folder_privacy;
@@ -253,6 +254,7 @@ fn validate(configuration: &Configuration) -> Vec<String> {
                 [&CheckerType::Layer]
                 .clone(),
         }),
+        Box::new(todo_format::Checker),
     ];
 
     let mut validation_errors: Vec<String> = validators
