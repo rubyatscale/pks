@@ -284,14 +284,44 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+struct GitConfigGuard {
+    original: Option<String>,
+    test_file: PathBuf,
+    global_gitignore: PathBuf,
+}
+
+impl Drop for GitConfigGuard {
+    fn drop(&mut self) {
+        use std::process::Command as StdCommand;
+        if let Some(ref orig) = self.original {
+            if !orig.is_empty() {
+                StdCommand::new("git")
+                    .args(["config", "--global", "core.excludesFile", orig])
+                    .status()
+                    .ok();
+            } else {
+                StdCommand::new("git")
+                    .args(["config", "--global", "--unset", "core.excludesFile"])
+                    .status()
+                    .ok();
+            }
+        } else {
+            StdCommand::new("git")
+                .args(["config", "--global", "--unset", "core.excludesFile"])
+                .status()
+                .ok();
+        }
+        fs::remove_file(&self.test_file).ok();
+        fs::remove_file(&self.global_gitignore).ok();
+    }
+}
+
 /// Test that global gitignore works end-to-end using core.excludesFile.
 /// This requires temporarily setting up git config.
 #[test]
 #[serial]
 fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     use std::env;
-    use std::fs;
-    use std::path::PathBuf;
     use std::process::Command as StdCommand;
 
     // Create a temporary global gitignore
@@ -318,6 +348,13 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
                 None
             }
         });
+
+    // RAII guard: restores git config and removes temp files even if assertions panic
+    let _guard = GitConfigGuard {
+        original: original_excludes_file,
+        test_file: test_file.clone(),
+        global_gitignore: global_gitignore.clone(),
+    };
 
     // Set core.excludesFile to our test global gitignore
     let set_result = StdCommand::new("git")
@@ -353,24 +390,6 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
         "Should NOT include file matched by global gitignore.\nOutput: {}",
         stdout
     );
-
-    // Cleanup: restore original core.excludesFile
-    if let Some(orig) = original_excludes_file {
-        if !orig.is_empty() {
-            StdCommand::new("git")
-                .args(["config", "--global", "core.excludesFile", &orig])
-                .status()
-                .ok();
-        }
-    } else {
-        // Unset if it wasn't set before
-        StdCommand::new("git")
-            .args(["config", "--global", "--unset", "core.excludesFile"])
-            .status()
-            .ok();
-    }
-    fs::remove_file(&test_file).ok();
-    fs::remove_file(&global_gitignore).ok();
 
     common::teardown();
     Ok(())

@@ -187,7 +187,7 @@ pub(crate) fn walk_directory(
     // Build gitignore matcher if enabled
     let gitignore_matcher = if raw.respect_gitignore {
         match build_gitignore_matcher(&absolute_root) {
-            Ok(matcher) => Some(Arc::new(matcher)),
+            Ok(matcher) => Some(matcher),
             Err(e) => {
                 debug!("Failed to build gitignore matcher: {}. Continuing without gitignore support.", e);
                 None
@@ -247,7 +247,7 @@ pub(crate) fn walk_directory(
                             .unwrap();
 
                         // Check gitignore for directories only (optimization: prune ignored directory trees early)
-                        // Files are checked separately in the main loop below (see line ~304)
+                        // Files are checked separately in the main file processing loop below
                         if let Some(gitignore) = cloned_gitignore.as_ref() {
                             let is_dir = child_dir_entry.file_type.is_dir();
                             if is_dir

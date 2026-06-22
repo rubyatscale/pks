@@ -65,15 +65,12 @@ If not specified, `respect_gitignore` defaults to `true` (enabled).
 
 When determining whether to process a file, `pks` applies rules in this order (highest priority first):
 
-1. **Include patterns** - Files matching `include:` patterns in configuration
-2. **Gitignore patterns** - Files/directories in `.gitignore` (if `respect_gitignore: true`)
-3. **Exclude patterns** - Files matching `exclude:` patterns in configuration
-4. **Default exclusions** - Hardcoded exclusions (e.g., `{bin,node_modules,script,tmp,vendor}/**/*`)
+1. **Gitignore patterns** - Files/directories in `.gitignore` (if `respect_gitignore: true`)
+2. **Exclude patterns** - Files matching `exclude:` patterns in configuration
+3. **Default exclusions** - Hardcoded exclusions (e.g., `{bin,node_modules,script,tmp,vendor}/**/*`)
+4. **Include patterns** - Files must match `include:` patterns to be analyzed
 
-This precedence allows you to:
-- Override gitignore by explicitly including files via `include:` patterns
-- Add additional exclusions beyond what's in `.gitignore` via `exclude:` patterns
-- Layer multiple levels of filtering for fine-grained control
+This means gitignore takes precedence: a gitignored file is skipped even if it would otherwise match an `include:` pattern. Use `.gitignore` negation patterns (e.g., `!path/to/file.rb`) if you need a gitignored file to be analyzed.
 
 ### Example Configuration
 
@@ -83,7 +80,7 @@ This precedence allows you to:
 # Enable gitignore support (this is the default)
 respect_gitignore: true
 
-# Include patterns (highest priority - override gitignore)
+# Include patterns (what file extensions to analyze)
 include:
   - "**/*.rb"
   - "**/*.rake"
@@ -159,17 +156,11 @@ If files are being ignored that shouldn't be:
    respect_gitignore: false
    ```
 
-4. **Use negation patterns** - Add `!path/to/file.rb` to your `.gitignore` to explicitly include it
+4. **Use negation patterns** - Add `!path/to/file.rb` to your `.gitignore` to explicitly un-ignore it
    ```gitignore
    # .gitignore
    *.log
    !important.log  # This file should NOT be ignored
-   ```
-
-5. **Override with include patterns** - Add explicit include patterns in your `packwerk.yml`:
-   ```yaml
-   include:
-     - "path/to/important/file.rb"
    ```
 
 #### Files Are Still Analyzed Despite Being in .gitignore
@@ -183,11 +174,7 @@ If gitignored files are still being analyzed:
    # or nothing (defaults to true)
    ```
 
-2. **Check include patterns** - Include patterns override gitignore; files matching `include:` will be processed even if gitignored
-   ```yaml
-   include:
-     - "**/*.rb"  # This will include ALL .rb files, even if gitignored
-   ```
+2. **Check include patterns** - Note that `include:` patterns do NOT override gitignore. Gitignored files are skipped even if they match an `include:` pattern. To un-ignore a specific file, use a `.gitignore` negation pattern (`!path/to/file.rb`) or set `respect_gitignore: false`.
 
 3. **Check file location** - Only files within the project root can be affected by gitignore
    - Files must be relative to the repository root
