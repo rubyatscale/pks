@@ -28,62 +28,13 @@ impl jwalk::ClientState for ProcessReadDirState {
     type DirEntryState = ProcessReadDirState;
 }
 
-/// Expands tilde (~) in paths to the user's home directory.
+/// Locates the global gitignore file from git config (`core.excludesFile`).
 ///
-/// This function is specifically needed to handle `core.excludesFile` paths from git config,
-/// which commonly use tilde notation (e.g., `~/.gitignore_global`). Git returns the literal
-/// tilde string, but Rust's PathBuf doesn't automatically expand it.
-///
-/// # Arguments
-/// * `path` - A path string that may contain a leading tilde
-///
-/// # Returns
-/// A PathBuf with the tilde expanded to the home directory, or the original path if
-/// no tilde is present or HOME is not set.
-///
-/// # Example
-/// ```
-/// // Git config might return "~/.gitignore_global"
-/// // This expands it to "/Users/username/.gitignore_global"
-/// ```
-pub fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
-            return PathBuf::from(home).join(stripped);
-        }
-    }
-    PathBuf::from(path)
-}
-
-/// Attempts to locate the global gitignore file from git config.
-///
-/// This function reads the `core.excludesFile` setting from git config,
-/// which is the standard way to configure a global gitignore file.
-///
-/// # Returns
-/// `Some(PathBuf)` if `core.excludesFile` is configured and the file exists,
-/// `None` otherwise.
+/// Returns `Some(PathBuf)` if `core.excludesFile` is configured and the file
+/// exists, `None` otherwise. Reads git config files directly without spawning
+/// a subprocess.
 pub fn get_global_gitignore() -> Option<PathBuf> {
-    // Read core.excludesFile from git config
-    if let Ok(output) = std::process::Command::new("git")
-        .args(["config", "--global", "core.excludesFile"])
-        .output()
-    {
-        if output.status.success() {
-            let path_str =
-                String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path_str.is_empty() {
-                // Git config returns literal tilde (e.g., "~/.gitignore_global")
-                // so we need to expand it to the actual home directory path
-                let expanded = expand_tilde(&path_str);
-                if expanded.exists() {
-                    return Some(expanded);
-                }
-            }
-        }
-    }
-
-    None
+    ignore::gitignore::gitconfig_excludes_path().filter(|p| p.exists())
 }
 
 /// Builds a gitignore matcher that respects local and global gitignore files.
@@ -146,6 +97,13 @@ pub fn build_gitignore_matcher(
 // which is faster than walking the directory multiple times.
 // Likely, we can organize this better by moving each piece of logic into its own function so this function
 // allows for a sort of "visitor pattern" for different things that need to walk the directory.
+//
+// Note: `ignore::WalkBuilder` (used by ripgrep) handles gitignore natively and supports
+// parallel traversal via `build_parallel()`. We keep jwalk here because its
+// `ProcessReadDirState` mechanism lets us propagate `current_package_yml` state from parent
+// to child directories in a single pass. WalkBuilder's visitor pattern has no equivalent
+// hook, so implementing that tracking would require per-file ancestor walks — an O(depth)
+// regression for large repos.
 pub(crate) fn walk_directory(
     absolute_root: PathBuf,
     raw: &RawConfiguration,
@@ -358,9 +316,8 @@ mod tests {
     use crate::packs::{
         raw_configuration::RawConfiguration, walk_directory::walk_directory,
     };
-    use serial_test::serial;
 
-    use super::{build_gitignore_matcher, expand_tilde, get_global_gitignore};
+    use super::{build_gitignore_matcher, get_global_gitignore};
 
     #[test]
     fn test_walk_directory() -> anyhow::Result<()> {
@@ -388,38 +345,6 @@ mod tests {
         assert!(!contains_bad_file);
 
         Ok(())
-    }
-
-    #[test]
-    #[serial]
-    fn test_expand_tilde_with_tilde() {
-        // Save and restore HOME to avoid test interaction
-        let original_home = std::env::var_os("HOME");
-
-        // Set HOME for this test
-        std::env::set_var("HOME", "/test/home");
-
-        let expanded = expand_tilde("~/some/path");
-        assert_eq!(expanded, PathBuf::from("/test/home/some/path"));
-
-        // Restore original HOME
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        } else {
-            std::env::remove_var("HOME");
-        }
-    }
-
-    #[test]
-    fn test_expand_tilde_without_tilde() {
-        let expanded = expand_tilde("/absolute/path");
-        assert_eq!(expanded, PathBuf::from("/absolute/path"));
-    }
-
-    #[test]
-    fn test_expand_tilde_relative_path() {
-        let expanded = expand_tilde("relative/path");
-        assert_eq!(expanded, PathBuf::from("relative/path"));
     }
 
     #[test]
@@ -462,26 +387,6 @@ mod tests {
         let _result = matcher.matched(&test_path, false);
 
         Ok(())
-    }
-
-    #[test]
-    #[serial]
-    fn test_expand_tilde_without_home_env() {
-        // Save original HOME value
-        let original_home = std::env::var_os("HOME");
-
-        // Temporarily unset HOME
-        std::env::remove_var("HOME");
-
-        let result = expand_tilde("~/test/path");
-
-        // When HOME is not set, should return path as-is
-        assert_eq!(result, PathBuf::from("~/test/path"));
-
-        // Restore HOME if it was set
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
     }
 
     #[test]
