@@ -301,7 +301,12 @@ impl Drop for GitConfigGuard {
                     .ok();
             } else {
                 StdCommand::new("git")
-                    .args(["config", "--global", "--unset", "core.excludesFile"])
+                    .args([
+                        "config",
+                        "--global",
+                        "--unset",
+                        "core.excludesFile",
+                    ])
                     .status()
                     .ok();
             }
