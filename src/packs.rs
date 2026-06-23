@@ -20,7 +20,7 @@ pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
 pub(crate) mod template;
 pub(crate) mod text;
-pub(crate) mod walk_directory;
+pub mod walk_directory;
 
 mod constant_dependencies;
 mod file_utils;

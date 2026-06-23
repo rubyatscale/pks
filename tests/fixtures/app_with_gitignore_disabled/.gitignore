@@ -1,0 +1,6 @@
+*.log
+*.tmp
+temp/
+ignored_folder/
+ignored_file.rb
+

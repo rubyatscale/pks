@@ -78,6 +78,10 @@ pub(crate) struct RawConfiguration {
 
     #[serde(default)]
     pub checker_overrides: Option<CheckerOverrides>,
+
+    // Whether to automatically respect .gitignore files
+    #[serde(default = "default_respect_gitignore")]
+    pub respect_gitignore: bool,
 }
 /// Customize violation names and error messages
 #[derive(Debug, Deserialize, Serialize)]
@@ -171,6 +175,10 @@ fn default_cache() -> bool {
 
 fn default_cache_directory() -> String {
     String::from("tmp/cache/packwerk")
+}
+
+fn default_respect_gitignore() -> bool {
+    true
 }
 
 fn string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
