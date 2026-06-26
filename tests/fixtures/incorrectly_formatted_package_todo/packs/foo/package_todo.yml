@@ -1,0 +1,14 @@
+# This file is incorrectly formatted (not ordered properly)
+---
+packs/bar:
+  "::Baz":
+    violations:
+    - privacy
+    - dependency
+    files:
+    - packs/foo/app/services/foo.rb
+  "::Bar":
+    violations:
+    - dependency
+    files:
+    - packs/foo/app/services/foo.rb
