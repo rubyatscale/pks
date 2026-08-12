@@ -1,5 +1,28 @@
+//! JSON output for `pks graph`.
+//!
+//! Serializes the whole-repo pack dependency graph (nodes + declared/ignored/todo
+//! edges) to JSON. Output is fully ordered — nodes by `name`, edges by
+//! `(from, to, kind)` — so repeated runs on unchanged config produce byte-identical
+//! output (stable hash). This is raw, uninterpreted output: no cycle detection, SCC
+//! decomposition, or simulation is performed here — downstream tools compute those
+//! from the graph.
+//!
+//! See `schema/graph-output.json` for the JSON Schema specification.
+
 use super::Configuration;
 use serde::Serialize;
+
+/// How a dependency edge is expressed in the source pack's configuration.
+#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+enum EdgeKind {
+    /// Listed under `dependencies:` in package.yml.
+    Declared,
+    /// Listed under `ignored_dependencies:` in package.yml.
+    Ignored,
+    /// A recorded violation in the source pack's package_todo.yml.
+    Todo,
+}
 
 /// A single pack (node) in the dependency graph.
 #[derive(Serialize, Debug, PartialEq, Eq)]
@@ -11,19 +34,12 @@ struct GraphNode {
     owner: Option<String>,
 }
 
-/// A directed edge `from -> to`. `kind` records how the dependency is expressed
-/// in the source pack's configuration:
-/// - `declared`: listed under `dependencies:` in package.yml
-/// - `ignored`:  listed under `ignored_dependencies:` in package.yml
-/// - `todo`:     a recorded violation in the source pack's package_todo.yml
-///
-/// This is raw, uninterpreted output: no cycle detection, SCC decomposition, or
-/// simulation is performed here — downstream tools compute those from the graph.
+/// A directed edge `from -> to`, tagged by how the dependency is expressed.
 #[derive(Serialize, Debug, PartialEq, Eq)]
 struct GraphEdge {
     from: String,
     to: String,
-    kind: String,
+    kind: EdgeKind,
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
@@ -32,11 +48,8 @@ struct Graph {
     edges: Vec<GraphEdge>,
 }
 
-/// Build the whole-repo pack dependency graph from the already-parsed pack set.
-///
-/// Output is fully ordered — nodes by `name`, edges by `(from, to, kind)` — so
-/// that two runs against the same code produce byte-identical output (stable hash),
-/// independent of the parsed collections' iteration order.
+/// Build the whole-repo pack dependency graph from the already-parsed pack set,
+/// fully ordered for deterministic output.
 fn build(configuration: &Configuration) -> Graph {
     let mut nodes: Vec<GraphNode> = configuration
         .pack_set
@@ -56,21 +69,21 @@ fn build(configuration: &Configuration) -> Graph {
             edges.push(GraphEdge {
                 from: pack.name.clone(),
                 to: to.clone(),
-                kind: "declared".to_owned(),
+                kind: EdgeKind::Declared,
             });
         }
         for to in &pack.ignored_dependencies {
             edges.push(GraphEdge {
                 from: pack.name.clone(),
                 to: to.clone(),
-                kind: "ignored".to_owned(),
+                kind: EdgeKind::Ignored,
             });
         }
         for to in pack.package_todo.violations_by_defining_pack.keys() {
             edges.push(GraphEdge {
                 from: pack.name.clone(),
                 to: to.clone(),
-                kind: "todo".to_owned(),
+                kind: EdgeKind::Todo,
             });
         }
     }
@@ -84,14 +97,19 @@ fn build(configuration: &Configuration) -> Graph {
     Graph { nodes, edges }
 }
 
-fn to_json(graph: &Graph) -> anyhow::Result<String> {
-    Ok(serde_json::to_string_pretty(graph)?)
+/// Write the pack dependency graph as compact JSON to `writer`.
+fn write_graph<W: std::io::Write>(
+    configuration: &Configuration,
+    writer: W,
+) -> anyhow::Result<()> {
+    // Compact, raw structured data (matches `pks check -o json`); consumers format as needed.
+    serde_json::to_writer(writer, &build(configuration))?;
+    Ok(())
 }
 
 /// Print the pack dependency graph as deterministic JSON to stdout.
 pub(crate) fn dump(configuration: &Configuration) -> anyhow::Result<()> {
-    println!("{}", to_json(&build(configuration))?);
-    Ok(())
+    write_graph(configuration, std::io::stdout())
 }
 
 #[cfg(test)]
@@ -110,13 +128,18 @@ mod tests {
         .unwrap()
     }
 
+    fn json_bytes(configuration: &Configuration) -> Vec<u8> {
+        let mut buf = Vec::new();
+        write_graph(configuration, &mut buf).unwrap();
+        buf
+    }
+
     #[test]
     fn graph_output_is_deterministic() {
         let configuration = config_for("tests/fixtures/simple_app");
-        let first = to_json(&build(&configuration)).unwrap();
-        let second = to_json(&build(&configuration)).unwrap();
         assert_eq!(
-            first, second,
+            json_bytes(&configuration),
+            json_bytes(&configuration),
             "graph JSON must be byte-identical across runs"
         );
     }
@@ -132,10 +155,10 @@ mod tests {
         sorted_names.sort();
         assert_eq!(node_names, sorted_names, "nodes must be ordered by name");
 
-        let edge_keys: Vec<(&String, &String, &String)> = graph
+        let edge_keys: Vec<(&String, &String, EdgeKind)> = graph
             .edges
             .iter()
-            .map(|e| (&e.from, &e.to, &e.kind))
+            .map(|e| (&e.from, &e.to, e.kind))
             .collect();
         let mut sorted_keys = edge_keys.clone();
         sorted_keys.sort();
@@ -154,12 +177,11 @@ mod tests {
             graph.nodes.iter().any(|n| n.name == "packs/foo"),
             "expected a node for packs/foo"
         );
-        // In simple_app, packs/foo declares a dependency on packs/baz
-        // (mirrors dependencies.rs::find_explicit_dependencies).
+        // In simple_app, packs/foo declares a dependency on packs/baz.
         assert!(
             graph.edges.iter().any(|e| e.from == "packs/foo"
                 && e.to == "packs/baz"
-                && e.kind == "declared"),
+                && e.kind == EdgeKind::Declared),
             "expected declared edge packs/foo -> packs/baz"
         );
     }
@@ -169,12 +191,11 @@ mod tests {
         let configuration = config_for("tests/fixtures/contains_package_todo");
         let graph = build(&configuration);
 
-        // packs/foo records a violation whose defining pack is packs/bar
-        // (mirrors dependencies.rs::find_implicit_dependencies).
+        // packs/foo records a violation whose defining pack is packs/bar.
         assert!(
             graph.edges.iter().any(|e| e.from == "packs/foo"
                 && e.to == "packs/bar"
-                && e.kind == "todo"),
+                && e.kind == EdgeKind::Todo),
             "expected todo edge packs/foo -> packs/bar"
         );
     }

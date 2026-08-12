@@ -13,10 +13,10 @@ fn graph_outputs_declared_edges_and_nodes() -> Result<(), Box<dyn Error>> {
         .assert()
         .success()
         .stdout(predicate::str::contains("\"nodes\""))
-        .stdout(predicate::str::contains("\"name\": \"packs/foo\""))
-        .stdout(predicate::str::contains("\"from\": \"packs/foo\""))
-        .stdout(predicate::str::contains("\"to\": \"packs/baz\""))
-        .stdout(predicate::str::contains("\"kind\": \"declared\""));
+        .stdout(predicate::str::contains("\"name\":\"packs/foo\""))
+        .stdout(predicate::str::contains("\"from\":\"packs/foo\""))
+        .stdout(predicate::str::contains("\"to\":\"packs/baz\""))
+        .stdout(predicate::str::contains("\"kind\":\"declared\""));
 
     common::teardown();
     Ok(())
@@ -30,9 +30,9 @@ fn graph_outputs_todo_edges() -> Result<(), Box<dyn Error>> {
         .arg("graph")
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"from\": \"packs/foo\""))
-        .stdout(predicate::str::contains("\"to\": \"packs/bar\""))
-        .stdout(predicate::str::contains("\"kind\": \"todo\""));
+        .stdout(predicate::str::contains("\"from\":\"packs/foo\""))
+        .stdout(predicate::str::contains("\"to\":\"packs/bar\""))
+        .stdout(predicate::str::contains("\"kind\":\"todo\""));
 
     common::teardown();
     Ok(())
@@ -47,9 +47,9 @@ fn graph_outputs_ignored_edges() -> Result<(), Box<dyn Error>> {
         .arg("graph")
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"to\": \"packs/bar\""))
-        .stdout(predicate::str::contains("\"kind\": \"ignored\""))
-        .stdout(predicate::str::contains("\"kind\": \"declared\""));
+        .stdout(predicate::str::contains("\"to\":\"packs/bar\""))
+        .stdout(predicate::str::contains("\"kind\":\"ignored\""))
+        .stdout(predicate::str::contains("\"kind\":\"declared\""));
 
     common::teardown();
     Ok(())
