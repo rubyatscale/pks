@@ -12,6 +12,7 @@ pub(crate) mod constant_resolver;
 pub(crate) mod creator;
 pub(crate) mod csv;
 pub(crate) mod dependencies;
+pub(crate) mod graph;
 pub(crate) mod ignored;
 pub(crate) mod json;
 pub(crate) mod monkey_patch_detection;
@@ -181,6 +182,10 @@ pub fn list_included_files(configuration: Configuration) -> anyhow::Result<()> {
 
 pub fn validate(configuration: &Configuration) -> anyhow::Result<()> {
     checker::validate_all(configuration)
+}
+
+pub fn dump_graph(configuration: &Configuration) -> anyhow::Result<()> {
+    graph::dump(configuration)
 }
 
 pub fn configuration(project_root: PathBuf) -> anyhow::Result<Configuration> {
