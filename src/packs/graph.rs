@@ -35,7 +35,7 @@ struct GraphNode {
 }
 
 /// A directed edge `from -> to`, tagged by how the dependency is expressed.
-#[derive(Serialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct GraphEdge {
     from: String,
     to: String,
@@ -61,38 +61,36 @@ fn build(configuration: &Configuration) -> Graph {
             owner: pack.owner.clone(),
         })
         .collect();
-    nodes.sort_by(|a, b| a.name.cmp(&b.name));
+    nodes.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
-    let mut edges: Vec<GraphEdge> = Vec::new();
-    for pack in &configuration.pack_set.packs {
-        for to in &pack.dependencies {
-            edges.push(GraphEdge {
+    let mut edges: Vec<GraphEdge> = configuration
+        .pack_set
+        .packs
+        .iter()
+        .flat_map(|pack| {
+            let declared = pack.dependencies.iter().map(|to| GraphEdge {
                 from: pack.name.clone(),
                 to: to.clone(),
                 kind: EdgeKind::Declared,
             });
-        }
-        for to in &pack.ignored_dependencies {
-            edges.push(GraphEdge {
+            let ignored = pack.ignored_dependencies.iter().map(|to| GraphEdge {
                 from: pack.name.clone(),
                 to: to.clone(),
                 kind: EdgeKind::Ignored,
             });
-        }
-        for to in pack.package_todo.violations_by_defining_pack.keys() {
-            edges.push(GraphEdge {
-                from: pack.name.clone(),
-                to: to.clone(),
-                kind: EdgeKind::Todo,
-            });
-        }
-    }
-    edges.sort_by(|a, b| {
-        a.from
-            .cmp(&b.from)
-            .then_with(|| a.to.cmp(&b.to))
-            .then_with(|| a.kind.cmp(&b.kind))
-    });
+            let todo = pack
+                .package_todo
+                .violations_by_defining_pack
+                .keys()
+                .map(|to| GraphEdge {
+                    from: pack.name.clone(),
+                    to: to.clone(),
+                    kind: EdgeKind::Todo,
+                });
+            declared.chain(ignored).chain(todo)
+        })
+        .collect();
+    edges.sort_unstable();
 
     Graph { nodes, edges }
 }
