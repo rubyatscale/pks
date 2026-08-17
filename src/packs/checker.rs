@@ -39,6 +39,20 @@ pub struct ViolationIdentifier {
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
+
+impl ViolationIdentifier {
+    /// `strict` describes how a violation should be treated, not which violation
+    /// it is, and `package_todo.yml` has nowhere to record it, so recorded
+    /// violations are always rebuilt with `strict: false`. Compare through this
+    /// so a violation in a strict pack can still match its recorded entry.
+    pub fn recorded_key(&self) -> Self {
+        Self {
+            strict: false,
+            ..self.clone()
+        }
+    }
+}
+
 /// A violation combines an identifier with display metadata.
 ///
 /// `source_location` is intentionally separate from `ViolationIdentifier` because:
@@ -142,7 +156,10 @@ impl<'a> CheckAllBuilder<'a> {
                 self.found_violations
                     .violations
                     .iter()
-                    .filter(|v| !recorded_violations.contains(&v.identifier))
+                    .filter(|v| {
+                        !recorded_violations
+                            .contains(&v.identifier.recorded_key())
+                    })
                     .collect()
             };
         reportable_violations
@@ -152,11 +169,11 @@ impl<'a> CheckAllBuilder<'a> {
         &mut self,
         recorded_violations: &'a HashSet<ViolationIdentifier>,
     ) -> anyhow::Result<Vec<&'a ViolationIdentifier>> {
-        let found_violation_identifiers: HashSet<&ViolationIdentifier> = self
+        let found_violation_identifiers: HashSet<ViolationIdentifier> = self
             .found_violations
             .violations
             .par_iter()
-            .map(|v| &v.identifier)
+            .map(|v| v.identifier.recorded_key())
             .collect();
         let relative_files = self
             .found_violations
@@ -196,9 +213,13 @@ impl<'a> CheckAllBuilder<'a> {
         Ok(stale_violations)
     }
 
+    /// `found_violation_identifiers` is keyed by [`ViolationIdentifier::recorded_key`].
+    /// `todo_violation_identifier` needs no such normalization: it comes from
+    /// `pack_set.all_violations`, which rebuilds every recorded violation with
+    /// `strict: false` already, so it is its own recorded key.
     fn is_stale_violation(
         relative_files: &HashSet<&str>,
-        found_violation_identifiers: &HashSet<&ViolationIdentifier>,
+        found_violation_identifiers: &HashSet<ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
     ) -> bool {
         let violation_path_exists =
