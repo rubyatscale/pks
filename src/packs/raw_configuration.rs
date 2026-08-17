@@ -128,7 +128,7 @@ fn get_from_file_that_exists(
         ))
     })?;
 
-    let configuration = serde_yaml::from_str(&contents).map_err(|e| {
+    let configuration = yaml_serde::from_str(&contents).map_err(|e| {
         anyhow::Error::new(e).context(format!(
             "Could not parse packwerk.yml at: {}",
             absolute_path_to_packwerk_yml.display(),
@@ -145,7 +145,7 @@ impl Default for RawConfiguration {
         // Deserialize an empty string to get the default RawConfiguration
         // We used to use #[derive(Default)] on the RawConfiguration.
         // However, that doesn't use the defaults fed to serde
-        serde_yaml::from_str("").unwrap()
+        yaml_serde::from_str("").unwrap()
     }
 }
 
@@ -230,7 +230,7 @@ mod tests {
     fn test_deserialize_package_paths_as_string() {
         let raw_configuration_string = String::from("package_paths: '**/*'");
         let raw_configuration =
-            serde_yaml::from_str::<RawConfiguration>(&raw_configuration_string)
+            yaml_serde::from_str::<RawConfiguration>(&raw_configuration_string)
                 .expect("Could not deserialize package_paths as string");
 
         assert_eq!(raw_configuration.package_paths, vec!["**/*"]);

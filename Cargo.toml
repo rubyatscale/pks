@@ -39,7 +39,7 @@ path-clean = "1.0.1"                                                   # Pathnam
 rayon = "1.7.0"                                                        # for parallel iteration
 regex = "1.7.3"
 serde = { version = "~1", features = ["derive"] }                      # de(serialization)
-serde_yaml = "0.9.19"                                                  # de(serialization)
+yaml_serde = "0.10.6"                                                  # de(serialization); the YAML org's maintained fork of the discontinued serde_yaml
 serde_json = "1.0.96"                                                  # de(serialization)
 serde_magnus = "0.7.0"                                                 # permits a ruby gem to interface with this library
 tracing = "0.1.37"                                                     # logging
