@@ -138,7 +138,7 @@ impl<'a> CheckAllBuilder<'a> {
                 .cloned()
                 .collect(),
             strict_mode_violations: self
-                .build_strict_mode_violations()
+                .build_strict_mode_violations(recorded_violations)
                 .into_iter()
                 .collect(),
         })
@@ -231,11 +231,23 @@ impl<'a> CheckAllBuilder<'a> {
         }
     }
 
-    fn build_strict_mode_violations(&self) -> Vec<Violation> {
+    /// Strict mode reports violations that are not already recorded in a
+    /// `package_todo.yml`, matching packwerk's `unlisted_strict_mode_violations`
+    /// (Shopify/packwerk#368). Turning strict on therefore blocks new violations
+    /// without also requiring every recorded one to be fixed first.
+    fn build_strict_mode_violations(
+        &self,
+        recorded_violations: &HashSet<ViolationIdentifier>,
+    ) -> Vec<Violation> {
         self.found_violations
             .violations
             .iter()
             .filter(|v| v.identifier.strict)
+            .filter(|v| {
+                self.configuration.ignore_recorded_violations
+                    || !recorded_violations
+                        .contains(&v.identifier.recorded_key())
+            })
             .cloned()
             .collect()
     }
@@ -323,22 +335,33 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         &checkers,
     )?;
 
-    let strict_violations = &violations
+    let recorded_violations = &configuration.pack_set.all_violations;
+
+    // Only *unlisted* strict violations make `check` fail, so only those are
+    // worth reporting here. Reporting recorded ones too claimed `check` would
+    // fail when it succeeds. Same filter as `build_strict_mode_violations`, and
+    // as packwerk's `unlisted_strict_mode_violations`.
+    let unlisted_strict_violations = &violations
         .iter()
         .filter(|v| v.identifier.strict)
+        .filter(|v| !recorded_violations.contains(&v.identifier.recorded_key()))
         .collect::<Vec<&Violation>>();
-    if !strict_violations.is_empty() {
-        for violation in strict_violations {
+    if !unlisted_strict_violations.is_empty() {
+        for violation in unlisted_strict_violations {
             let strict_message =
                 build_strict_violation_message(&violation.identifier);
             println!("{}", strict_message);
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            &strict_violations.len()
+            &unlisted_strict_violations.len()
         );
     }
-    package_todo::write_violations_to_disk(configuration, violations);
+    package_todo::write_violations_to_disk(
+        configuration,
+        violations,
+        recorded_violations,
+    );
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())

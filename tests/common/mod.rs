@@ -55,6 +55,38 @@ pub fn delete_foobar_app_with_custom_readme() {
     }
 }
 
+// Restores the round-trip strict-mode fixture. Its todo file records a strict
+// violation, which is the state `check` tolerance depends on, so any test that
+// runs `update` against it has to put it back.
+#[allow(dead_code)]
+pub fn set_up_uses_strict_mode_round_trip_fixture() {
+    let package_todo = String::from(
+        "\
+# This file contains a list of dependencies that are not part of the long term plan for the
+# 'packs/foo' package.
+# We should generally work to reduce this list over time.
+#
+# You can regenerate this file using the following command:
+#
+# bin/packwerk update-todo
+---
+packs/bar:
+  \"::Bar\":
+    violations:
+    - privacy
+    - dependency
+    files:
+    - packs/foo/app/services/foo.rb
+",
+    );
+
+    fs::write(
+        "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml",
+        package_todo,
+    )
+    .unwrap();
+}
+
 // In case we want our tests to call `update` or otherwise mutate the file system
 #[allow(dead_code)]
 pub fn set_up_fixtures() {

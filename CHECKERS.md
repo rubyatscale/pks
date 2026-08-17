@@ -13,9 +13,11 @@ enforce_privacy: true
 
 Setting `enforce_privacy` to `true` will make all references to private constants in your package a violation.
 
-Setting `enforce_privacy` to `strict` will forbid all references to private constants in your package. **This includes violations that have been added to other packages' `package_todo.yml` files.**
+Setting `enforce_privacy` to `strict` will forbid *new* references to private constants in your package. **Violations already recorded in another package's `package_todo.yml` are tolerated**, so strict mode stops the list growing rather than requiring it to be empty.
 
-Note: You will need to remove all existing privacy violations before setting `enforce_privacy` to `strict`.
+Note: you do not need to remove existing privacy violations before setting `enforce_privacy` to `strict`. Turn it on, and any reference that is not already recorded will fail the check. To see everything the todo files are currently grandfathering, run `pks check --ignore-recorded-violations`.
+
+Running `pks update` will not silence strict mode either: an unrecorded strict violation is never written to a `package_todo.yml`, so it keeps failing until the reference itself is dealt with.
 
 ### Using public folders
 You may enforce privacy either way mentioned above and still expose a public API for your package by placing constants in the public folder, which by default is `app/public`. The constants in the public folder will be made available for use by the rest of the application.
@@ -99,8 +101,7 @@ end => Ideal solution. No exceptions from rubocop and very low risk of the magic
 Sometimes it is desirable to only enforce privacy on a subset of constants in a package. You can do so by defining a `private_constants` list in your package.yml. Note that `enforce_privacy` must be set to `true` or `'strict'` for this to work.
 
 ### Ignore strict mode for violation coming from specific path patterns
-If you want to activate `'strict'` mode on your package but have a few privacy violations you know you will deal with later,
-you can set a list of patterns to exclude.
+You do not need this to adopt `'strict'` mode on a package that already has violations you will deal with later: violations recorded in a `package_todo.yml` are tolerated by default. Reach for these patterns when you want to exempt a **path** instead of a recorded list.
 
 ```yaml
 enforce_privacy: strict
@@ -109,6 +110,8 @@ strict_privacy_ignored_patterns:
 ```
 
 In this example, violations on constants of your engine referenced in those files `engines/another_engine/test/**/*` will not fail Packwerk checks.
+
+The difference matters. A `package_todo.yml` entry grandfathers one `(constant, file)` pair, so a *new* reference from the same file still fails. A pattern here exempts the path outright, so anything those files reference later is ignored too. Prefer the todo file unless you genuinely want the whole path exempt.
 
 ### Package Privacy violation
 Packwerk thinks something is a privacy violation if you're referencing a constant, class, or module defined in the private implementation (i.e. not the public folder) of another package. We care about these because we want to make sure we only use parts of a package that have been exposed as public API.

@@ -197,6 +197,80 @@ packs/bar:
 }
 
 #[test]
+#[serial]
+// This and the round-trip test below both mutate
+// tests/fixtures/uses_strict_mode_round_trip, so they run in serial and each
+// restores the fixture on the way out.
+fn test_update_preserves_recorded_strict_violations() -> anyhow::Result<()> {
+    common::set_up_uses_strict_mode_round_trip_fixture();
+
+    let path = Path::new(
+        "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml",
+    );
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_round_trip")
+        .arg("update")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Successfully updated package_todo.yml files!",
+        ))
+        // The violation is recorded, so `check` tolerates it. Claiming it must
+        // be fixed for `check` to succeed would be false.
+        .stdout(
+            predicate::str::contains(
+                "These violations must be fixed for `check` to succeed.",
+            )
+            .not(),
+        );
+
+    assert!(
+        path.exists(),
+        "update must not delete the todo file that grandfathers a recorded strict violation"
+    );
+    let contents = std::fs::read_to_string(path)?;
+    assert!(
+        contents.contains("\"::Bar\""),
+        "the recorded strict violation must survive update, got:\n{}",
+        contents
+    );
+
+    common::set_up_uses_strict_mode_round_trip_fixture();
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn test_check_update_check_round_trip_with_strict_mode() -> anyhow::Result<()> {
+    common::set_up_uses_strict_mode_round_trip_fixture();
+
+    let assert_check_is_clean = || {
+        cargo_bin_cmd!("pks")
+            .arg("--project-root")
+            .arg("tests/fixtures/uses_strict_mode_round_trip")
+            .arg("check")
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("No violations detected!"));
+    };
+
+    // A routine `update` between two checks must not turn a green build red.
+    assert_check_is_clean();
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_round_trip")
+        .arg("update")
+        .assert()
+        .success();
+    assert_check_is_clean();
+
+    common::set_up_uses_strict_mode_round_trip_fixture();
+    Ok(())
+}
+
+#[test]
 fn test_update_with_strict_violations() -> anyhow::Result<()> {
     let path = Path::new(
         "tests/fixtures/contains_strict_violations/packs/foo/package_todo.yml",

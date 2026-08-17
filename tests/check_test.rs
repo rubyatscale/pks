@@ -320,15 +320,33 @@ fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
-    // The violation here IS recorded in packs/foo/package_todo.yml, so it has to
-    // match its recorded entry: reported neither as a new violation nor as a
-    // stale todo. Strict mode still fails the run, which is what keeps this at
-    // exit 1, so the two strict messages are the whole of the output.
+fn test_check_with_recorded_strict_mode_violation() -> Result<(), Box<dyn Error>>
+{
+    // The violation is already recorded in packs/foo/package_todo.yml, so strict
+    // mode tolerates it and only blocks new ones. Matches packwerk's
+    // `unlisted_strict_mode_violations` (Shopify/packwerk#368).
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains("No violations detected!"));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_recorded_strict_mode_violation_ignoring_todo(
+) -> Result<(), Box<dyn Error>> {
+    // `--ignore-recorded-violations` is the escape hatch: it still surfaces
+    // everything the todo file is grandfathering.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("--ignore-recorded-violations")
         .assert()
         .code(1)
         .stdout(predicate::str::contains(
@@ -336,14 +354,60 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
         ))
         .stdout(predicate::str::contains(
             "packs/foo cannot have dependency violations on packs/bar because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
+        ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_unrecorded_strict_mode_violation(
+) -> Result<(), Box<dyn Error>> {
+    // No package_todo.yml entry for this one, so strict mode must still fail.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_strict_violations")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
+        ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_partially_recorded_strict_mode_violations(
+) -> Result<(), Box<dyn Error>> {
+    // The case that makes strict mode adoptable, and the one nothing else
+    // covers: one recorded violation (::Bar) and one unrecorded (::Baz) in the
+    // same strict pack, in the same run. Only the unrecorded one is reported,
+    // and the run still fails because of it.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_partially_recorded")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "packs/foo cannot have privacy violations on packs/baz because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
         ))
+        .stdout(predicate::str::contains(
+            "packs/foo cannot have dependency violations on packs/baz because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
+        ))
+        .stdout(predicate::str::contains("::Baz"))
+        // The recorded one stays silent: no strict message, no new-violation
+        // report, no stale-todo line.
+        .stdout(predicate::str::contains("packs/bar").not())
+        .stdout(predicate::str::contains("::Bar").not())
         .stdout(
             predicate::str::contains(
                 "There were stale violations found, please run `packs update`",
             )
             .not(),
-        )
-        .stdout(predicate::str::contains("violation(s) detected:").not());
+        );
 
     common::teardown();
     Ok(())
@@ -351,16 +415,19 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
+    // Uses `contains_strict_violations` rather than `uses_strict_mode`: the
+    // latter's violation is recorded, so there is nothing left to assert against
+    // in the CSV. The duplicate assertion this used to carry was byte-identical
+    // to the one below it, so nothing is lost by dropping it.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
-        .arg("tests/fixtures/uses_strict_mode")
+        .arg("tests/fixtures/contains_strict_violations")
         .arg("check")
         .arg("-o")
         .arg("csv")
         .assert()
         .code(1)
         .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
-        .stdout(predicate::str::contains("privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file"))
         .stdout(predicate::str::contains(
             "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file",
         ));
