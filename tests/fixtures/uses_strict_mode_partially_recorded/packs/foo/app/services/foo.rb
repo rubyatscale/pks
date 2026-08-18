@@ -6,4 +6,8 @@ module Foo
   def calls_baz_without_stated_dependency
     Baz
   end
+
+  def calls_qux_without_stated_dependency
+    Qux
+  end
 end

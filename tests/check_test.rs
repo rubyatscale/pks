@@ -414,6 +414,38 @@ fn test_check_with_partially_recorded_strict_mode_violations(
 }
 
 #[test]
+fn test_check_with_single_recorded_violation_type_in_strict_pack(
+) -> Result<(), Box<dyn Error>> {
+    // `::Qux` is recorded for `privacy` only, while `packs/qux` is strict on both
+    // privacy and dependencies. Recording one type must tolerate only that type,
+    // so the dependency violation still fails the run.
+    //
+    // This pins `violation_type` inside the recorded-comparison key. A refactor
+    // that normalized it away, the way `strict` is normalized by
+    // `ViolationIdentifier::recorded_key`, would silence both types from a
+    // single-type entry, and every other strict fixture records privacy and
+    // dependency together so nothing else would catch it.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_partially_recorded")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "packs/foo cannot have dependency violations on packs/qux because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
+        ))
+        .stdout(
+            predicate::str::contains(
+                "packs/foo cannot have privacy violations on packs/qux because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
+            )
+            .not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
     // A CSV format test, and only that. It uses `contains_strict_violations`
     // rather than `uses_strict_mode` because the latter's violation is recorded,

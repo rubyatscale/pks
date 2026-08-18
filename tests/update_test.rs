@@ -236,7 +236,9 @@ fn test_update_preserves_recorded_strict_violations() -> anyhow::Result<()> {
 // over-correction. Preserving recorded strict violations must not make them
 // immortal: once the reference is gone the entry still has to be pruned. Union
 // `recorded_violations` into the write set instead of intersecting it with the
-// found violations and this is the only test that fails.
+// found violations and this test fails, as does the pre-existing
+// `test_update_with_stale_violations`. That one uses a non-strict fixture, so
+// this is the only coverage of the strict path.
 fn test_update_prunes_recorded_strict_violation_once_reference_is_gone(
 ) -> anyhow::Result<()> {
     let _fixture = common::RoundTripFixture::set_up();
@@ -305,6 +307,13 @@ fn test_check_update_check_round_trip_with_strict_mode() -> anyhow::Result<()> {
 }
 
 #[test]
+// Shares `contains_strict_violations` with `check_test.rs`, which reads it. That
+// is safe only because of what this test asserts: the committed fixture has no
+// `package_todo.yml`, the `remove_file` below is defensive, and the assertion is
+// that `update` does not create one. So the fixture is invariant across this
+// test. If that assertion ever inverts, give this test its own fixture copy,
+// because `serial_test` here has no `file_locks` feature and so cannot serialise
+// across test binaries.
 fn test_update_with_strict_violations() -> anyhow::Result<()> {
     let path = Path::new(
         "tests/fixtures/contains_strict_violations/packs/foo/package_todo.yml",
