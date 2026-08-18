@@ -381,10 +381,12 @@ fn test_check_with_unrecorded_strict_mode_violation(
 #[test]
 fn test_check_with_partially_recorded_strict_mode_violations(
 ) -> Result<(), Box<dyn Error>> {
-    // The case that makes strict mode adoptable, and the one nothing else
-    // covers: one recorded violation (::Bar) and one unrecorded (::Baz) in the
-    // same strict pack, in the same run. Only the unrecorded one is reported,
-    // and the run still fails because of it.
+    // The case that makes strict mode adoptable: a recorded violation (::Bar)
+    // and an unrecorded one (::Baz) in the same strict pack, in the same run.
+    // Only the unrecorded one is reported, and the run still fails because of
+    // it. This fixture also carries ::Qux with a single-type entry, read by
+    // `test_check_with_single_recorded_violation_type_in_strict_pack`, so
+    // ::Qux's dependency message is expected in this output too.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode_partially_recorded")
@@ -423,8 +425,15 @@ fn test_check_with_single_recorded_violation_type_in_strict_pack(
     // This pins `violation_type` inside the recorded-comparison key. A refactor
     // that normalized it away, the way `strict` is normalized by
     // `ViolationIdentifier::recorded_key`, would silence both types from a
-    // single-type entry, and every other strict fixture records privacy and
-    // dependency together so nothing else would catch it.
+    // single-type entry.
+    //
+    // Measured, because the obvious way to say this overstates it: collapsing
+    // `violation_type` in the strict filter *specifically* fails exactly this
+    // test and nothing else in the suite. Collapsing it everywhere in
+    // `recorded_key` fails eight tests, since it also breaks reportable and
+    // stale comparisons, so that coarser mutation proves nothing about this
+    // one. Every other strict fixture records privacy and dependency together,
+    // which is why the narrow case needs its own coverage.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode_partially_recorded")

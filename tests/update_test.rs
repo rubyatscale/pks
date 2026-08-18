@@ -313,7 +313,10 @@ fn test_check_update_check_round_trip_with_strict_mode() -> anyhow::Result<()> {
 // that `update` does not create one. So the fixture is invariant across this
 // test. If that assertion ever inverts, give this test its own fixture copy,
 // because `serial_test` here has no `file_locks` feature and so cannot serialise
-// across test binaries.
+// across test binaries. Cargo runs test binaries sequentially, so the coupling is
+// latent rather than live, but that is cargo's behaviour and not a property of
+// this design: `cargo-nextest` runs tests from different binaries concurrently,
+// so adopting it would make this live without anyone touching this test.
 fn test_update_with_strict_violations() -> anyhow::Result<()> {
     let path = Path::new(
         "tests/fixtures/contains_strict_violations/packs/foo/package_todo.yml",

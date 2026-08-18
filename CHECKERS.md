@@ -133,7 +133,7 @@ enforcement_globs_ignore:
 
 In this example, privacy violations on constants of your engine referenced from anywhere under `engines/another_engine/test/` will not fail pks checks.
 
-Note the trailing `**` rather than `**/*`. These are gitignore-style globs, so `**` matches the whole subtree including files directly inside `test/`, whereas `**/*` requires at least one intervening directory and would silently skip `test/a_test.rb`. A pattern that matches nothing looks identical to no exemption at all, so check a new pattern against a file you expect it to cover.
+Note the trailing `**` rather than `**/*`. `**` matches the whole subtree including files directly inside `test/`, whereas `**/*` requires at least one intervening directory and so silently skips `test/a_test.rb`. Do not reason about these from gitignore: `git check-ignore` treats `test/**` and `test/**/*` identically, and pks does not, because matching goes through `fnmatch_regex2::glob_to_regex` (`src/packs/ignored.rs`) rather than gitignore semantics. A pattern that matches nothing looks identical to no exemption at all, so check a new pattern against a file you expect it to cover.
 
 > **Note:** packwerk spells this `strict_privacy_ignored_patterns`. **pks does not implement that key**, and because `Pack` collects unknown keys via `#[serde(flatten)]` it is accepted silently and has no effect, which leaves the pack unguarded. Use `enforcement_globs_ignore` instead.
 

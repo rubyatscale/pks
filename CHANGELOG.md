@@ -67,6 +67,20 @@ files are grandfathering:
 pks check --ignore-recorded-violations
 ```
 
+### Internal
+
+#### Replaced `serde_yaml` with `yaml_serde`
+
+`serde_yaml` was discontinued in March 2024, and its `unsafe-libyaml` backend has
+been unreleased since. pks now depends on
+[`yaml_serde`](https://github.com/yaml/yaml-serde), the YAML organization's
+maintained fork, which is backed by `libyaml-rs` from the same org.
+
+`yaml_serde` is an API-compatible fork whose only substantive changes are `no_std`
+support and lint cleanups, so this is behavior-preserving: the bytes pks writes to
+`package.yml` and `package_todo.yml` are unchanged, as are its YAML parse error
+messages. No action is required.
+
 ## 0.4.0
 
 ### Breaking Changes
@@ -90,17 +104,3 @@ excluded, and the old behavior (analyze everything) was rarely desired.
 ```yaml
 respect_gitignore: false
 ```
-
-### Internal
-
-#### Replaced `serde_yaml` with `yaml_serde`
-
-`serde_yaml` was discontinued in March 2024, and its `unsafe-libyaml` backend has
-been unreleased since. pks now depends on
-[`yaml_serde`](https://github.com/yaml/yaml-serde), the YAML organization's
-maintained fork, which is backed by `libyaml-rs` from the same org.
-
-`yaml_serde` is an API-compatible fork whose only substantive changes are `no_std`
-support and lint cleanups, so this is behavior-preserving: the bytes pks writes to
-`package.yml` and `package_todo.yml` are unchanged, as are its YAML parse error
-messages. No action is required.
