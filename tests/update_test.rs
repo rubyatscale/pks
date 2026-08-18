@@ -198,15 +198,11 @@ packs/bar:
 
 #[test]
 #[serial]
-// This and the round-trip test below both mutate
-// tests/fixtures/uses_strict_mode_round_trip, so they run in serial and each
-// restores the fixture on the way out.
+// These three all mutate tests/fixtures/uses_strict_mode_round_trip, so they run
+// in serial and restore through `RoundTripFixture`'s Drop rather than a trailing
+// call, which a panicking test would skip.
 fn test_update_preserves_recorded_strict_violations() -> anyhow::Result<()> {
-    common::set_up_uses_strict_mode_round_trip_fixture();
-
-    let path = Path::new(
-        "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml",
-    );
+    let _fixture = common::RoundTripFixture::set_up();
 
     cargo_bin_cmd!("pks")
         .arg("--project-root")
@@ -226,25 +222,60 @@ fn test_update_preserves_recorded_strict_violations() -> anyhow::Result<()> {
             .not(),
         );
 
+    // Byte equality, not a substring: this pins the whole file `update` writes,
+    // so a change that preserved the entry but mangled the rest is caught too.
+    let actual = std::fs::read_to_string(common::ROUND_TRIP_TODO_PATH)?;
+    assert_eq!(common::ROUND_TRIP_TODO, actual);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+// The counterpart to the test above, and the one that stops the obvious
+// over-correction. Preserving recorded strict violations must not make them
+// immortal: once the reference is gone the entry still has to be pruned. Union
+// `recorded_violations` into the write set instead of intersecting it with the
+// found violations and this is the only test that fails.
+fn test_update_prunes_recorded_strict_violation_once_reference_is_gone(
+) -> anyhow::Result<()> {
+    let _fixture = common::RoundTripFixture::set_up();
+
+    std::fs::write(
+        common::ROUND_TRIP_SOURCE_PATH,
+        "module Foo\n  def no_longer_references_bar\n    :nothing\n  end\nend\n",
+    )?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_round_trip")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "There were stale violations found, please run `packs update`",
+        ));
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_round_trip")
+        .arg("update")
+        .assert()
+        .success();
+
     assert!(
-        path.exists(),
-        "update must not delete the todo file that grandfathers a recorded strict violation"
-    );
-    let contents = std::fs::read_to_string(path)?;
-    assert!(
-        contents.contains("\"::Bar\""),
-        "the recorded strict violation must survive update, got:\n{}",
-        contents
+        !Path::new(common::ROUND_TRIP_TODO_PATH).exists(),
+        "update must prune a recorded strict violation whose reference is gone, \
+         otherwise `check` stays green forever for code that no longer exists"
     );
 
-    common::set_up_uses_strict_mode_round_trip_fixture();
     Ok(())
 }
 
 #[test]
 #[serial]
 fn test_check_update_check_round_trip_with_strict_mode() -> anyhow::Result<()> {
-    common::set_up_uses_strict_mode_round_trip_fixture();
+    let _fixture = common::RoundTripFixture::set_up();
 
     let assert_check_is_clean = || {
         cargo_bin_cmd!("pks")
@@ -266,7 +297,10 @@ fn test_check_update_check_round_trip_with_strict_mode() -> anyhow::Result<()> {
         .success();
     assert_check_is_clean();
 
-    common::set_up_uses_strict_mode_round_trip_fixture();
+    // And it must leave the file exactly as it found it.
+    let actual = std::fs::read_to_string(common::ROUND_TRIP_TODO_PATH)?;
+    assert_eq!(common::ROUND_TRIP_TODO, actual);
+
     Ok(())
 }
 

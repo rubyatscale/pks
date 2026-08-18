@@ -415,10 +415,14 @@ fn test_check_with_partially_recorded_strict_mode_violations(
 
 #[test]
 fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
-    // Uses `contains_strict_violations` rather than `uses_strict_mode`: the
-    // latter's violation is recorded, so there is nothing left to assert against
-    // in the CSV. The duplicate assertion this used to carry was byte-identical
-    // to the one below it, so nothing is lost by dropping it.
+    // A CSV format test, and only that. It uses `contains_strict_violations`
+    // rather than `uses_strict_mode` because the latter's violation is recorded,
+    // so there is nothing left to assert against in the CSV. Note that this
+    // fixture ships no `package_todo.yml`, so the violation is an ordinary
+    // unrecorded one: this test does not exercise strict tolerance and passes
+    // with the recorded filter disabled. The duplicate assertion it used to
+    // carry was byte-identical to the one below it, so dropping it costs no
+    // coverage.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/contains_strict_violations")

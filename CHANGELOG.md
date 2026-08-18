@@ -6,24 +6,48 @@
 
 #### Strict mode tolerates violations already recorded in `package_todo.yml`
 
-`enforce_privacy: strict` and `enforce_dependencies: strict` now fail only on
-references that are **not** already recorded in a `package_todo.yml`. This matches
-packwerk's `unlisted_strict_mode_violations` (Shopify/packwerk#368).
+Any checker set to `strict` now fails only on references that are **not** already
+recorded in a `package_todo.yml`. This matches packwerk's
+`unlisted_strict_mode_violations`
+([Shopify/packwerk#368](https://github.com/Shopify/packwerk/pull/368)).
 
-**Who is affected:** any project with a strict pack whose existing violations are
-recorded in todo files. Previously `pks check` failed on every one of them, so a
-strict pack could only be green with an empty todo list.
+This is not limited to privacy and dependencies. The filter is checker-agnostic,
+so `enforce_layers: strict`, `enforce_visibility: strict` and strict folder
+privacy relax in exactly the same way. If you are using one of those to hold a
+boundary hard, this affects you too.
 
-**What changes:** pks silently produces different (smaller) results without any
-configuration change. Strict packs that were red because of grandfathered
-violations go green. New references into a strict pack still fail, and `pks update`
-still refuses to record an unrecorded strict violation, so strict mode cannot be
-silenced by running it.
+**Who is affected:** any project with a strict checker whose existing violations
+are recorded in todo files. Note that the entries live in the **referencing**
+package's `package_todo.yml`, not the strict package's. Previously `pks check`
+failed on every recorded strict violation, so a strict package could only be
+green with no strict entries recorded against it.
 
-**Opt out:** there is no config flag, matching packwerk. To see everything the todo
-files are grandfathering, run:
+**What changes, in `check`:** pks silently produces different (smaller) results
+with no configuration change. Strict packages that were red because of
+grandfathered violations go green. New references still fail, and a reference to
+a different constant from an already-recorded file still fails.
 
-```
+**What changes, in `update`, and this is the half that touches committed files:**
+previously `update` dropped every strict violation when regenerating todo files,
+and a package left with no entries had its `package_todo.yml` deleted outright.
+So `update` used to erase recorded strict entries, which silently un-did the
+tolerance `check` now depends on. It retains them now. Expect `update` to
+*re-add* strict entries to files in your repo, and to show up in a diff or a
+stale-todo CI step. `update` still refuses to record an *unrecorded* strict
+violation, so strict mode cannot be adopted by running it.
+
+**Adopting strict mode:** run `update` while the checker is still `true`, commit
+the todo files, then set it to `strict`. Flipping first does not work, because
+`update` will not record violations for a package that is already strict. See
+CHECKERS.md.
+
+**No opt out:** there is no config flag, matching packwerk. `--ignore-recorded-violations`
+is *not* a drop-in replacement for the old behaviour, because it also disables
+recorded-violation filtering everywhere else and will surface every recorded
+violation of every type in every package. It is useful for seeing what the todo
+files are grandfathering:
+
+```sh
 pks check --ignore-recorded-violations
 ```
 

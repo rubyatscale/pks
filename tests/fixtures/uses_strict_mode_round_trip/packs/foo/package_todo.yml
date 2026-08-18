@@ -9,7 +9,7 @@
 packs/bar:
   "::Bar":
     violations:
-    - privacy
     - dependency
+    - privacy
     files:
     - packs/foo/app/services/foo.rb

@@ -45,7 +45,7 @@ impl ViolationIdentifier {
     /// it is, and `package_todo.yml` has nowhere to record it, so recorded
     /// violations are always rebuilt with `strict: false`. Compare through this
     /// so a violation in a strict pack can still match its recorded entry.
-    pub fn recorded_key(&self) -> Self {
+    pub(crate) fn recorded_key(&self) -> Self {
         Self {
             strict: false,
             ..self.clone()
@@ -356,6 +356,11 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
             &unlisted_strict_violations.len()
         );
+        // Out of scope here: packwerk's `update-todo` exits non-zero in this
+        // state (`unlisted_strict_mode_violations.empty? && errors.empty?` as
+        // its result), whereas `update` returns Ok unconditionally and goes on
+        // to print a success line. Pre-existing, and changing the exit code is
+        // a separate breaking change from the filter this commit touches.
     }
     package_todo::write_violations_to_disk(
         configuration,

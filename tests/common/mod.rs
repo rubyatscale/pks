@@ -55,13 +55,24 @@ pub fn delete_foobar_app_with_custom_readme() {
     }
 }
 
-// Restores the round-trip strict-mode fixture. Its todo file records a strict
-// violation, which is the state `check` tolerance depends on, so any test that
-// runs `update` against it has to put it back.
+// The round-trip strict-mode fixture. Its todo file records a strict violation,
+// which is the state `check` tolerance depends on, and its source file provides
+// the reference that entry points at. Tests here mutate both, so they restore
+// via the guard below rather than a trailing call: a panicking test would skip
+// a trailing restore and leave a deleted fixture in the tree, which the
+// pre-commit hook makes easy to commit by accident.
 #[allow(dead_code)]
-pub fn set_up_uses_strict_mode_round_trip_fixture() {
-    let package_todo = String::from(
-        "\
+pub const ROUND_TRIP_TODO_PATH: &str =
+    "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml";
+
+#[allow(dead_code)]
+pub const ROUND_TRIP_SOURCE_PATH: &str =
+    "tests/fixtures/uses_strict_mode_round_trip/packs/foo/app/services/foo.rb";
+
+// Violation types are in sorted order, matching what `update` writes, so tests
+// can assert byte equality against this rather than only grepping for a key.
+#[allow(dead_code)]
+pub const ROUND_TRIP_TODO: &str = "\
 # This file contains a list of dependencies that are not part of the long term plan for the
 # 'packs/foo' package.
 # We should generally work to reduce this list over time.
@@ -73,18 +84,42 @@ pub fn set_up_uses_strict_mode_round_trip_fixture() {
 packs/bar:
   \"::Bar\":
     violations:
-    - privacy
     - dependency
+    - privacy
     files:
     - packs/foo/app/services/foo.rb
-",
-    );
+";
 
-    fs::write(
-        "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml",
-        package_todo,
-    )
-    .unwrap();
+#[allow(dead_code)]
+pub const ROUND_TRIP_SOURCE: &str = "\
+module Foo
+  def calls_bar_without_stated_dependency
+    Bar
+  end
+end
+";
+
+/// Restores the round-trip fixture when it goes out of scope, panic or not.
+#[allow(dead_code)]
+pub struct RoundTripFixture;
+
+#[allow(dead_code)]
+impl RoundTripFixture {
+    pub fn set_up() -> Self {
+        Self::restore();
+        Self
+    }
+
+    fn restore() {
+        fs::write(ROUND_TRIP_TODO_PATH, ROUND_TRIP_TODO).unwrap();
+        fs::write(ROUND_TRIP_SOURCE_PATH, ROUND_TRIP_SOURCE).unwrap();
+    }
+}
+
+impl Drop for RoundTripFixture {
+    fn drop(&mut self) {
+        Self::restore();
+    }
 }
 
 // In case we want our tests to call `update` or otherwise mutate the file system
