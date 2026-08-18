@@ -56,7 +56,7 @@ where
             // a String key with double quotes.
             // When I tried this:
             // let quoted_constant_name = format!("\"{}\"", constant_name);
-            // serde_yaml would escape the quotes, so I would get this:
+            // yaml_serde would escape the quotes, so I would get this:
             // '\"::Bar\"'
             // (uncomment the above and run tests to reproduce)
             quoted_sorted_violations_by_constant
@@ -189,7 +189,7 @@ fn serialize_package_todo(
     package_todo: &PackageTodo,
     packs_first_mode: bool,
 ) -> String {
-    let package_todo_yml = serde_yaml::to_string(&package_todo).unwrap();
+    let package_todo_yml = yaml_serde::to_string(&package_todo).unwrap();
 
     // HACK: This is the other part of the hack above (search `HACK:` for more)
     let package_todo_yml = package_todo_yml.replace("'#", "\"");
@@ -364,7 +364,7 @@ mod tests {
 
         let expected = example_package_todo(String::from("packs/bar"));
 
-        let actual: PackageTodo = serde_yaml::from_str(&contents).unwrap();
+        let actual: PackageTodo = yaml_serde::from_str(&contents).unwrap();
         assert_eq!(expected, actual);
     }
 

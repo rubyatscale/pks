@@ -10,7 +10,7 @@ use anyhow::Context;
 use core::hash::Hash;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_yaml::Value;
+use yaml_serde::Value;
 
 use super::{
     checker::ViolationIdentifier, file_utils::expand_glob, ignored, PackageTodo,
@@ -240,7 +240,7 @@ impl Pack {
                 .context("Failed to open the package_todo.yml file")?;
             file.read_to_string(&mut package_todo_contents)
                 .context("Could not read the package_todo.yml file")?;
-            serde_yaml::from_str(&package_todo_contents).with_context(|| {
+            yaml_serde::from_str(&package_todo_contents).with_context(|| {
                 format!(
                     "Failed to deserialize the package_todo.yml file at {}. Try deleting the file and running the `update` command to regenerate it.",
                     absolute_path_to_package_todo.display()
@@ -264,7 +264,7 @@ impl Pack {
         package_yml_contents: &str,
         package_todo: PackageTodo,
     ) -> anyhow::Result<Pack> {
-        let pack_result = serde_yaml::from_str(package_yml_contents);
+        let pack_result = yaml_serde::from_str(package_yml_contents);
         let pack = match pack_result {
             Ok(pack) => pack,
             Err(e) => {
@@ -406,7 +406,7 @@ fn is_default_public_folder(value: &Option<PathBuf>) -> bool {
 }
 
 pub fn serialize_pack(pack: &Pack) -> anyhow::Result<String> {
-    let serialized_pack = serde_yaml::to_string(&pack).unwrap();
+    let serialized_pack = yaml_serde::to_string(&pack).unwrap();
     if serialized_pack == "{}\n" {
         Ok("".to_owned())
     } else {
@@ -414,7 +414,7 @@ pub fn serialize_pack(pack: &Pack) -> anyhow::Result<String> {
     }
 }
 
-// serde_yaml doesn't add quotes around all constants, which isn't a problem
+// yaml_serde doesn't add quotes around all constants, which isn't a problem
 //unless the constant starts with ::
 fn add_back_necessary_quotes(
     serialized_pack: String,
@@ -489,7 +489,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     fn reserialize_pack(pack_yml: &str) -> anyhow::Result<String> {
-        let deserialized_pack = serde_yaml::from_str::<Pack>(pack_yml).unwrap();
+        let deserialized_pack = yaml_serde::from_str::<Pack>(pack_yml).unwrap();
         serialize_pack(&deserialized_pack)
     }
 
@@ -678,7 +678,7 @@ enforcement_globs_ignore:
         "#
         .trim_start();
 
-        let pack: Result<Pack, _> = serde_yaml::from_str(pack_yml);
+        let pack: Result<Pack, _> = yaml_serde::from_str(pack_yml);
         let pack = pack.unwrap();
         assert_eq!(
             pack.clone().enforcement_globs_ignore.unwrap(),
@@ -709,7 +709,7 @@ enforcement_globs_ignore:
         );
 
         let reserialized = reserialize_pack(pack_yml)?;
-        let re_pack: Result<Pack, _> = serde_yaml::from_str(&reserialized);
+        let re_pack: Result<Pack, _> = yaml_serde::from_str(&reserialized);
         let re_pack = re_pack.unwrap();
         assert_eq!(pack, re_pack);
 
