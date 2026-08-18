@@ -100,25 +100,41 @@ end
 ";
 
 /// Restores the round-trip fixture when it goes out of scope, panic or not.
+///
+/// Bind it to a named variable, `let _fixture = RoundTripFixture::set_up();`.
+/// Binding to `let _` drops it immediately and silently removes the protection,
+/// which `#[must_use]` cannot catch.
 #[allow(dead_code)]
+#[must_use = "bind this to a named variable; `let _` drops the guard immediately"]
 pub struct RoundTripFixture;
 
 #[allow(dead_code)]
 impl RoundTripFixture {
     pub fn set_up() -> Self {
-        Self::restore();
-        Self
-    }
-
-    fn restore() {
+        // Panicking here is fine and informative: the test has not run yet.
         fs::write(ROUND_TRIP_TODO_PATH, ROUND_TRIP_TODO).unwrap();
         fs::write(ROUND_TRIP_SOURCE_PATH, ROUND_TRIP_SOURCE).unwrap();
+        Self
     }
 }
 
 impl Drop for RoundTripFixture {
     fn drop(&mut self) {
-        Self::restore();
+        // Deliberately does not unwrap. This runs while a failing test is
+        // unwinding, and a panic here would be a panic-during-panic, which
+        // aborts the whole test binary and replaces the real failure with an
+        // abort. Report and carry on, as `teardown()` does.
+        for (path, contents) in [
+            (ROUND_TRIP_TODO_PATH, ROUND_TRIP_TODO),
+            (ROUND_TRIP_SOURCE_PATH, ROUND_TRIP_SOURCE),
+        ] {
+            if let Err(err) = fs::write(path, contents) {
+                eprintln!(
+                    "Failed to restore {} during teardown: {}",
+                    path, err
+                );
+            }
+        }
     }
 }
 

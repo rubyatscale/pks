@@ -15,7 +15,7 @@ Setting `enforce_privacy` to `true` will make all references to private constant
 
 Setting `enforce_privacy` to `strict` will forbid *new* references to private constants in your package. **Violations already recorded in the referencing package's `package_todo.yml` are tolerated**, so strict mode stops the list growing rather than requiring it to be empty.
 
-#### Adopting strict mode on a package that already has violations
+### Adopting strict mode on a package that already has violations
 
 **Record the existing violations first, then flip to `strict`.** The order matters, because tolerance only ever matches entries that are *already* in a `package_todo.yml`, and `update` will not create them once the package is strict:
 
