@@ -54,6 +54,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use tracing::debug;
 
 pub fn greet() {
     println!("👋 Hello! Welcome to packs 📦 🔥 🎉 🌈. This tool is under construction.")
@@ -114,6 +115,8 @@ pub fn check(
             json::write_json(&result, configuration, std::io::stdout())?;
         }
     }
+
+    debug!("Finished writing check output");
 
     if result.has_violations() {
         return Err(ViolationsFound.into());
