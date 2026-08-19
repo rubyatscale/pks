@@ -61,7 +61,6 @@ impl CheckerInterface for Checker {
                         &format!("{}::", private_constant);
                     reference.constant_name.starts_with(namespaced_constant)
                 });
-            dbg!(constant_is_private, constant_is_in_private_namespace);
             if !constant_is_private && !constant_is_in_private_namespace {
                 return Ok(None);
             }

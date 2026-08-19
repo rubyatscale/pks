@@ -49,6 +49,39 @@ fn test_check_with_privacy_dependency_error_template_overrides(
     Ok(())
 }
 #[test]
+fn test_check_with_private_constants() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/privacy_violations_with_private_constants")
+        .arg("check")
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+
+    let stripped_stdout = stripped_output(output.stdout);
+
+    // A non-empty `private_constants` list narrows privacy to that list: the listed
+    // constant and its namespace are private, everything else in the pack is public.
+    assert!(stripped_stdout.contains("2 violation(s) detected:"));
+    assert!(stripped_stdout.contains("packs/foo/app/services/foo.rb:3:4\nPrivacy violation: `::Bar` is private to `packs/bar`, but referenced from `packs/foo`"));
+    assert!(stripped_stdout.contains("packs/foo/app/services/foo.rb:7:4\nPrivacy violation: `::Bar::Inner` is private to `packs/bar`, but referenced from `packs/foo`"));
+    assert!(!stripped_stdout.contains("::SomeConcern"));
+
+    // Regression guard: this branch once carried a live `dbg!`, which wrote a pair of
+    // lines to stderr for every reference checked against `private_constants`.
+    let stripped_stderr = stripped_output(output.stderr);
+    assert_eq!(
+        stripped_stderr, "",
+        "expected no stderr output, got:\n{}",
+        stripped_stderr
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check() -> Result<(), Box<dyn Error>> {
     let output = cargo_bin_cmd!("pks")
         .arg("--project-root")
