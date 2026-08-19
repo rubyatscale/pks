@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use regex::Regex;
 use ruby_inflector::case::{
@@ -13,6 +14,26 @@ const CLASS_CASE_TO_SINGULAR: [(&str, &str); 4] = [
     ("Lefe", "Leave"),
     ("Daum", "Datum"),
 ];
+
+// `camelize` and `to_class_case` run once per file while the Zeitwerk constant
+// map is built, so on a large codebase these are on the order of 50k calls per
+// invocation. Compiling a regex is expensive (it builds a DFA), so every pattern
+// used here is compiled once for the life of the process rather than per call.
+static STATUSE_SUFFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("Statuse$").unwrap());
+static STATU_SUFFIX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("Statu$").unwrap());
+static STATUSS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("Statuss").unwrap());
+static SINGULARIZE: LazyLock<[(Regex, &str); CLASS_CASE_TO_SINGULAR.len()]> =
+    LazyLock::new(|| {
+        CLASS_CASE_TO_SINGULAR
+            .map(|(plural, singular)| (Regex::new(plural).unwrap(), singular))
+    });
+static LEADING_LOWERCASE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("^[a-z\\d]*").unwrap());
+static UNDERSCORE_OR_SLASH_WORD: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("(?:_|(/))([a-z\\d]*)").unwrap());
 
 // See https://github.com/whatisinternet/Inflector/pull/87
 // Note that as of the PR that adds this comment, we are now using https://github.com/alexevanczuk/ruby_inflector,
@@ -38,24 +59,26 @@ pub fn to_class_case(
     };
 
     if class_name.contains("Statu") {
-        let re = Regex::new("Statuse$").unwrap();
-        class_name = re.replace_all(&class_name, "Status").to_string();
-        let re = Regex::new("Statu$").unwrap();
+        class_name = STATUSE_SUFFIX
+            .replace_all(&class_name, "Status")
+            .to_string();
+        class_name =
+            STATU_SUFFIX.replace_all(&class_name, "Status").to_string();
 
-        class_name = re.replace_all(&class_name, "Status").to_string();
-
-        let re = Regex::new("Statuss").unwrap();
-        re.replace_all(&class_name, "Status").to_string();
+        // NOTE: the result of this replacement has always been discarded, so
+        // "Statuss" is left alone (see the ("statuss", false, "Statuss") case in
+        // the tests below). Preserved verbatim here: this commit is only meant to
+        // stop recompiling regexes, not to change what the inflector produces.
+        STATUSS.replace_all(&class_name, "Status").to_string();
     }
 
-    CLASS_CASE_TO_SINGULAR
-        .into_iter()
-        .for_each(|(plural, singular)| {
-            if class_name.contains(plural) {
-                let re = Regex::new(plural).unwrap();
-                class_name = re.replace_all(&class_name, singular).to_string();
-            }
-        });
+    SINGULARIZE.iter().for_each(|(re, singular)| {
+        // `contains` on the original literal is a cheap pre-filter that avoids
+        // running the regex at all for the common case of no match.
+        if class_name.contains(re.as_str()) {
+            class_name = re.replace_all(&class_name, *singular).to_string();
+        }
+    });
 
     class_name
 }
@@ -86,8 +109,7 @@ pub fn camelize(s: &str, acronyms: &HashSet<String>) -> String {
 
     let mut new_string = s.to_string();
     // Replace the beginning of the word, matched with lowercase letters, with either a matching inflection or a capitalized version of the word
-    let re = Regex::new("^[a-z\\d]*").unwrap();
-    new_string = re
+    new_string = LEADING_LOWERCASE
         .replace(&new_string, |caps: &regex::Captures| {
             let word = caps.get(0).unwrap().as_str();
             if lowercase_acronyms_to_originals.contains_key(word) {
@@ -99,9 +121,7 @@ pub fn camelize(s: &str, acronyms: &HashSet<String>) -> String {
         .to_mut()
         .to_string();
 
-    let re = Regex::new("(?:_|(/))([a-z\\d]*)").unwrap();
-
-    new_string = re
+    new_string = UNDERSCORE_OR_SLASH_WORD
         .replace_all(&new_string, |caps: &regex::Captures| {
             let matched_slash = caps.get(1);
             let word = caps.get(2).unwrap().as_str();
