@@ -12,12 +12,14 @@ on:
 jobs:
   audit:
     permissions:
-      checks: write
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/audit-check@v1
+      - uses: actions/checkout@v5
+      # Installs a prebuilt cargo-audit from the upstream GitHub releases.
+      # `actions-rs/audit-check` built it with `cargo install` instead, which
+      # broke once cargo-audit's dependencies outran the runner's toolchain.
+      - uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - run: cargo audit
