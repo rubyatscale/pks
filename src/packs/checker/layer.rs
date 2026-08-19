@@ -53,7 +53,7 @@ impl Checker {
                 } else {
                     Some(format!(
                         "Invalid 'layer' option in '{}'. `layer` must be one of the layers defined in `packwerk.yml`",
-                        &pack.relative_yml().to_string_lossy()
+                        pack.relative_yml().to_string_lossy()
                     ))
                 }
             }

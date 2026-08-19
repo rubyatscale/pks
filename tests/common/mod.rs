@@ -13,7 +13,7 @@ pub fn teardown() {
             if let Err(err) = fs::remove_dir_all(&cache_dir) {
                 eprintln!(
                     "Failed to remove {} during test teardown: {}",
-                    &cache_dir.display(),
+                    cache_dir.display(),
                     err
                 );
             }

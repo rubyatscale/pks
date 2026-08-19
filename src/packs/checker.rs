@@ -167,7 +167,7 @@ impl<'a> CheckAllBuilder<'a> {
                     .map_err(|e| {
                         anyhow::Error::new(e).context(format!(
                             "Failed to strip prefix from {:?}",
-                            &self.configuration.absolute_root
+                            self.configuration.absolute_root
                         ))
                     })
                     .and_then(|path| {
@@ -175,7 +175,7 @@ impl<'a> CheckAllBuilder<'a> {
                             anyhow::Error::new(std::fmt::Error).context(
                                 format!(
                                     "Path ({:?}) cannot be converted to &str",
-                                    &path
+                                    path
                                 ),
                             )
                         })
@@ -314,7 +314,7 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            &strict_violations.len()
+            strict_violations.len()
         );
     }
     package_todo::write_violations_to_disk(configuration, violations);

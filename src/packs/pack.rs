@@ -428,20 +428,20 @@ pub fn write_pack_to_disk(pack: &Pack) -> anyhow::Result<()> {
     let pack_dir = pack.yml.parent().ok_or_else(|| {
         anyhow::Error::new(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("Failed to get parent directory of pack {:?}", &pack.yml),
+            format!("Failed to get parent directory of pack {:?}", pack.yml),
         ))
     })?;
 
     std::fs::create_dir_all(pack_dir).map_err(|e| {
         anyhow::Error::new(e).context(format!(
             "Failed to create directory for pack {:?}",
-            &pack_dir
+            pack_dir
         ))
     })?;
 
     std::fs::write(&pack.yml, serialized_pack).map_err(|e| {
         anyhow::Error::new(e)
-            .context(format!("Failed to write pack to disk {:?}", &pack.yml))
+            .context(format!("Failed to write pack to disk {:?}", pack.yml))
     })?;
 
     Ok(())

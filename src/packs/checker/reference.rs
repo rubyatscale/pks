@@ -27,7 +27,7 @@ impl Reference {
                 .for_pack(name)
                 .context(format!(
                     "Reference#defining_pack_name is {}, but that pack is not found in pack set.",
-                    &name
+                    name
                 ))?))
         } else {
             Ok(None)
@@ -40,7 +40,7 @@ impl Reference {
     ) -> anyhow::Result<&'a Pack> {
         pack_set.for_pack(&self.referencing_pack_name).
         context(format!("Reference#referencing_pack_name is {}, but that pack is not found in pack set.", 
-        &self.referencing_pack_name))
+        self.referencing_pack_name))
     }
 }
 
@@ -59,7 +59,7 @@ impl Reference {
             Some(pack_name) => pack_name,
             None => bail!(
                 "Could not find pack for referencing file path: {}",
-                &referencing_file_path.display()
+                referencing_file_path.display()
             ),
         };
 
