@@ -24,3 +24,14 @@ install-path = "CARGO_HOME"
 install-updater = false
 # Link build artifacts to the process which created it
 github-attestations = true
+
+# Pin the GitHub Actions that dist generates into release.yml to exact commits
+# rather than floating tags, so a compromised or retagged upstream release can't
+# silently change what runs. Keep these on the same major version that dist
+# 0.30.3 generates; bump the SHA and the trailing version comment together.
+# Docs: https://axodotdev.github.io/cargo-dist/book/ci/customizing.html#pinned-actions-commits
+[dist.github-action-commits]
+"actions/checkout" = "11d5960a326750d5838078e36cf38b85af677262" # v4.4.0
+"actions/upload-artifact" = "ea165f8d65b6e75b540449e92b4886f43607fa02" # v4.6.2
+"actions/download-artifact" = "d3f86a106a0bac45b974a628896c90dbdf5c8093" # v4.3.0
+"actions/attest-build-provenance" = "e8998f949152b193b063cb0ec769d69d929409be" # v2.4.0
