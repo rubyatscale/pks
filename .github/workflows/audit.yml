@@ -9,17 +9,24 @@ on:
       - '**/Cargo.lock'
   pull_request:
 
+permissions: {}
+
 jobs:
   audit:
     permissions:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      # Installs a prebuilt cargo-audit from the upstream GitHub releases.
-      # `actions-rs/audit-check` built it with `cargo install` instead, which
-      # broke once cargo-audit's dependencies outran the runner's toolchain.
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs a prebuilt cargo-audit from the upstream GitHub releases and
+      # verifies its SHA256 checksum. `actions-rs/audit-check` built it with
+      # `cargo install`, which broke once cargo-audit's dependencies outran the
+      # runner's toolchain. `fallback: none` keeps that compile path from
+      # silently coming back if the download ever fails.
+      - uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
         with:
           tool: cargo-audit
+          fallback: none
       - run: cargo audit
