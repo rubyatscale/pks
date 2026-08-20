@@ -9,9 +9,26 @@ use tempfile::TempDir;
 
 mod common;
 
+// Every test below that shells out to `pks` is marked `#[serial]`.
+//
+// `common::teardown()` globs `tests/fixtures/*/tmp/cache/packwerk` and removes
+// the cache for *every* fixture, not just the one the calling test used. Tests
+// within a binary run on parallel threads, so one test's teardown could delete a
+// directory another test was mid-way through writing into. `pks` creates a cache
+// entry with `create_dir_all(parent)` followed by `File::create`, and losing the
+// parent between those two calls surfaced as:
+//
+//   Failed to create cache file ".../tmp/cache/packwerk/zeitwerk/<hash>":
+//   Invalid argument (os error 22)
+//
+// which failed the run about one time in three. Note the cache is written even
+// though these fixtures do not set `cache:` -- the constant-resolver cache is
+// not governed by that setting, so it cannot be configured away.
+
 /// Test that gitignored files are completely excluded from violation checking.
 /// The fixture has a violation in ignored_folder/violating.rb which should NOT be reported.
 #[test]
+#[serial]
 fn test_check_ignores_violations_in_gitignored_files(
 ) -> Result<(), Box<dyn Error>> {
     // The fixture has:
@@ -51,6 +68,7 @@ fn test_check_ignores_violations_in_gitignored_files(
 
 /// Test that list-included-files respects gitignore patterns.
 #[test]
+#[serial]
 fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
 {
     let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
@@ -95,6 +113,7 @@ fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
 
 /// Test that the application works correctly even without a .gitignore file.
 #[test]
+#[serial]
 fn test_check_works_without_gitignore() -> Result<(), Box<dyn Error>> {
     // simple_app doesn't have a .gitignore file
     // This should still work (and report violations as usual)
@@ -186,6 +205,7 @@ fn test_gitignore_matcher_without_gitignore() -> Result<(), Box<dyn Error>> {
 
 /// CRITICAL: Test that respect_gitignore: false configuration disables gitignore support.
 #[test]
+#[serial]
 fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
     // The fixture has:
     // - .gitignore with ignored_folder/ pattern
@@ -256,6 +276,7 @@ fn test_gitignore_negation_patterns() -> Result<(), Box<dyn Error>> {
 /// Note: We test this at the library level since .log files aren't Ruby files
 /// and won't appear in list-included-files regardless of gitignore.
 #[test]
+#[serial]
 fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
     // This is already tested by test_gitignore_negation_patterns at the library level.
     // At the CLI level, .log files aren't included in list-included-files anyway
@@ -403,6 +424,7 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
 /// Test that gitignore works with the update command.
 /// Gitignored files should not cause package_todo.yml updates.
 #[test]
+#[serial]
 fn test_update_respects_gitignore() -> Result<(), Box<dyn Error>> {
     // Create a temporary copy of the fixture
     let temp_dir = TempDir::new()?;
