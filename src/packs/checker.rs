@@ -236,7 +236,10 @@ pub(crate) fn check_all(
         absolute_paths,
         violations,
     };
-    CheckAllBuilder::new(configuration, &found_violations).build()
+    debug!("Building check-all result (diffing against package_todo.yml)");
+    let result = CheckAllBuilder::new(configuration, &found_violations).build();
+    debug!("Finished building check-all result");
+    result
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {
@@ -425,6 +428,12 @@ fn get_all_violations(
         });
 
     debug!("Finished running checkers");
+
+    // Dropping the reference vector deallocates several million Strings on a
+    // large codebase. It is measured explicitly so it shows up as its own phase
+    // in `--debug` output rather than hiding in the gap before process exit.
+    drop(references);
+    debug!("Dropped resolved references");
 
     violations
 }

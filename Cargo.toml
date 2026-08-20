@@ -15,6 +15,22 @@ repository = "https://github.com/rubyatscale/pks"
 [profile.dev]
 debug = true
 
+# `cargo build --release` is what dev/run_benchmarks.sh measures and what people
+# build locally, so it should be optimized like the shipped binary. This profile
+# was previously left at cargo defaults (lto = false, codegen-units = 16), which
+# meant benchmarks understated the `dist` build.
+#
+# Measured on a 51k-file app: default profile 5.289s, lto="thin" 5.127s,
+# lto="fat" 5.433s. Fat LTO is both slower to build (42s vs 27s) and slower to
+# run, so "thin" it is -- which also matches the dist profile.
+#
+# codegen-units = 1 costs some release build time in exchange for a faster binary
+# and, just as usefully, far less run-to-run variance (+/-0.084s -> +/-0.010s),
+# without which changes worth a few percent cannot be told apart from noise.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
