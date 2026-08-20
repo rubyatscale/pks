@@ -4,8 +4,17 @@ use pretty_assertions::assert_eq;
 use std::{error::Error, fs, path::Path};
 
 mod common;
+use serial_test::serial;
+
+// `#[serial]` because these tests mutate shared fixture state. Two of them run
+// against `simple_packs_first_app` -- one creating and deleting `packs/foobaz`
+// inside it -- and all four call `common::teardown()`, which removes the cache
+// for every fixture, not just the one the calling test used. Run in parallel,
+// they delete directories out from under each other, which failed
+// `test_create_already_exists` roughly one run in ten.
 
 #[test]
+#[serial]
 fn test_create() -> Result<(), Box<dyn Error>> {
     common::delete_foobar();
 
@@ -67,6 +76,7 @@ See https://github.com/rubyatscale/pks#readme for more info!");
 }
 
 #[test]
+#[serial]
 fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 {
     common::delete_foobaz();
@@ -102,6 +112,7 @@ fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 }
 
 #[test]
+#[serial]
 fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
 {
     common::delete_foobar_app_with_custom_readme();
@@ -130,6 +141,7 @@ fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
 }
 
 #[test]
+#[serial]
 fn test_create_already_exists() -> Result<(), Box<dyn Error>> {
     cargo_bin_cmd!("pks")
         .arg("--project-root")
