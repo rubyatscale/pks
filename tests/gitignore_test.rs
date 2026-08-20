@@ -5,7 +5,6 @@ use serial_test::serial;
 use std::fs;
 use std::path::PathBuf;
 use std::{error::Error, process::Command};
-use tempfile::TempDir;
 
 mod common;
 
@@ -14,13 +13,15 @@ mod common;
 #[test]
 fn test_check_ignores_violations_in_gitignored_files(
 ) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_gitignore");
+
     // The fixture has:
     // - packs/foo/app/services/foo.rb with violation (NOT ignored)
     // - ignored_folder/violating.rb with violation (IS ignored)
 
     let result = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_gitignore")
+        .arg(fixture.root())
         .arg("check")
         .assert()
         .failure(); // Still fails due to violation in foo.rb
@@ -45,7 +46,6 @@ fn test_check_ignores_violations_in_gitignored_files(
         "Should NOT detect violations in gitignored files.\nstdout: {}\nstderr: {}", stdout, stderr
     );
 
-    common::teardown();
     Ok(())
 }
 
@@ -53,9 +53,11 @@ fn test_check_ignores_violations_in_gitignored_files(
 #[test]
 fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
 {
+    let fixture = common::Fixture::new("app_with_gitignore");
+
     let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_gitignore")
+        .arg(fixture.root())
         .arg("list-included-files")
         .assert()
         .success()
@@ -89,26 +91,26 @@ fn test_list_included_files_excludes_gitignored() -> Result<(), Box<dyn Error>>
         "Should NOT include files in ignored directories"
     );
 
-    common::teardown();
     Ok(())
 }
 
 /// Test that the application works correctly even without a .gitignore file.
 #[test]
 fn test_check_works_without_gitignore() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+
     // simple_app doesn't have a .gitignore file
     // This should still work (and report violations as usual)
 
     Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/simple_app")
+        .arg(fixture.root())
         .arg("--debug")
         .arg("check")
         .assert()
         .failure() // Has violations
         .stdout(predicate::str::contains("violation(s) detected"));
 
-    common::teardown();
     Ok(())
 }
 
@@ -187,6 +189,8 @@ fn test_gitignore_matcher_without_gitignore() -> Result<(), Box<dyn Error>> {
 /// CRITICAL: Test that respect_gitignore: false configuration disables gitignore support.
 #[test]
 fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_gitignore_disabled");
+
     // The fixture has:
     // - .gitignore with ignored_folder/ pattern
     // - respect_gitignore: false in packwerk.yml
@@ -196,7 +200,7 @@ fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
 
     let result = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_gitignore_disabled")
+        .arg(fixture.root())
         .arg("check")
         .assert()
         .failure(); // Should fail due to violation in ignored_folder/
@@ -212,7 +216,6 @@ fn test_respect_gitignore_can_be_disabled() -> Result<(), Box<dyn Error>> {
         stdout, stderr
     );
 
-    common::teardown();
     Ok(())
 }
 
@@ -257,6 +260,8 @@ fn test_gitignore_negation_patterns() -> Result<(), Box<dyn Error>> {
 /// and won't appear in list-included-files regardless of gitignore.
 #[test]
 fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_gitignore");
+
     // This is already tested by test_gitignore_negation_patterns at the library level.
     // At the CLI level, .log files aren't included in list-included-files anyway
     // since they don't match the Ruby file patterns.
@@ -264,7 +269,7 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
     // Just verify the basic behavior still works
     let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_gitignore")
+        .arg(fixture.root())
         .arg("list-included-files")
         .assert()
         .success()
@@ -280,7 +285,6 @@ fn test_list_included_files_respects_negation() -> Result<(), Box<dyn Error>> {
         "Should include non-ignored Ruby files"
     );
 
-    common::teardown();
     Ok(())
 }
 
@@ -337,8 +341,8 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     fs::write(&global_gitignore, "# Global test\n*.global_ignore\n")?;
 
     // Create a test file that should be ignored
-    let fixture_path = PathBuf::from("tests/fixtures/app_with_gitignore");
-    let test_file = fixture_path.join("test.global_ignore");
+    let fixture = common::Fixture::new("app_with_gitignore");
+    let test_file = fixture.path("test.global_ignore");
     fs::write(&test_file, "// Should be ignored by global gitignore\n")?;
 
     // Save original core.excludesFile config
@@ -379,7 +383,7 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
     // Test that list-included-files excludes the globally ignored file
     let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_gitignore")
+        .arg(fixture.root())
         .arg("list-included-files")
         .assert()
         .success()
@@ -396,7 +400,6 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
         stdout
     );
 
-    common::teardown();
     Ok(())
 }
 
@@ -404,18 +407,12 @@ fn test_respects_global_gitignore() -> Result<(), Box<dyn Error>> {
 /// Gitignored files should not cause package_todo.yml updates.
 #[test]
 fn test_update_respects_gitignore() -> Result<(), Box<dyn Error>> {
-    // Create a temporary copy of the fixture
-    let temp_dir = TempDir::new()?;
-    let temp_fixture = temp_dir.path().join("app");
-
-    // Copy fixture to temp directory
-    let fixture_path = "tests/fixtures/app_with_gitignore";
-    copy_dir_all(fixture_path, &temp_fixture)?;
+    let fixture = common::Fixture::new("app_with_gitignore");
 
     // Run update command
     let output = Command::new(assert_cmd::cargo::cargo_bin!("pks"))
         .arg("--project-root")
-        .arg(&temp_fixture)
+        .arg(fixture.root())
         .arg("update")
         .assert()
         .success()
@@ -432,24 +429,5 @@ fn test_update_respects_gitignore() -> Result<(), Box<dyn Error>> {
         stdout
     );
 
-    common::teardown();
-    Ok(())
-}
-
-// Helper function to copy directories recursively
-fn copy_dir_all(
-    src: impl AsRef<std::path::Path>,
-    dst: impl AsRef<std::path::Path>,
-) -> std::io::Result<()> {
-    fs::create_dir_all(&dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        }
-    }
     Ok(())
 }

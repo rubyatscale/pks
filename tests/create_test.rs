@@ -1,17 +1,26 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
-use std::{error::Error, fs, path::Path};
+use std::{error::Error, fs};
 
 mod common;
 
+// `pks create` writes into the project root, and these tests previously ran
+// against the shared fixtures in `tests/fixtures/`, cleaning up afterwards with
+// `common::delete_foobar*()` and `common::teardown()`. Because tests in a binary
+// run on parallel threads, those cleanups deleted directories that sibling tests
+// were still using -- `test_create_already_exists` failed about one run in ten.
+//
+// Each test now works on its own copy, so there is nothing shared to clean up and
+// no need to serialize.
+
 #[test]
 fn test_create() -> Result<(), Box<dyn Error>> {
-    common::delete_foobar();
+    let fixture = common::Fixture::new("simple_app");
 
     cargo_bin_cmd!("pks")
         .arg("--project-root")
-        .arg("tests/fixtures/simple_app")
+        .arg(fixture.root())
         .arg("create")
         .arg("packs/foobar")
         .assert()
@@ -21,20 +30,14 @@ fn test_create() -> Result<(), Box<dyn Error>> {
         ));
 
     let actual = fs::read_to_string(
-        "tests/fixtures/simple_app/packs/foobar/package.yml",
+        fixture.path("packs/foobar/package.yml"),
     ).unwrap_or_else(|_| panic!("Could not read file tests/fixtures/simple_app/packs/foobar/package.yml"));
     assert!(actual.contains("enforce_dependencies: true"));
     assert!(actual.contains("enforce_privacy: true"));
     assert!(actual.contains("enforce_layers: true"));
-    assert!(Path::new(
-        "tests/fixtures/simple_app/packs/foobar/app/public/foobar"
-    )
-    .exists());
-    assert!(Path::new(
-        "tests/fixtures/simple_app/packs/foobar/app/services/foobar"
-    )
-    .exists());
-    assert!(Path::new("tests/fixtures/simple_app/packs/foobar/spec").exists());
+    assert!(fixture.path("packs/foobar/app/public/foobar").exists());
+    assert!(fixture.path("packs/foobar/app/services/foobar").exists());
+    assert!(fixture.path("packs/foobar/spec").exists());
 
     let expected_readme = String::from("\
 Welcome to `packs/foobar`!
@@ -54,14 +57,11 @@ README.md should change as your public API changes.
 See https://github.com/rubyatscale/pks#readme for more info!");
 
     let actual_readme =
-        fs::read_to_string("tests/fixtures/simple_app/packs/foobar/README.md").unwrap_or_else(|e| {
+        fs::read_to_string(fixture.path("packs/foobar/README.md")).unwrap_or_else(|e| {
             panic!("Could not read file tests/fixtures/simple_app/packs/foobar/README.md: {}", e)
         });
 
     assert_eq!(expected_readme, actual_readme);
-
-    common::teardown();
-    common::delete_foobar();
 
     Ok(())
 }
@@ -69,16 +69,16 @@ See https://github.com/rubyatscale/pks#readme for more info!");
 #[test]
 fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 {
-    common::delete_foobaz();
+    let fixture = common::Fixture::new("simple_packs_first_app");
 
     fs::write(
-        "tests/fixtures/simple_packs_first_app/README_TEMPLATE.md",
+        fixture.path("README_TEMPLATE.md"),
         "This is a test custom README template",
     )?;
 
     cargo_bin_cmd!("pks")
         .arg("--project-root")
-        .arg("tests/fixtures/simple_packs_first_app")
+        .arg(fixture.root())
         .arg("create")
         .arg("packs/foobaz")
         .assert()
@@ -86,17 +86,13 @@ fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 
     let expected_readme = String::from("This is a test custom README template");
     let actual_readme =
-        fs::read_to_string("tests/fixtures/simple_packs_first_app/packs/foobaz/README.md").unwrap_or_else(|e| {
+        fs::read_to_string(fixture.path("packs/foobaz/README.md")).unwrap_or_else(|e| {
             panic!("Could not read file tests/fixtures/simple_packs_first_app/packs/foobaz/README.md: {}", e)
         });
 
     assert_eq!(expected_readme, actual_readme);
 
-    common::teardown();
-    common::delete_foobaz();
-    fs::remove_file(
-        "tests/fixtures/simple_packs_first_app/README_TEMPLATE.md",
-    )?;
+    fs::remove_file(fixture.path("README_TEMPLATE.md"))?;
 
     Ok(())
 }
@@ -104,11 +100,11 @@ fn test_create_with_readme_template_default_path() -> Result<(), Box<dyn Error>>
 #[test]
 fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
 {
-    common::delete_foobar_app_with_custom_readme();
+    let fixture = common::Fixture::new("app_with_custom_readme");
 
     cargo_bin_cmd!("pks")
         .arg("--project-root")
-        .arg("tests/fixtures/app_with_custom_readme")
+        .arg(fixture.root())
         .arg("create")
         .arg("packs/foobar")
         .assert()
@@ -117,29 +113,27 @@ fn test_create_with_readme_template_custom_path() -> Result<(), Box<dyn Error>>
     let expected_readme = String::from("README template\n\nThis is a test\n");
 
     let actual_readme =
-        fs::read_to_string("tests/fixtures/app_with_custom_readme/packs/foobar/README.md").unwrap_or_else(|e| {
+        fs::read_to_string(fixture.path("packs/foobar/README.md")).unwrap_or_else(|e| {
             panic!("Could not read file tests/fixtures/app_with_custom_readme/packs/foobar/README.md: {}", e)
         });
 
     assert_eq!(expected_readme, actual_readme);
-
-    common::teardown();
-    common::delete_foobar_app_with_custom_readme();
 
     Ok(())
 }
 
 #[test]
 fn test_create_already_exists() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_packs_first_app");
+
     cargo_bin_cmd!("pks")
         .arg("--project-root")
-        .arg("tests/fixtures/simple_packs_first_app")
+        .arg(fixture.root())
         .arg("create")
         .arg("packs/foo")
         .assert()
         .success()
         .stdout(predicate::str::contains("`packs/foo` already exists!"));
 
-    common::teardown();
     Ok(())
 }
