@@ -15,6 +15,11 @@ set -euo pipefail
 PKS_ROOT="${PKS_ROOT:-../pks}"
 PKS_BIN="${PKS_BIN:-$PKS_ROOT/target/release/pks}"
 
+if ! command -v hyperfine >/dev/null 2>&1; then
+  echo "error: hyperfine not installed (brew install hyperfine)" >&2
+  exit 1
+fi
+
 if [ ! -x "$PKS_BIN" ]; then
   echo "error: no pks binary at $PKS_BIN" >&2
   echo "  build it first: cargo build --release --manifest-path $PKS_ROOT/Cargo.toml" >&2

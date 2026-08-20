@@ -64,6 +64,59 @@ fi
 mkdir -p "$PKS_ROOT/target"
 cd "$PKS_APP"
 
+# Record what was measured, not just the number. A mean is meaningless without
+# the corpus it came from, and two labels measured against different apps are not
+# comparable -- printing this makes mixing them obvious rather than silent.
+APP_FILES=$("$PKS_BIN" list-included-files 2>/dev/null | wc -l | tr -d ' ')
+APP_PACKS=$(find . -name package.yml -not -path './tmp/*' 2>/dev/null | wc -l | tr -d ' ')
+APP_COMMIT=$(git -C "$PKS_APP" rev-parse --short HEAD 2>/dev/null || echo "not-a-git-repo")
+APP_DIRTY=$(git -C "$PKS_APP" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+
+echo "==> corpus: $APP_FILES files, $APP_PACKS packs, at $APP_COMMIT"
+echo "    pks:    $(git -C "$PKS_ROOT" rev-parse --short HEAD) on $(git -C "$PKS_ROOT" rev-parse --abbrev-ref HEAD)"
+
+# A small corpus produces numbers that look real and mean nothing: the phases this
+# tool exists to compare scale with codebase size, and on a fixture they are all
+# rounding error. Refusing to be quiet about it is the point.
+if [ "$APP_FILES" -lt 1000 ]; then
+  echo
+  echo "    !! WARNING: only $APP_FILES files. This is a smoke test, not a measurement." >&2
+  echo "    !! Phase timings will be dominated by process startup. Do not compare" >&2
+  echo "    !! these numbers against a real application, or publish them." >&2
+fi
+
+if [ "$APP_DIRTY" -ne 0 ]; then
+  echo
+  echo "    !! WARNING: corpus has $APP_DIRTY uncommitted change(s)." >&2
+  echo "    !! Results are not reproducible from $APP_COMMIT alone." >&2
+fi
+
+echo
+echo "==> [$LABEL] verifying the binary works before timing it"
+
+# `hyperfine --ignore-failure` treats *any* exit code as a valid run, so a binary
+# that panics on every invocation would be timed happily and report a fast,
+# clean-looking mean. Since this script exists to validate performance changes,
+# that is the worst possible failure: it does not look like a failure.
+#
+# `pks check` exits 0 (clean) or 1 (violations found); anything else -- 2 for an
+# internal error, 101 for a panic -- means we would be timing a broken binary.
+probe_out=$("$PKS_BIN" check 2>&1) && probe_code=0 || probe_code=$?
+case "$probe_code" in
+  0|1) ;;
+  *)
+    echo "error: pks check exited $probe_code, so there is nothing meaningful to time" >&2
+    echo "$probe_out" | tail -20 >&2
+    exit 1
+    ;;
+esac
+if grep -q "panicked at" <<<"$probe_out"; then
+  echo "error: pks check panicked; refusing to time it" >&2
+  grep -m3 "panicked at" <<<"$probe_out" >&2
+  exit 1
+fi
+echo "    exit $probe_code (0 = no violations, 1 = violations found) -- ok to time"
+
 echo
 echo "==> [$LABEL] hyperfine: pks check (warm cache, ${WARMUP} warmup / ${RUNS} runs)"
 
@@ -83,6 +136,25 @@ if ! grep -E "Time|Range" <<<"$hyperfine_out"; then
   echo "error: could not parse hyperfine output" >&2
   echo "$hyperfine_out" >&2
   exit 1
+fi
+
+# State the noise floor next to the mean, so a later delta can be judged against
+# it. A change smaller than this spread has not been shown to do anything -- the
+# same change measured on a busy and an idle machine can differ by more than the
+# effect being hunted.
+if [ -f "$EXPORT_JSON" ] && command -v python3 >/dev/null 2>&1; then
+  python3 - "$EXPORT_JSON" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))["results"][0]
+mean, stddev = r["mean"], r.get("stddev") or 0.0
+spread = max(r["times"]) - min(r["times"])
+print(f"    noise floor: +/-{stddev*1000:.0f}ms stddev, {spread*1000:.0f}ms spread "
+      f"({spread/mean*100:.1f}% of mean)")
+print(f"    -> treat any delta under ~{spread*1000:.0f}ms as within noise")
+print( "    -> this is WITHIN-batch spread and understates drift BETWEEN sessions;")
+print( "       machine load moved one unchanged binary 5.1s -> 8.1s across a day,")
+print( "       so A/B two builds in one hyperfine run, not in two separate runs")
+PY
 fi
 
 echo
