@@ -148,7 +148,7 @@ pub fn get_reference_from_active_record_association(
         // Later we should probably handle these cases!
         if name.is_some() {
             let unwrapped_name = name.unwrap_or_else(|| {
-                panic!("Could not find class name for association {:?}", &node,)
+                panic!("Could not find class name for association {:?}", node)
             });
 
             Some(UnresolvedReference {

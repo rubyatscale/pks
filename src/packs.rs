@@ -54,6 +54,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use tracing::debug;
 
 pub fn greet() {
     println!("👋 Hello! Welcome to packs 📦 🔥 🎉 🌈. This tool is under construction.")
@@ -65,10 +66,10 @@ pub fn create(
 ) -> anyhow::Result<()> {
     match creator::create(configuration, &name)? {
         CreateResult::AlreadyExists => {
-            println!("`{}` already exists!", &name);
+            println!("`{}` already exists!", name);
         }
         CreateResult::Success => {
-            println!("Successfully created `{}`!", &name);
+            println!("Successfully created `{}`!", name);
         }
     }
     Ok(())
@@ -114,6 +115,8 @@ pub fn check(
             json::write_json(&result, configuration, std::io::stdout())?;
         }
     }
+
+    debug!("Finished writing check output");
 
     if result.has_violations() {
         return Err(ViolationsFound.into());
@@ -246,11 +249,7 @@ pub fn lint_package_yml_files(
 pub fn delete_cache(configuration: Configuration) {
     let absolute_cache_dir = configuration.cache_directory;
     if let Err(err) = std::fs::remove_dir_all(&absolute_cache_dir) {
-        eprintln!(
-            "Failed to remove {}: {}",
-            &absolute_cache_dir.display(),
-            err
-        );
+        eprintln!("Failed to remove {}: {}", absolute_cache_dir.display(), err);
     }
 }
 

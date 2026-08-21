@@ -2,7 +2,12 @@ use packs::packs::cli;
 use std::process::ExitCode;
 
 pub fn main() -> ExitCode {
-    match cli::run() {
+    let result = cli::run();
+    // Everything owned by `cli::run` (Configuration, PackSet, the included-file
+    // set) has been dropped by this point. On a large codebase that teardown is
+    // not free, so it gets its own `--debug` marker.
+    tracing::debug!("cli::run returned; owned data dropped");
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             if e.downcast_ref::<cli::ViolationsFound>().is_some() {

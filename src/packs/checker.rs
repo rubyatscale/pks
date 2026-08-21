@@ -184,7 +184,7 @@ impl<'a> CheckAllBuilder<'a> {
                     .map_err(|e| {
                         anyhow::Error::new(e).context(format!(
                             "Failed to strip prefix from {:?}",
-                            &self.configuration.absolute_root
+                            self.configuration.absolute_root
                         ))
                     })
                     .and_then(|path| {
@@ -192,7 +192,7 @@ impl<'a> CheckAllBuilder<'a> {
                             anyhow::Error::new(std::fmt::Error).context(
                                 format!(
                                     "Path ({:?}) cannot be converted to &str",
-                                    &path
+                                    path
                                 ),
                             )
                         })
@@ -269,7 +269,10 @@ pub(crate) fn check_all(
         absolute_paths,
         violations,
     };
-    CheckAllBuilder::new(configuration, &found_violations).build()
+    debug!("Building check-all result (diffing against package_todo.yml)");
+    let result = CheckAllBuilder::new(configuration, &found_violations).build();
+    debug!("Finished building check-all result");
+    result
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {
@@ -354,7 +357,7 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            &unlisted_strict_violations.len()
+            unlisted_strict_violations.len()
         );
         // TODO: packwerk's `update-todo` exits non-zero here; `update` returns
         // Ok and prints a success line. Pre-existing, separate breaking change.
@@ -471,6 +474,12 @@ fn get_all_violations(
         });
 
     debug!("Finished running checkers");
+
+    // Dropping the reference vector deallocates several million Strings on a
+    // large codebase. It is measured explicitly so it shows up as its own phase
+    // in `--debug` output rather than hiding in the gap before process exit.
+    drop(references);
+    debug!("Dropped resolved references");
 
     violations
 }
