@@ -39,6 +39,20 @@ pub struct ViolationIdentifier {
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
+
+impl ViolationIdentifier {
+    /// `strict` describes how a violation should be treated, not which violation
+    /// it is, and `package_todo.yml` has nowhere to record it, so recorded
+    /// violations are always rebuilt with `strict: false`. Compare through this
+    /// so a violation in a strict pack can still match its recorded entry.
+    pub(crate) fn recorded_key(&self) -> Self {
+        Self {
+            strict: false,
+            ..self.clone()
+        }
+    }
+}
+
 /// A violation combines an identifier with display metadata.
 ///
 /// `source_location` is intentionally separate from `ViolationIdentifier` because:
@@ -124,7 +138,7 @@ impl<'a> CheckAllBuilder<'a> {
                 .cloned()
                 .collect(),
             strict_mode_violations: self
-                .build_strict_mode_violations()
+                .build_strict_mode_violations(recorded_violations)
                 .into_iter()
                 .collect(),
         })
@@ -142,7 +156,10 @@ impl<'a> CheckAllBuilder<'a> {
                 self.found_violations
                     .violations
                     .iter()
-                    .filter(|v| !recorded_violations.contains(&v.identifier))
+                    .filter(|v| {
+                        !recorded_violations
+                            .contains(&v.identifier.recorded_key())
+                    })
                     .collect()
             };
         reportable_violations
@@ -152,11 +169,11 @@ impl<'a> CheckAllBuilder<'a> {
         &mut self,
         recorded_violations: &'a HashSet<ViolationIdentifier>,
     ) -> anyhow::Result<Vec<&'a ViolationIdentifier>> {
-        let found_violation_identifiers: HashSet<&ViolationIdentifier> = self
+        let found_violation_identifiers: HashSet<ViolationIdentifier> = self
             .found_violations
             .violations
             .par_iter()
-            .map(|v| &v.identifier)
+            .map(|v| v.identifier.recorded_key())
             .collect();
         let relative_files = self
             .found_violations
@@ -196,9 +213,13 @@ impl<'a> CheckAllBuilder<'a> {
         Ok(stale_violations)
     }
 
+    /// `found_violation_identifiers` is keyed by [`ViolationIdentifier::recorded_key`].
+    /// `todo_violation_identifier` needs no such normalization: it comes from
+    /// `pack_set.all_violations`, which rebuilds every recorded violation with
+    /// `strict: false` already, so it is its own recorded key.
     fn is_stale_violation(
         relative_files: &HashSet<&str>,
-        found_violation_identifiers: &HashSet<&ViolationIdentifier>,
+        found_violation_identifiers: &HashSet<ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
     ) -> bool {
         let violation_path_exists =
@@ -210,11 +231,23 @@ impl<'a> CheckAllBuilder<'a> {
         }
     }
 
-    fn build_strict_mode_violations(&self) -> Vec<Violation> {
+    /// Strict mode reports violations that are not already recorded in a
+    /// `package_todo.yml`, matching packwerk's `unlisted_strict_mode_violations`
+    /// (Shopify/packwerk#368). Turning strict on therefore blocks new violations
+    /// without also requiring every recorded one to be fixed first.
+    fn build_strict_mode_violations(
+        &self,
+        recorded_violations: &HashSet<ViolationIdentifier>,
+    ) -> Vec<Violation> {
         self.found_violations
             .violations
             .iter()
             .filter(|v| v.identifier.strict)
+            .filter(|v| {
+                self.configuration.ignore_recorded_violations
+                    || !recorded_violations
+                        .contains(&v.identifier.recorded_key())
+            })
             .cloned()
             .collect()
     }
@@ -305,22 +338,35 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         &checkers,
     )?;
 
-    let strict_violations = &violations
+    let recorded_violations = &configuration.pack_set.all_violations;
+
+    // Only *unlisted* strict violations make `check` fail, so only those are
+    // worth reporting here. Reporting recorded ones too claimed `check` would
+    // fail when it succeeds. Same filter as `build_strict_mode_violations`, and
+    // as packwerk's `unlisted_strict_mode_violations`.
+    let unlisted_strict_violations = &violations
         .iter()
         .filter(|v| v.identifier.strict)
+        .filter(|v| !recorded_violations.contains(&v.identifier.recorded_key()))
         .collect::<Vec<&Violation>>();
-    if !strict_violations.is_empty() {
-        for violation in strict_violations {
+    if !unlisted_strict_violations.is_empty() {
+        for violation in unlisted_strict_violations {
             let strict_message =
                 build_strict_violation_message(&violation.identifier);
             println!("{}", strict_message);
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            strict_violations.len()
+            unlisted_strict_violations.len()
         );
+        // TODO: packwerk's `update-todo` exits non-zero here; `update` returns
+        // Ok and prints a success line. Pre-existing, separate breaking change.
     }
-    package_todo::write_violations_to_disk(configuration, violations);
+    package_todo::write_violations_to_disk(
+        configuration,
+        violations,
+        recorded_violations,
+    );
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())

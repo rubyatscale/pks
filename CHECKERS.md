@@ -13,9 +13,26 @@ enforce_privacy: true
 
 Setting `enforce_privacy` to `true` will make all references to private constants in your package a violation.
 
-Setting `enforce_privacy` to `strict` will forbid all references to private constants in your package. **This includes violations that have been added to other packages' `package_todo.yml` files.**
+Setting `enforce_privacy` to `strict` will forbid *new* references to private constants in your package. **Violations already recorded in the referencing package's `package_todo.yml` are tolerated**, so strict mode stops the list growing rather than requiring it to be empty.
 
-Note: You will need to remove all existing privacy violations before setting `enforce_privacy` to `strict`.
+### Adopting strict mode on a package that already has violations
+
+**Record the existing violations first, then flip to `strict`.** The order matters, because tolerance only ever matches entries that are *already* in a `package_todo.yml`, and `update` will not create them once the package is strict:
+
+```sh
+# 1. while the package is still `enforce_privacy: true`
+pks update
+
+# 2. commit the package_todo.yml files this wrote
+
+# 3. now set enforce_privacy: strict
+```
+
+Flipping to `strict` first leaves you stuck: `check` fails on the existing references, and `pks update` will not record them, so the only ways out are fixing every reference, hand-writing the todo entries, or reverting to `true`. pks matches packwerk here.
+
+To see everything the todo files are currently grandfathering, run `pks check --ignore-recorded-violations`.
+
+Once the package is strict, `pks update` will not add new entries for it: an unrecorded strict violation is never written to a `package_todo.yml`, so it keeps failing until the reference is dealt with. Note that this is a guarantee about `update`, not about the file. A hand-added entry does silence strict mode, and `update` preserves it rather than dropping it, so the boundary is only as strong as your review of `package_todo.yml` diffs.
 
 ### Using public folders
 You may enforce privacy either way mentioned above and still expose a public API for your package by placing constants in the public folder, which by default is `app/public`. The constants in the public folder will be made available for use by the rest of the application.
@@ -98,17 +115,29 @@ end => Ideal solution. No exceptions from rubocop and very low risk of the magic
 ### Using specific private constants
 Sometimes it is desirable to only enforce privacy on a subset of constants in a package. You can do so by defining a `private_constants` list in your package.yml. Note that `enforce_privacy` must be set to `true` or `'strict'` for this to work.
 
-### Ignore strict mode for violation coming from specific path patterns
-If you want to activate `'strict'` mode on your package but have a few privacy violations you know you will deal with later,
-you can set a list of patterns to exclude.
+### Ignore strict mode for violations coming from specific path patterns
+You do not need this to adopt `'strict'` mode on a package that already has violations you will deal with later: record them first and they are tolerated, as described above. Reach for a path exemption when you want to exempt a **path** rather than a recorded list.
+
+Use [`enforcement_globs_ignore`](#enforcement-globs-ignore) with `enforcements: [privacy]`:
 
 ```yaml
 enforce_privacy: strict
-strict_privacy_ignored_patterns:
-- engines/another_engine/test/**/*
+
+enforcement_globs_ignore:
+- enforcements:
+  - privacy
+  ignores:
+  - engines/another_engine/test/**
+  reason: test files reach into engine internals
 ```
 
-In this example, violations on constants of your engine referenced in those files `engines/another_engine/test/**/*` will not fail Packwerk checks.
+In this example, privacy violations on constants of your engine referenced from anywhere under `engines/another_engine/test/` will not fail pks checks.
+
+Note the trailing `**` rather than `**/*`. `**` matches the whole subtree including files directly inside `test/`, whereas `**/*` requires at least one intervening directory and so silently skips `test/a_test.rb`. Do not reason about these from gitignore: `git check-ignore` treats `test/**` and `test/**/*` identically, and pks does not, because matching goes through `fnmatch_regex2::glob_to_regex` (`src/packs/ignored.rs`) rather than gitignore semantics. A pattern that matches nothing looks identical to no exemption at all, so check a new pattern against a file you expect it to cover.
+
+> **Note:** packwerk spells this `strict_privacy_ignored_patterns`. **pks does not implement that key**, and because `Pack` collects unknown keys via `#[serde(flatten)]` it is accepted silently and has no effect, which leaves the pack unguarded. Use `enforcement_globs_ignore` instead.
+
+The two mechanisms differ in what they grandfather, so they are not interchangeable. A `package_todo.yml` entry covers one constant referenced from one file, for one violation type, so a reference to a *different* constant from that same file still fails. A path exemption covers the path outright, so anything those files reference later is ignored too. Prefer the todo file unless you genuinely want the whole path exempt.
 
 ### Package Privacy violation
 Packwerk thinks something is a privacy violation if you're referencing a constant, class, or module defined in the private implementation (i.e. not the public folder) of another package. We care about these because we want to make sure we only use parts of a package that have been exposed as public API.
