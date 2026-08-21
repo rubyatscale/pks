@@ -354,6 +354,10 @@ fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
+    // The violation here IS recorded in packs/foo/package_todo.yml, so it has to
+    // match its recorded entry: reported neither as a new violation nor as a
+    // stale todo. Strict mode still fails the run, which is what keeps this at
+    // exit 1, so the two strict messages are the whole of the output.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
@@ -365,7 +369,14 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
         ))
         .stdout(predicate::str::contains(
             "packs/foo cannot have dependency violations on packs/bar because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
-        ));
+        ))
+        .stdout(
+            predicate::str::contains(
+                "There were stale violations found, please run `packs update`",
+            )
+            .not(),
+        )
+        .stdout(predicate::str::contains("violation(s) detected:").not());
 
     common::teardown();
     Ok(())
