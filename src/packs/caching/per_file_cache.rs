@@ -11,6 +11,7 @@ use tracing::warn;
 use super::cache::Cache;
 use super::CacheResult;
 use super::EmptyCacheEntry;
+use super::SourceStat;
 
 pub struct PerFileCache {
     pub cache_dir: PathBuf,
@@ -18,22 +19,75 @@ pub struct PerFileCache {
 
 impl Cache for PerFileCache {
     fn get(&self, path: &Path) -> anyhow::Result<CacheResult> {
-        let empty_cache_entry = EmptyCacheEntry::new(&self.cache_dir, path)
-            .context(format!("Failed to create cache entry for {:?}", path))?;
-        let cache_entry = CacheEntry::from_empty(&empty_cache_entry)?;
-        if let Some(cache_entry) = cache_entry {
-            let file_digests_match = cache_entry.file_contents_digest
-                == empty_cache_entry.file_contents_digest;
+        // Deliberately does not read the source file yet. On a warm cache the
+        // stat below settles the overwhelming majority of files, and reading
+        // every source file to MD5 it was roughly half the cost of this phase.
+        let mut empty_cache_entry =
+            EmptyCacheEntry::without_digest(&self.cache_dir, path).context(
+                format!("Failed to create cache entry for {:?}", path),
+            )?;
 
-            if !file_digests_match {
-                Ok(CacheResult::Miss(empty_cache_entry))
-            } else {
-                let processed_file = cache_entry.processed_file;
-                Ok(CacheResult::Processed(processed_file))
-            }
-        } else {
-            Ok(CacheResult::Miss(empty_cache_entry))
+        let Some(cache_entry) = CacheEntry::from_empty(&empty_cache_entry)?
+        else {
+            empty_cache_entry.populate_digest()?;
+            return Ok(CacheResult::Miss(empty_cache_entry));
+        };
+
+        // Fast path: the file has the same mtime and length as when we cached
+        // it, so it cannot have changed in any way we care about.
+        //
+        // `is_some()` is not redundant with the equality check and must not be
+        // folded into it. Both sides are `None` whenever no usable stat exists --
+        // on a filesystem too coarse to be trusted, every file every run (see
+        // `SourceStat`) -- and `None == None` is true. Without this, "we have no
+        // idea whether the file changed" would read as "the file is unchanged",
+        // serving stale entries on exactly the filesystems the stat check exists
+        // to protect. Covered by `test_whole_second_mtime_is_not_trusted`.
+        if cache_entry.source_stat.is_some()
+            && cache_entry.source_stat == empty_cache_entry.source_stat
+        {
+            return Ok(CacheResult::Processed(cache_entry.processed_file));
         }
+
+        // Slow path: no stat recorded (entry predates this feature, or was
+        // written by packwerk), or the stat moved. The content digest is still
+        // the authority, so fall back to it.
+        let digest = empty_cache_entry.populate_digest()?;
+        if cache_entry.file_contents_digest != digest {
+            return Ok(CacheResult::Miss(empty_cache_entry));
+        }
+
+        // Contents are unchanged but the stat differs -- a checkout, a `touch`,
+        // or an entry written before stats were recorded. Refresh the entry so
+        // the next run takes the fast path.
+        //
+        // Only when there is actually a usable stat to record, and it differs
+        // from what is on disk. Without this guard, a filesystem too coarse to
+        // produce a trustworthy stat (see `SourceStat`) would yield `None` on
+        // every run, never match, and rewrite every cache entry every time --
+        // turning a read-mostly cache into a full rewrite of itself.
+        let stat_is_worth_recording = empty_cache_entry.source_stat.is_some()
+            && empty_cache_entry.source_stat != cache_entry.source_stat;
+
+        if stat_is_worth_recording {
+            // A failure here is not fatal: the result we return is still
+            // correct, we just re-hash this file on the next run too. It is
+            // warned about rather than ignored, because a persistent failure
+            // (an unwritable cache dir, a full disk) degrades every subsequent
+            // run and would otherwise be invisible -- the tool would simply be
+            // slow forever with no clue why.
+            if let Err(e) =
+                self.write(&empty_cache_entry, &cache_entry.processed_file)
+            {
+                warn!(
+                    "Failed to refresh cache entry {:?}; it will be re-hashed \
+                     on every run until this succeeds: {}",
+                    empty_cache_entry.cache_file_path, e
+                );
+            }
+        }
+
+        Ok(CacheResult::Processed(cache_entry.processed_file))
     }
 
     fn write(
@@ -41,11 +95,23 @@ impl Cache for PerFileCache {
         empty_cache_entry: &EmptyCacheEntry,
         processed_file: &ProcessedFile,
     ) -> anyhow::Result<()> {
-        let file_contents_digest =
-            empty_cache_entry.file_contents_digest.to_owned();
+        // A missing digest means a caller reached `write` without hashing the
+        // file. Erroring is deliberate: persisting a placeholder would produce
+        // an entry that never matches, making the file permanently uncacheable
+        // and silently slow.
+        let file_contents_digest = empty_cache_entry
+            .digest()
+            .with_context(|| {
+                format!(
+                    "Refusing to write a cache entry for {:?} with no content digest",
+                    empty_cache_entry.filepath
+                )
+            })?
+            .to_owned();
 
         let cache_entry = &CacheEntry {
             file_contents_digest,
+            source_stat: empty_cache_entry.source_stat,
             // Ideally we could pass by reference here, but in practice this cost should be paid on few files
             // that have changed and need to be reprocessed.
             processed_file: processed_file.clone(),
@@ -81,6 +147,11 @@ impl Cache for PerFileCache {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CacheEntry {
     pub file_contents_digest: String,
+    /// Absent in entries written by packwerk, or by versions of pks before the
+    /// stat fast path existed. `serde(default)` keeps those entries readable;
+    /// they simply fall back to comparing the content digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_stat: Option<SourceStat>,
     pub processed_file: ProcessedFile,
 }
 
@@ -169,6 +240,8 @@ mod tests {
 
         let expected_serialized = CacheEntry {
             file_contents_digest: "8f9efdcf2caa22fb7b1b4a8274e68d11".to_owned(),
+            // A packwerk-written entry carries no stat; it must still deserialize.
+            source_stat: None,
             processed_file: ProcessedFile {
                 absolute_path: PathBuf::from("/tests/fixtures/simple_app/packs/foo/app/services/bar/foo.rb"),
                 unresolved_references: vec![UnresolvedReference {
@@ -210,7 +283,7 @@ mod tests {
         fs::write(corrupt_file_path, corrupt_contents)
             .context("expected to write corrupt cache file")?;
 
-        let empty_cache_entry = EmptyCacheEntry::new(
+        let empty_cache_entry = EmptyCacheEntry::without_digest(
             &cache_path,
             &PathBuf::from(
                 "tests/fixtures/simple_app/packs/foo/app/services/foo/bar.rb",
