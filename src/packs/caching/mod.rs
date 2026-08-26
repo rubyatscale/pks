@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use super::{file_utils::file_content_digest, ProcessedFile};
@@ -107,60 +108,61 @@ impl SourceStat {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct EmptyCacheEntry {
-    #[allow(dead_code)]
+/// Everything about a source file that can be known without reading it: where
+/// its cache entry lives, and the stat used to check that entry against the file.
+///
+/// Split out from [`EmptyCacheEntry`] because reading + MD5-ing the source is the
+/// expensive half of a cache lookup, and on a warm cache the stat settles the
+/// overwhelming majority of files without it. A lookup that ends on the fast path
+/// never becomes an `EmptyCacheEntry` at all.
+#[derive(Debug)]
+pub struct CacheLookup {
     pub filepath: PathBuf,
-    /// `None` until [`Self::populate_digest`] computes it. Private so that
-    /// "not computed yet" cannot be mistaken for a digest: writing an entry
-    /// without one would persist a value that never matches, quietly making
-    /// that file uncacheable forever.
-    file_contents_digest: Option<String>,
-    #[allow(dead_code)]
-    pub file_name_digest: String,
     pub cache_file_path: PathBuf,
     pub source_stat: Option<SourceStat>,
 }
 
-impl EmptyCacheEntry {
-    /// The parts of a cache entry that can be derived without reading the file's
-    /// contents. Reading + MD5-ing the source is the expensive half, so it is
-    /// deferred until something actually needs the digest.
-    pub fn without_digest(
-        cache_directory: &Path,
-        filepath: &Path,
-    ) -> anyhow::Result<EmptyCacheEntry> {
-        let file_digest = md5::compute(filepath.to_str().unwrap());
-        let file_name_digest = format!("{:x}", file_digest);
-        let cache_file_path = cache_directory.join(&file_name_digest);
+impl CacheLookup {
+    pub fn new(cache_directory: &Path, filepath: &Path) -> CacheLookup {
+        let file_name_digest =
+            format!("{:x}", md5::compute(filepath.to_str().unwrap()));
+
+        CacheLookup {
+            filepath: filepath.to_owned(),
+            cache_file_path: cache_directory.join(file_name_digest),
+            source_stat: SourceStat::of(filepath),
+        }
+    }
+
+    /// Reads and hashes the file, producing the entry needed to write the cache.
+    ///
+    /// Consuming the lookup is what makes the digest structural: an
+    /// `EmptyCacheEntry` can only be reached through here, so there is no state
+    /// in which [`cache::Cache::write`] could persist a placeholder digest --
+    /// which would produce an entry that never matches, silently making that file
+    /// uncacheable forever.
+    pub fn read_contents(self) -> anyhow::Result<EmptyCacheEntry> {
+        let file_contents_digest = file_content_digest(&self.filepath)
+            .context("Failed to create cache entry")?;
 
         Ok(EmptyCacheEntry {
-            filepath: filepath.to_owned(),
-            file_contents_digest: None,
-            cache_file_path,
-            file_name_digest,
-            source_stat: SourceStat::of(filepath),
+            file_contents_digest,
+            filepath: self.filepath,
+            cache_file_path: self.cache_file_path,
+            source_stat: self.source_stat,
         })
     }
+}
 
-    /// Reads and hashes the file, at most once per entry.
-    pub fn populate_digest(&mut self) -> anyhow::Result<&str> {
-        if self.file_contents_digest.is_none() {
-            self.file_contents_digest =
-                Some(file_content_digest(&self.filepath)?);
-        }
-        Ok(self
-            .file_contents_digest
-            .as_deref()
-            .expect("just populated above"))
-    }
-
-    /// The digest, if it has been computed. `None` means no one has called
-    /// [`Self::populate_digest`] -- see the field comment for why that must not
-    /// be treated as an empty digest.
-    pub fn digest(&self) -> Option<&str> {
-        self.file_contents_digest.as_deref()
-    }
+/// A cache entry that has not been written yet. Always carries a digest -- see
+/// [`CacheLookup::read_contents`].
+#[derive(Debug, Default)]
+pub struct EmptyCacheEntry {
+    #[allow(dead_code)]
+    pub filepath: PathBuf,
+    pub file_contents_digest: String,
+    pub cache_file_path: PathBuf,
+    pub source_stat: Option<SourceStat>,
 }
 
 pub fn create_cache_dir_idempotently(cache_dir: &Path) {

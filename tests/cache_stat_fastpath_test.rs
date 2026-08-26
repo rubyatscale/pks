@@ -2,6 +2,7 @@ use assert_cmd::cargo::cargo_bin_cmd;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 mod common;
 
@@ -328,13 +329,18 @@ fn source_files(root: &Path) -> Vec<PathBuf> {
 /// would instead give the edited file a *later* second, which the stat could
 /// catch on its own -- and the test would pass without proving anything.
 fn set_whole_second_mtime(path: &Path) -> Result<(), Box<dyn Error>> {
-    // `touch -t` takes [[CC]YY]MMDDhhmm[.SS], which has no sub-second field.
-    let status = std::process::Command::new("touch")
-        .arg("-t")
-        .arg("202601011200.00")
-        .arg(path)
-        .status()?;
-    assert!(status.success(), "touch failed for {}", path.display());
+    // 2026-01-01T12:00:00Z, expressed in whole seconds so the nanosecond part is
+    // exactly zero. Set through `File::set_modified` rather than by shelling out
+    // to `touch`, which would tie the suite to platforms that ship it.
+    let whole_second =
+        std::time::UNIX_EPOCH + Duration::from_secs(1_767_268_800);
+
+    // `set_modified` requires the handle to be opened for writing.
+    fs::File::options()
+        .write(true)
+        .open(path)?
+        .set_modified(whole_second)?;
+
     Ok(())
 }
 

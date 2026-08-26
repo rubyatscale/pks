@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use tracing::warn;
 
 use super::cache::Cache;
+use super::CacheLookup;
 use super::CacheResult;
 use super::EmptyCacheEntry;
 use super::SourceStat;
@@ -22,15 +23,10 @@ impl Cache for PerFileCache {
         // Deliberately does not read the source file yet. On a warm cache the
         // stat below settles the overwhelming majority of files, and reading
         // every source file to MD5 it was roughly half the cost of this phase.
-        let mut empty_cache_entry =
-            EmptyCacheEntry::without_digest(&self.cache_dir, path).context(
-                format!("Failed to create cache entry for {:?}", path),
-            )?;
+        let lookup = CacheLookup::new(&self.cache_dir, path);
 
-        let Some(cache_entry) = CacheEntry::from_empty(&empty_cache_entry)?
-        else {
-            empty_cache_entry.populate_digest()?;
-            return Ok(CacheResult::Miss(empty_cache_entry));
+        let Some(cache_entry) = CacheEntry::from_lookup(&lookup)? else {
+            return Ok(CacheResult::Miss(lookup.read_contents()?));
         };
 
         // Fast path: the file has the same mtime and length as when we cached
@@ -44,7 +40,7 @@ impl Cache for PerFileCache {
         // serving stale entries on exactly the filesystems the stat check exists
         // to protect. Covered by `test_whole_second_mtime_is_not_trusted`.
         if cache_entry.source_stat.is_some()
-            && cache_entry.source_stat == empty_cache_entry.source_stat
+            && cache_entry.source_stat == lookup.source_stat
         {
             return Ok(CacheResult::Processed(cache_entry.processed_file));
         }
@@ -52,8 +48,10 @@ impl Cache for PerFileCache {
         // Slow path: no stat recorded (entry predates this feature, or was
         // written by packwerk), or the stat moved. The content digest is still
         // the authority, so fall back to it.
-        let digest = empty_cache_entry.populate_digest()?;
-        if cache_entry.file_contents_digest != digest {
+        let empty_cache_entry = lookup.read_contents()?;
+        if cache_entry.file_contents_digest
+            != empty_cache_entry.file_contents_digest
+        {
             return Ok(CacheResult::Miss(empty_cache_entry));
         }
 
@@ -95,22 +93,10 @@ impl Cache for PerFileCache {
         empty_cache_entry: &EmptyCacheEntry,
         processed_file: &ProcessedFile,
     ) -> anyhow::Result<()> {
-        // A missing digest means a caller reached `write` without hashing the
-        // file. Erroring is deliberate: persisting a placeholder would produce
-        // an entry that never matches, making the file permanently uncacheable
-        // and silently slow.
-        let file_contents_digest = empty_cache_entry
-            .digest()
-            .with_context(|| {
-                format!(
-                    "Refusing to write a cache entry for {:?} with no content digest",
-                    empty_cache_entry.filepath
-                )
-            })?
-            .to_owned();
-
         let cache_entry = &CacheEntry {
-            file_contents_digest,
+            file_contents_digest: empty_cache_entry
+                .file_contents_digest
+                .to_owned(),
             source_stat: empty_cache_entry.source_stat,
             // Ideally we could pass by reference here, but in practice this cost should be paid on few files
             // that have changed and need to be reprocessed.
@@ -156,10 +142,10 @@ pub struct CacheEntry {
 }
 
 impl CacheEntry {
-    pub fn from_empty(
-        empty: &EmptyCacheEntry,
+    pub fn from_lookup(
+        lookup: &CacheLookup,
     ) -> anyhow::Result<Option<CacheEntry>> {
-        let cache_file_path = &empty.cache_file_path;
+        let cache_file_path = &lookup.cache_file_path;
 
         if cache_file_path.exists() {
             match read_json_file(cache_file_path) {
@@ -283,14 +269,14 @@ mod tests {
         fs::write(corrupt_file_path, corrupt_contents)
             .context("expected to write corrupt cache file")?;
 
-        let empty_cache_entry = EmptyCacheEntry::without_digest(
+        let lookup = CacheLookup::new(
             &cache_path,
             &PathBuf::from(
                 "tests/fixtures/simple_app/packs/foo/app/services/foo/bar.rb",
             ),
-        ).context("expected tests/fixtures/simple_app/packs/foo/app/services/foo/bar.rb to exist")?;
+        );
 
-        let entry = CacheEntry::from_empty(&empty_cache_entry)?;
+        let entry = CacheEntry::from_lookup(&lookup)?;
         assert!(entry.is_none());
 
         Ok(())
