@@ -11,7 +11,6 @@ mod visibility;
 
 use crate::packs::checker_configuration::CheckerType;
 // Internal imports
-use crate::packs::pack::write_pack_to_disk;
 use crate::packs::pack::Pack;
 use crate::packs::package_todo;
 use crate::packs::Configuration;
@@ -475,16 +474,61 @@ fn remove_reference_to_dependency(
     pack: &Pack,
     dependency_names: &[String],
 ) -> anyhow::Result<()> {
-    let without_dependency = pack
-        .dependencies
-        .iter()
-        .filter(|dependency| !dependency_names.contains(dependency));
-    let updated_pack = Pack {
-        dependencies: without_dependency.cloned().collect(),
-        ..pack.clone()
-    };
-    write_pack_to_disk(&updated_pack)?;
+    // Edit the YAML as text rather than round-tripping the Pack struct. serde has no
+    // notion of comments, so re-serializing silently deletes every comment in the file
+    // and rewrites the top-level keys into struct order. Deleting just the offending
+    // list items leaves the rest of the file byte for byte identical.
+    let contents = std::fs::read_to_string(&pack.yml).map_err(|e| {
+        anyhow::Error::new(e)
+            .context(format!("Failed to read pack {:?}", pack.yml))
+    })?;
+
+    let updated = remove_dependency_lines(&contents, dependency_names);
+
+    std::fs::write(&pack.yml, updated).map_err(|e| {
+        anyhow::Error::new(e)
+            .context(format!("Failed to write pack to disk {:?}", pack.yml))
+    })?;
+
     Ok(())
+}
+
+/// Removes `- <name>` items for `dependency_names` from the top-level `dependencies:`
+/// block, leaving comments, key order, and every other block (notably
+/// `ignored_dependencies:`) untouched.
+fn remove_dependency_lines(
+    contents: &str,
+    dependency_names: &[String],
+) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    let mut in_dependencies = false;
+
+    for line in contents.lines() {
+        if in_dependencies {
+            if let Some(item) = line.strip_prefix("- ") {
+                if dependency_names.iter().any(|name| name == item.trim()) {
+                    continue;
+                }
+                out.push(line);
+                continue;
+            }
+            // A comment inside the block belongs to whatever follows it, so keep it and
+            // stay in the block. Anything else ends the block.
+            if !line.trim_start().starts_with('#') {
+                in_dependencies = false;
+            }
+        } else if line.trim_end() == "dependencies:" {
+            in_dependencies = true;
+        }
+
+        out.push(line);
+    }
+
+    let mut result = out.join("\n");
+    if contents.ends_with('\n') {
+        result.push('\n');
+    }
+    result
 }
 // Note: Display impl was removed from CheckAllResult. Use write_text() directly with Configuration.
 // Tests for text formatting are in text.rs

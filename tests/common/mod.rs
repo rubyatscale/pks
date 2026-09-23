@@ -225,12 +225,15 @@ enforce_dependencies: true
     );
     let pack_yml_contents = String::from(
         "\
+# Header comment: proves comments above the first key survive.
 enforce_dependencies: true
 enforce_privacy: true
-layer: technical_services
 dependencies:
+# Comment inside the dependencies block.
 - packs/bar
 - packs/baz
+# Trailing comment, after the list and before another key.
+layer: technical_services
 ",
     );
 

@@ -39,15 +39,16 @@ fn assert_auto_correct_unused_dependencies(
 ) -> Result<(), Box<dyn Error>> {
     common::set_up_fixtures();
 
-    let expected_before_autocorrect = [
-        "enforce_dependencies: true",
-        "enforce_privacy: true",
-        "layer: technical_services",
-        "dependencies:",
-        "- packs/bar",
-        "- packs/baz\n",
-    ]
-    .join("\n");
+    let expected_before_autocorrect = r#"# Header comment: proves comments above the first key survive.
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+# Comment inside the dependencies block.
+- packs/bar
+- packs/baz
+# Trailing comment, after the list and before another key.
+layer: technical_services
+"#;
     let foo_package_yml = fs::read_to_string("tests/fixtures/app_with_unnecessary_dependencies/packs/foo/package.yml").unwrap();
     assert_eq!(foo_package_yml, expected_before_autocorrect);
 
@@ -60,14 +61,17 @@ fn assert_auto_correct_unused_dependencies(
         .assert()
         .success();
 
-    let expected_autocorrect = [
-        "enforce_privacy: true",
-        "layer: technical_services",
-        "enforce_dependencies: true",
-        "dependencies:",
-        "- packs/bar\n",
-    ]
-    .join("\n");
+    // Comments in all three positions survive, and the key order is unchanged:
+    // the correction deletes the one list item and nothing else.
+    let expected_autocorrect = r#"# Header comment: proves comments above the first key survive.
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+# Comment inside the dependencies block.
+- packs/bar
+# Trailing comment, after the list and before another key.
+layer: technical_services
+"#;
     let after_autocorrect = fs::read_to_string("tests/fixtures/app_with_unnecessary_dependencies/packs/foo/package.yml").unwrap();
     assert_eq!(after_autocorrect, expected_autocorrect);
 
