@@ -3,6 +3,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::debug;
 
+use super::checker::ViolationIdentifier;
 use super::{pack::Pack, Configuration, Violation};
 
 #[derive(PartialEq, Debug, Eq, Deserialize, Serialize, Default, Clone)]
@@ -133,6 +134,7 @@ pub fn package_todos_for_pack_name(
 pub fn write_violations_to_disk(
     configuration: &Configuration,
     violations: HashSet<Violation>,
+    recorded_violations: &HashSet<ViolationIdentifier>,
 ) {
     debug!("Starting writing violations to disk");
     // First we need to group the violations by the responsible pack, which today is always the referencing pack
@@ -141,7 +143,18 @@ pub fn write_violations_to_disk(
     let mut violations_by_responsible_pack: HashMap<String, Vec<Violation>> =
         HashMap::new();
     for violation in violations {
-        if violation.identifier.strict {
+        // An *unlisted* strict violation is never recorded, so `update` cannot
+        // be used to silence strict mode. An already-recorded one has to be
+        // re-written, because `check` now tolerates recorded violations in
+        // strict packs and `PackageTodo` is dumped wholesale from these
+        // entries — dropping it here would delete the record that made the
+        // build green and fail the next `check` with no source change in
+        // between. packwerk keeps the entry for the same reason, in
+        // `OffenseCollection#add_offense`.
+        if violation.identifier.strict
+            && !recorded_violations
+                .contains(&violation.identifier.recorded_key())
+        {
             continue;
         }
         let referencing_pack_name =

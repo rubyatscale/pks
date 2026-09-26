@@ -131,6 +131,89 @@ pub fn delete_foobar_app_with_custom_readme() {
     }
 }
 
+// The round-trip strict-mode fixture. Its todo file records a strict violation,
+// which is the state `check` tolerance depends on, and its source file provides
+// the reference that entry points at. Tests here mutate both, so they restore
+// via the guard below rather than a trailing call: a panicking test would skip
+// a trailing restore and leave a deleted fixture in the tree, which the
+// pre-commit hook makes easy to commit by accident.
+#[allow(dead_code)]
+pub const ROUND_TRIP_TODO_PATH: &str =
+    "tests/fixtures/uses_strict_mode_round_trip/packs/foo/package_todo.yml";
+
+#[allow(dead_code)]
+pub const ROUND_TRIP_SOURCE_PATH: &str =
+    "tests/fixtures/uses_strict_mode_round_trip/packs/foo/app/services/foo.rb";
+
+// Violation types are in sorted order, matching what `update` writes, so tests
+// can assert byte equality against this rather than only grepping for a key.
+#[allow(dead_code)]
+pub const ROUND_TRIP_TODO: &str = "\
+# This file contains a list of dependencies that are not part of the long term plan for the
+# 'packs/foo' package.
+# We should generally work to reduce this list over time.
+#
+# You can regenerate this file using the following command:
+#
+# bin/packwerk update-todo
+---
+packs/bar:
+  \"::Bar\":
+    violations:
+    - dependency
+    - privacy
+    files:
+    - packs/foo/app/services/foo.rb
+";
+
+#[allow(dead_code)]
+pub const ROUND_TRIP_SOURCE: &str = "\
+module Foo
+  def calls_bar_without_stated_dependency
+    Bar
+  end
+end
+";
+
+/// Restores the round-trip fixture when it goes out of scope, panic or not.
+///
+/// Bind it to a named variable, `let _fixture = RoundTripFixture::set_up();`.
+/// Binding to `let _` drops it immediately and silently removes the protection,
+/// which `#[must_use]` cannot catch.
+#[allow(dead_code)]
+#[must_use = "bind this to a named variable; `let _` drops the guard immediately"]
+pub struct RoundTripFixture;
+
+#[allow(dead_code)]
+impl RoundTripFixture {
+    pub fn set_up() -> Self {
+        // Panicking here is fine and informative: the test has not run yet.
+        fs::write(ROUND_TRIP_TODO_PATH, ROUND_TRIP_TODO).unwrap();
+        fs::write(ROUND_TRIP_SOURCE_PATH, ROUND_TRIP_SOURCE).unwrap();
+        Self
+    }
+}
+
+impl Drop for RoundTripFixture {
+    fn drop(&mut self) {
+        // Deliberately does not unwrap. This runs while a failing test is
+        // unwinding, and a panic here would be a panic-during-panic, which
+        // aborts the whole test binary and replaces the real failure with an
+        // abort. Report and carry on, as `teardown()` does.
+        for (path, contents) in [
+            (ROUND_TRIP_TODO_PATH, ROUND_TRIP_TODO),
+            (ROUND_TRIP_SOURCE_PATH, ROUND_TRIP_SOURCE),
+        ] {
+            if let Err(err) = fs::write(path, contents) {
+                eprintln!(
+                    "Failed to restore {} during teardown: {}",
+                    path, err
+                );
+            }
+        }
+    }
+}
+
 // In case we want our tests to call `update` or otherwise mutate the file system
 #[allow(dead_code)]
 pub fn set_up_fixtures() {
