@@ -354,6 +354,10 @@ fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
+    // The violation here IS recorded in packs/foo/package_todo.yml, so it has to
+    // match its recorded entry: reported neither as a new violation nor as a
+    // stale todo. Strict mode still fails the run, which is what keeps this at
+    // exit 1, so the two strict messages are the whole of the output.
     cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
@@ -365,7 +369,14 @@ fn test_check_with_strict_mode() -> Result<(), Box<dyn Error>> {
         ))
         .stdout(predicate::str::contains(
             "packs/foo cannot have dependency violations on packs/bar because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
-        ));
+        ))
+        .stdout(
+            predicate::str::contains(
+                "There were stale violations found, please run `packs update`",
+            )
+            .not(),
+        )
+        .stdout(predicate::str::contains("violation(s) detected:").not());
 
     common::teardown();
     Ok(())
@@ -386,6 +397,36 @@ fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
         .stdout(predicate::str::contains(
             "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file",
         ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_reports_only_unrecorded_violations_in_strict_pack(
+) -> Result<(), Box<dyn Error>> {
+    // Recorded: `::Bar` for both violation types, `::Qux` for privacy only, `::Baz` not at all.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_partially_recorded")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("3 violation(s) detected:"))
+        .stdout(predicate::str::contains(
+            "Dependency violation: `::Baz` belongs to `packs/baz`",
+        ))
+        .stdout(predicate::str::contains(
+            "Privacy violation: `::Baz` is private to `packs/baz`",
+        ))
+        .stdout(predicate::str::contains(
+            "Dependency violation: `::Qux` belongs to `packs/qux`",
+        ))
+        .stdout(predicate::str::contains("Privacy violation: `::Qux`").not())
+        .stdout(predicate::str::contains("`::Bar`").not())
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
 
     common::teardown();
     Ok(())
