@@ -515,6 +515,36 @@ fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_check_reports_only_unrecorded_violations_in_strict_pack(
+) -> Result<(), Box<dyn Error>> {
+    // Recorded: `::Bar` for both violation types, `::Qux` for privacy only, `::Baz` not at all.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode_partially_recorded")
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains("3 violation(s) detected:"))
+        .stdout(predicate::str::contains(
+            "Dependency violation: `::Baz` belongs to `packs/baz`",
+        ))
+        .stdout(predicate::str::contains(
+            "Privacy violation: `::Baz` is private to `packs/baz`",
+        ))
+        .stdout(predicate::str::contains(
+            "Dependency violation: `::Qux` belongs to `packs/qux`",
+        ))
+        .stdout(predicate::str::contains("Privacy violation: `::Qux`").not())
+        .stdout(predicate::str::contains("`::Bar`").not())
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_contents() -> Result<(), Box<dyn Error>> {
     let project_root = "tests/fixtures/simple_app";
     let relative_path = "packs/foo/app/services/foo.rb";
