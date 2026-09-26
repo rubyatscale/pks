@@ -45,7 +45,7 @@ impl ViolationIdentifier {
     /// it is, and `package_todo.yml` has nowhere to record it, so recorded
     /// violations are always rebuilt with `strict: false`. Compare through this
     /// so a violation in a strict pack can still match its recorded entry.
-    pub fn recorded_key(&self) -> Self {
+    pub(crate) fn recorded_key(&self) -> Self {
         Self {
             strict: false,
             ..self.clone()
