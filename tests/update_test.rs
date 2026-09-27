@@ -343,3 +343,56 @@ fn test_update_with_strict_violations() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+// `packs/bar` enforces privacy strictly and `packs/baz` doesn't, so `foo.rb`
+// has one unlisted strict violation and one ordinary one. Every other strict
+// fixture is strict throughout, so dropping the `strict` filter from `update`'s
+// report, or from the check `write_violations_to_disk` uses to skip unlisted
+// strict violations, passed the rest of the suite.
+fn test_update_with_strict_and_non_strict_violations() -> anyhow::Result<()> {
+    let fixture =
+        common::Fixture::new("contains_strict_and_non_strict_violations");
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("update")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert_eq!(
+        String::from_utf8(output)?,
+        "\
+packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack's package.yml file
+1 strict mode violation(s) detected. These violations must be fixed for `check` to succeed.
+Successfully updated package_todo.yml files!
+"
+    );
+
+    let actual =
+        std::fs::read_to_string(fixture.path("packs/foo/package_todo.yml"))?;
+    assert_eq!(
+        actual,
+        "\
+# This file contains a list of dependencies that are not part of the long term plan for the
+# 'packs/foo' package.
+# We should generally work to reduce this list over time.
+#
+# You can regenerate this file using the following command:
+#
+# bin/packwerk update-todo
+---
+packs/baz:
+  \"::Baz\":
+    violations:
+    - privacy
+    files:
+    - packs/foo/app/services/foo.rb
+"
+    );
+    Ok(())
+}
