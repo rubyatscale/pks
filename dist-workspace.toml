@@ -26,6 +26,10 @@ install-updater = false
 github-attestations = true
 # Add a DotSlash `pks` file to each release once it's published
 post-announce-jobs = ["./publish-dotslash"]
+# Start releases from a workflow_dispatch with a tag input rather than a tag
+# push; dist creates the tag when it creates the release. auto-release.yml
+# dispatches one when Cargo.toml's version changes on main.
+dispatch-releases = true
 
 [dist.github-custom-job-permissions]
 "publish-dotslash" = { contents = "write" }
