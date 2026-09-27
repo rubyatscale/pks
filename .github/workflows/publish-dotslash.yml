@@ -3,6 +3,10 @@
 # dist-workspace.toml. It can't be a separate `on: release` workflow: dist
 # creates the release with GITHUB_TOKEN, and events from GITHUB_TOKEN don't
 # trigger other workflows.
+#
+# The action uploads without --clobber, so re-running this job after the `pks`
+# asset is on the release fails. Delete it first:
+#   gh release delete-asset <tag> pks --yes
 name: Publish DotSlash file
 
 on:

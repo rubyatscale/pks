@@ -97,7 +97,7 @@ downloads release assets by name needs updating.
 
 The dotslash `pks` file is still published under the same name. It now points
 at the new archives, and it covers Windows as well as macOS and Linux. See
-[INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md).
+[INSTALLATION.md](https://github.com/rubyatscale/pks/blob/v0.5.0/INSTALLATION.md).
 
 ### Internal
 
