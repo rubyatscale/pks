@@ -53,7 +53,7 @@ struct JsonSummary {
 /// Build message from violation using template expansion.
 /// For JSON, reference_location is cleared (location is in separate fields).
 fn build_message(v: &Violation, config: &Configuration) -> String {
-    if v.identifier.strict {
+    if v.strict {
         build_strict_violation_message(&v.identifier)
     } else {
         let checker_config =
@@ -87,7 +87,7 @@ pub fn write_json<W: std::io::Write>(
             constant_name: &v.identifier.constant_name,
             referencing_pack_name: &v.identifier.referencing_pack_name,
             defining_pack_name: &v.identifier.defining_pack_name,
-            strict: v.identifier.strict,
+            strict: v.strict,
             message: build_message(v, config),
         })
         .collect();

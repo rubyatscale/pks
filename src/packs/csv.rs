@@ -9,7 +9,7 @@ use super::Configuration;
 /// Build message from violation using template expansion.
 /// For CSV, reference_location uses the default plain format.
 fn build_message(v: &Violation, config: &Configuration) -> String {
-    if v.identifier.strict {
+    if v.strict {
         build_strict_violation_message(&v.identifier)
     } else {
         let checker_config =
@@ -50,7 +50,7 @@ pub fn write_csv<W: std::io::Write>(
             let message = build_message(violation, config);
             wtr.serialize((
                 identifier.violation_type.to_string(),
-                &identifier.strict,
+                &violation.strict,
                 &identifier.file,
                 &identifier.constant_name,
                 &identifier.referencing_pack_name,

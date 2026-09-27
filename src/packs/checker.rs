@@ -33,40 +33,31 @@ use super::reference_extractor::get_all_references;
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct ViolationIdentifier {
     pub violation_type: CheckerType,
-    pub strict: bool,
     pub file: String,
     pub constant_name: String,
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
 
-impl ViolationIdentifier {
-    /// `strict` describes how a violation should be treated, not which violation
-    /// it is, and `package_todo.yml` has nowhere to record it, so recorded
-    /// violations are always rebuilt with `strict: false`. Compare through this
-    /// so a violation in a strict pack can still match its recorded entry.
-    pub(crate) fn recorded_key(&self) -> Self {
-        Self {
-            strict: false,
-            ..self.clone()
-        }
-    }
-}
-
 /// A violation combines an identifier with display metadata.
 ///
 /// `source_location` is intentionally separate from `ViolationIdentifier` because:
-/// - The identifier defines "sameness" for deduplication and comparison with
-///   recorded violations in `package_todo.yml`, which doesn't store line/column
-/// - Multiple references to the same constant in the same file are considered
-///   one violation, even if they occur at different lines
+/// - The identifier defines "sameness" for comparison with recorded violations
+///   in `package_todo.yml`, which doesn't store line/column
+/// - Violations at different lines stay distinct, but those of the same type on
+///   the same constant in the same file share an identifier, so one recorded
+///   entry covers them all
 /// - Keeping line/column out of the identity makes violations stable across
 ///   minor code movements that shift line numbers
+///
+/// `strict` is kept out of the identifier too: it says how to treat the
+/// violation, not which violation it is, and `package_todo.yml` cannot record it.
 ///
 /// Violations store only data - template expansion happens in formatters.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
     pub identifier: ViolationIdentifier,
+    pub strict: bool,
     pub source_location: SourceLocation,
     // Additional data for template expansion:
     pub referencing_pack_relative_yml: String,
@@ -156,10 +147,7 @@ impl<'a> CheckAllBuilder<'a> {
                 self.found_violations
                     .violations
                     .iter()
-                    .filter(|v| {
-                        !recorded_violations
-                            .contains(&v.identifier.recorded_key())
-                    })
+                    .filter(|v| !recorded_violations.contains(&v.identifier))
                     .collect()
             };
         reportable_violations
@@ -169,11 +157,11 @@ impl<'a> CheckAllBuilder<'a> {
         &mut self,
         recorded_violations: &'a HashSet<ViolationIdentifier>,
     ) -> anyhow::Result<Vec<&'a ViolationIdentifier>> {
-        let found_violation_identifiers: HashSet<ViolationIdentifier> = self
+        let found_violation_identifiers: HashSet<&ViolationIdentifier> = self
             .found_violations
             .violations
             .par_iter()
-            .map(|v| v.identifier.recorded_key())
+            .map(|v| &v.identifier)
             .collect();
         let relative_files = self
             .found_violations
@@ -213,13 +201,9 @@ impl<'a> CheckAllBuilder<'a> {
         Ok(stale_violations)
     }
 
-    /// `found_violation_identifiers` is keyed by [`ViolationIdentifier::recorded_key`].
-    /// `todo_violation_identifier` needs no such normalization: it comes from
-    /// `pack_set.all_violations`, which rebuilds every recorded violation with
-    /// `strict: false` already, so it is its own recorded key.
     fn is_stale_violation(
         relative_files: &HashSet<&str>,
-        found_violation_identifiers: &HashSet<ViolationIdentifier>,
+        found_violation_identifiers: &HashSet<&ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
     ) -> bool {
         let violation_path_exists =
@@ -242,11 +226,10 @@ impl<'a> CheckAllBuilder<'a> {
         self.found_violations
             .violations
             .iter()
-            .filter(|v| v.identifier.strict)
+            .filter(|v| v.strict)
             .filter(|v| {
                 self.configuration.ignore_recorded_violations
-                    || !recorded_violations
-                        .contains(&v.identifier.recorded_key())
+                    || !recorded_violations.contains(&v.identifier)
             })
             .cloned()
             .collect()
@@ -346,8 +329,8 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
     // as packwerk's `unlisted_strict_mode_violations`.
     let unlisted_strict_violations = &violations
         .iter()
-        .filter(|v| v.identifier.strict)
-        .filter(|v| !recorded_violations.contains(&v.identifier.recorded_key()))
+        .filter(|v| v.strict)
+        .filter(|v| !recorded_violations.contains(&v.identifier))
         .collect::<Vec<&Violation>>();
     if !unlisted_strict_violations.is_empty() {
         for violation in unlisted_strict_violations {

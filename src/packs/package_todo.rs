@@ -151,9 +151,8 @@ pub fn write_violations_to_disk(
         // build green and fail the next `check` with no source change in
         // between. packwerk keeps the entry for the same reason, in
         // `OffenseCollection#add_offense`.
-        if violation.identifier.strict
-            && !recorded_violations
-                .contains(&violation.identifier.recorded_key())
+        if violation.strict
+            && !recorded_violations.contains(&violation.identifier)
         {
             continue;
         }

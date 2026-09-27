@@ -455,16 +455,15 @@ fn test_check_with_single_recorded_violation_type_in_strict_pack(
     // privacy and dependencies. Recording one type must tolerate only that type,
     // so the dependency violation still fails the run.
     //
-    // This pins `violation_type` inside the recorded-comparison key. A refactor
-    // that normalized it away, the way `strict` is normalized by
-    // `ViolationIdentifier::recorded_key`, would silence both types from a
-    // single-type entry.
+    // This pins `violation_type` inside `ViolationIdentifier`, the key compared
+    // with recorded violations. A refactor that moved it onto `Violation`
+    // alongside `strict` would silence both types from a single-type entry.
     //
-    // Measured, because the obvious way to say this overstates it: collapsing
+    // Measured, because the obvious way to say this overstates it: ignoring
     // `violation_type` in the strict filter *specifically* fails exactly this
-    // test and nothing else in the suite. Collapsing it everywhere in
-    // `recorded_key` fails eight tests, since it also breaks reportable and
-    // stale comparisons, so that coarser mutation proves nothing about this
+    // test and nothing else in the suite. Ignoring it in every comparison with
+    // the recorded set fails other tests too, since it also breaks reportable
+    // and stale comparisons, so that coarser mutation proves nothing about this
     // one. Every other strict fixture records privacy and dependency together,
     // which is why the narrow case needs its own coverage.
     cargo_bin_cmd!("pks")
