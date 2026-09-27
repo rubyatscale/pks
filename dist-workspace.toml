@@ -24,6 +24,11 @@ install-path = "CARGO_HOME"
 install-updater = false
 # Link build artifacts to the process which created it
 github-attestations = true
+# Add a DotSlash `pks` file to each release once it's published
+post-announce-jobs = ["./publish-dotslash"]
+
+[dist.github-custom-job-permissions]
+"publish-dotslash" = { contents = "write" }
 
 # Pin the GitHub Actions that dist generates into release.yml to exact commits
 # rather than floating tags, so a compromised or retagged upstream release can't

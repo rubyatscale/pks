@@ -1,12 +1,6 @@
 # Changelog
 
-<!-- Whoever cuts the next release: retitle `## Unreleased` below to the version
-     being tagged. `.github/workflows/release.yml` builds the GitHub Release body
-     from cargo-dist's `announcement_github_body`, which matches a heading against
-     the tag, so an entry left under `## Unreleased` silently misses the release
-     notes. Pre-1.0, the breaking change below wants 0.5.0 rather than 0.4.x. -->
-
-## Unreleased
+## 0.5.0
 
 ### Breaking Changes
 
@@ -66,6 +60,44 @@ files are grandfathering:
 ```sh
 pks check --ignore-recorded-violations
 ```
+
+### Fixes
+
+#### Recorded violations in strict packs match their `package_todo.yml` entries
+
+`package_todo.yml` has no field for `strict`, so a recorded violation in a pack
+with a strict checker never matched its entry. `check` reported it as a new
+violation and reported its todo entry as stale. Neither happens now, and
+`--ignore-recorded-violations` no longer prints a spurious stale-todo line for
+those entries.
+
+#### Removed stray debug output from the privacy checker
+
+A leftover `dbg!` wrote two lines to stderr for every reference checked against
+a pack's `private_constants`, in release builds too.
+
+### Performance
+
+#### `pks check` compiles the inflector's regexes once
+
+Constant-name inflection compiled its regexes on every call, roughly 50k times
+per run on a large codebase. They're now compiled once, which cut total CPU time
+for `pks check` by about 45% on a large application.
+
+### Distribution
+
+#### Releases are built by cargo-dist
+
+This is the first release built by cargo-dist. Each release now publishes
+`pks-<target>.tar.xz` archives for macOS and Linux, a `.zip` for Windows, and
+`pks-installer.sh` and `pks-installer.ps1` installer scripts. The old asset names
+(`pks-mac.tar.gz`, `x86_64-unknown-linux-gnu.tar.gz` and
+`aarch64-unknown-linux-gnu.tar.gz`) are no longer published, so anything that
+downloads release assets by name needs updating.
+
+The dotslash `pks` file is still published under the same name. It now points
+at the new archives, and it covers Windows as well as macOS and Linux. See
+[INSTALLATION.md](https://github.com/rubyatscale/pks/blob/v0.5.0/INSTALLATION.md).
 
 ### Internal
 
