@@ -494,10 +494,10 @@ fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
     // so there is nothing left to assert against in the CSV. Note that this
     // fixture ships no `package_todo.yml`, so the violation is an ordinary
     // unrecorded one: this test does not exercise strict tolerance and passes
-    // with the recorded filter disabled. The duplicate assertion it used to
-    // carry was byte-identical to the one below it, so dropping it costs no
-    // coverage.
-    cargo_bin_cmd!("pks")
+    // with the recorded filter disabled. It compares whole lines because an
+    // unrecorded strict violation is in both `reportable_violations` and
+    // `strict_mode_violations`, and must still get exactly one row.
+    let output = cargo_bin_cmd!("pks")
         .arg("--project-root")
         .arg("tests/fixtures/contains_strict_violations")
         .arg("check")
@@ -505,10 +505,127 @@ fn test_check_with_strict_mode_output_csv() -> Result<(), Box<dyn Error>> {
         .arg("csv")
         .assert()
         .code(1)
-        .stdout(predicate::str::contains("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message"))
-        .stdout(predicate::str::contains(
-            "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack\'s package.yml file",
-        ));
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output)?;
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        [
+            "Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message",
+            "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
+        ]
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_strict_mode_output_json() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_strict_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["violation_count"], 1);
+    assert_eq!(json_output["summary"]["stale_todo_count"], 0);
+    assert_eq!(json_output["summary"]["strict_violation_count"], 1);
+    assert_eq!(json_output["summary"]["success"], false);
+
+    let violations = json_output["violations"].as_array().unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0]["violation_type"], "privacy");
+    assert_eq!(violations[0]["constant_name"], "::Bar");
+    assert_eq!(violations[0]["strict"], true);
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_recorded_strict_mode_violation_ignoring_todo_csv(
+) -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("--ignore-recorded-violations")
+        .arg("-o")
+        .arg("csv")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output)?;
+    let mut lines = stdout.lines();
+    assert_eq!(
+        lines.next(),
+        Some("Violation,Strict?,File,Constant,Referencing Pack,Defining Pack,Message")
+    );
+    let mut rows: Vec<&str> = lines.collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        [
+            "dependency,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have dependency violations on packs/bar because strict mode is enabled for dependency violations in the enforcing pack's package.yml file",
+            "privacy,true,packs/foo/app/services/foo.rb,::Bar,packs/foo,packs/bar,packs/foo cannot have privacy violations on packs/bar because strict mode is enabled for privacy violations in the enforcing pack's package.yml file",
+        ]
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_recorded_strict_mode_violation_ignoring_todo_json(
+) -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("--ignore-recorded-violations")
+        .arg("-o")
+        .arg("json")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["violation_count"], 2);
+    assert_eq!(json_output["summary"]["stale_todo_count"], 0);
+    assert_eq!(json_output["summary"]["strict_violation_count"], 2);
+    assert_eq!(json_output["summary"]["success"], false);
+
+    let violations = json_output["violations"].as_array().unwrap();
+    let mut violation_types: Vec<&str> = violations
+        .iter()
+        .map(|v| v["violation_type"].as_str().unwrap())
+        .collect();
+    violation_types.sort();
+    assert_eq!(violation_types, ["dependency", "privacy"]);
+    assert!(violations.iter().all(|v| v["strict"] == true));
 
     common::teardown();
     Ok(())
