@@ -92,9 +92,12 @@ This is the first release built by cargo-dist. Each release now publishes
 `pks-<target>.tar.xz` archives for macOS and Linux, a `.zip` for Windows, and
 `pks-installer.sh` and `pks-installer.ps1` installer scripts. The old asset names
 (`pks-mac.tar.gz`, `x86_64-unknown-linux-gnu.tar.gz` and
-`aarch64-unknown-linux-gnu.tar.gz`) and the dotslash `pks` file are no longer
-published, so anything that downloads release assets by name needs updating.
-See [INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md).
+`aarch64-unknown-linux-gnu.tar.gz`) are no longer published, so anything that
+downloads release assets by name needs updating.
+
+The dotslash `pks` file is still published under the same name. It now points
+at the new archives, and it covers Windows as well as macOS and Linux. See
+[INSTALLATION.md](https://github.com/rubyatscale/pks/blob/main/INSTALLATION.md).
 
 ### Internal
 

@@ -1,28 +1,33 @@
 {
-    "outputs": {
-      "pks": {
-        "platforms": {
-          "macos-x86_64": {
-            "regex": "^pks-mac",
-            "path": "pks",
-            "format": "tar.gz"
-          },
-          "macos-aarch64": {
-            "regex": "^pks-mac",
-            "path": "pks",
-            "format": "tar.gz"
-          },
-          "linux-x86_64": {
-            "regex": "^x86_64-unknown-linux",
-            "path": "pks",
-            "format": "tar.gz"
-          },
-          "linux-aarch64": {
-            "regex": "^aarch64-unknown-linux",
-            "path": "pks",
-            "format": "tar.gz"
-          }
+  "outputs": {
+    "pks": {
+      "platforms": {
+        "macos-aarch64": {
+          "name": "pks-aarch64-apple-darwin.tar.xz",
+          "path": "pks-aarch64-apple-darwin/pks",
+          "format": "tar.xz"
+        },
+        "macos-x86_64": {
+          "name": "pks-x86_64-apple-darwin.tar.xz",
+          "path": "pks-x86_64-apple-darwin/pks",
+          "format": "tar.xz"
+        },
+        "linux-aarch64": {
+          "name": "pks-aarch64-unknown-linux-gnu.tar.xz",
+          "path": "pks-aarch64-unknown-linux-gnu/pks",
+          "format": "tar.xz"
+        },
+        "linux-x86_64": {
+          "name": "pks-x86_64-unknown-linux-gnu.tar.xz",
+          "path": "pks-x86_64-unknown-linux-gnu/pks",
+          "format": "tar.xz"
+        },
+        "windows-x86_64": {
+          "name": "pks-x86_64-pc-windows-msvc.zip",
+          "path": "pks.exe",
+          "format": "zip"
         }
       }
     }
   }
+}

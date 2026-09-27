@@ -1,6 +1,14 @@
 # Installation
 
-## Option 1: Prebuilt binary
+## Option 1: dotslash
+
+- Install [dotslash](https://dotslash-cli.com/docs/installation/).
+- Download the `pks` DotSlash file from a release, for example https://github.com/rubyatscale/pks/releases/latest/download/pks, and save it to your Ruby project's `bin/` directory.
+- Run `bin/pks`.
+
+The file pins that release's binaries by hash, so everyone working on the project runs the same version. It covers macOS, Linux (x86_64 and aarch64), and Windows (x86_64).
+
+## Option 2: Prebuilt binary
 
 From v0.5.0, every release publishes prebuilt binaries for macOS, Linux, and Windows, along with installer scripts that put `pks` in `$CARGO_HOME/bin` (usually `~/.cargo/bin`).
 
@@ -17,10 +25,6 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/rubyatscale/pks/re
 ```
 
 To pin a version, replace `latest/download` with `download/v0.5.0` (or whichever version you want). You can also download a `pks-<target>.tar.xz` archive, or the `.zip` on Windows, straight from the [releases page](https://github.com/rubyatscale/pks/releases).
-
-## Option 2: dotslash (v0.4.0 and earlier)
-
-Releases up to v0.4.0 include a [dotslash](https://dotslash-cli.com/docs/installation/) `pks` file, for example https://github.com/rubyatscale/pks/releases/download/v0.4.0/pks. Save it to your Ruby project's `bin/` directory and run `bin/pks`. Releases from v0.5.0 on don't publish a dotslash file.
 
 ## Option 3: Build from source
 

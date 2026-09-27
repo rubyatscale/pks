@@ -31,3 +31,13 @@ rules:
       # This repo configures no custom container runners, so matrix.container is
       # always null and no image is ever pulled.
       - release.yml
+  secrets-inherit:
+    ignore:
+      # dist calls every custom job (`post-announce-jobs` in dist-workspace.toml)
+      # with `secrets: inherit`. The only one is publish-dotslash.yml in this
+      # repo, which uses nothing but GITHUB_TOKEN.
+      - release.yml
+  self-repository:
+    ignore:
+      # dist calls custom jobs as `./.github/workflows/<name>.yml`.
+      - release.yml
