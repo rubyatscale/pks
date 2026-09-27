@@ -1,5 +1,3 @@
-use itertools::chain;
-
 use super::checker::{
     build_strict_violation_message, CheckAllResult, Violation,
 };
@@ -40,10 +38,9 @@ pub fn write_csv<W: std::io::Write>(
     if !&result.reportable_violations.is_empty()
         || !&result.strict_mode_violations.is_empty()
     {
-        let all = chain!(
-            &result.reportable_violations,
-            &result.strict_mode_violations
-        );
+        let all = result
+            .reportable_violations
+            .union(&result.strict_mode_violations);
 
         for violation in all {
             let identifier = &violation.identifier;

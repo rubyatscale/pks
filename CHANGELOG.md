@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+#### `check -o json` and `-o csv` list each strict violation once
+
+A strict violation that fails the run is both a new violation and a strict-mode
+violation, and the JSON and CSV formats listed it once for each, as two
+identical entries. JSON also counted both in `violation_count`, so it could
+exceed the number of distinct violations. Each violation now appears once, and
+`violation_count` counts distinct violations. Text output is unchanged.
+
 ## 0.5.0
 
 ### Breaking Changes

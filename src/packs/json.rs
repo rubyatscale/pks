@@ -3,7 +3,6 @@
 //! Serializes check results (violations, stale TODOs, and summary) to JSON.
 //! See `schema/check-output.json` for the JSON Schema specification.
 
-use itertools::chain;
 use serde::Serialize;
 
 use super::checker::{
@@ -71,10 +70,9 @@ pub fn write_json<W: std::io::Write>(
     config: &Configuration,
     writer: W,
 ) -> anyhow::Result<()> {
-    let all_violations = chain!(
-        &result.reportable_violations,
-        &result.strict_mode_violations
-    );
+    let all_violations = result
+        .reportable_violations
+        .union(&result.strict_mode_violations);
 
     // JSON outputs raw structured data - consumers can format as needed.
     // Location is provided as separate file/line/column fields.
