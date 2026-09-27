@@ -10,16 +10,16 @@
 #   gh workflow run release.yml -f tag=dry-run
 name: Auto release
 
-on:
+# No concurrency group: GitHub keeps one pending run per group and cancels the
+# rest, and a cancelled run says nothing about how to finish the release. The
+# check that main hasn't moved already stops overlapping runs from both
+# dispatching.
+on: # zizmor: ignore[concurrency-limits]
   push:
     branches: [main]
     paths: [Cargo.toml]
 
 permissions: {}
-
-concurrency:
-  group: auto-release
-  cancel-in-progress: false
 
 jobs:
   dispatch-release:
@@ -49,15 +49,28 @@ jobs:
           fi
 
           # dist takes the release notes from the CHANGELOG heading that matches
-          # the version, so without one the release would have no notes.
-          if ! grep -qxF "## $version" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## $version' heading. Add one, then run: gh workflow run release.yml -f tag=$tag"
+          # the version, so without one the release would have no notes. For a
+          # prerelease, dist falls back to the stable version's heading, then to
+          # "Unreleased".
+          headings=(-e "## $version")
+          wanted="'## $version'"
+          if [[ $version == *-* ]]; then
+            headings+=(-e "## ${version%%-*}" -e "## Unreleased")
+            wanted="'## $version', '## ${version%%-*}' or '## Unreleased'"
+          fi
+          if ! grep -qxF "${headings[@]}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no $wanted heading. Add one, then run: gh workflow run release.yml -f tag=$tag"
             exit 1
           fi
 
           # A dispatch runs on the branch's head, so if main has moved on since
-          # this push, it would release a later commit.
-          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          # this push, it would release a later commit. This narrows the window
+          # rather than closing it: a dispatch can't pin a SHA, so a commit that
+          # lands between this check and the dispatch still ships.
+          if ! head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha); then
+            echo "::error::Couldn't look up main's head. Check what's on main, then run: gh workflow run release.yml -f tag=$tag"
+            exit 1
+          fi
           if [ "$head" != "$PUSHED_SHA" ]; then
             echo "::error::main has moved from $PUSHED_SHA to $head. Check that $head is what should ship as $tag, then run: gh workflow run release.yml -f tag=$tag"
             exit 1
