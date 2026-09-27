@@ -19,11 +19,11 @@ rules:
       - release.yml
   template-injection:
     ignore:
-      # dist interpolates `github.ref_name`, `needs.plan.outputs.tag*` and its
-      # `matrix.*` build parameters straight into run blocks. The tag-derived
-      # values only expand on `push:` of a tag, which requires push access, and
-      # expand to '' on pull_request. The matrix values come from dist's own
-      # plan output, not from user input.
+      # dist interpolates the `tag` dispatch input, `needs.plan.outputs.tag*` and
+      # its `matrix.*` build parameters straight into run blocks. The
+      # tag-derived values come from a workflow_dispatch, which requires write
+      # access, and expand to '' on pull_request. The matrix values come from
+      # dist's own plan output, not from user input.
       - release.yml
   unpinned-images:
     ignore:
