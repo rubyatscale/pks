@@ -4,6 +4,22 @@
 
 ### Fixes
 
+#### ERB comments no longer hide or invent references
+
+pks read every line of a multi-line `<%# %>` comment after the first as Ruby
+code. Depending on what the comment said, references elsewhere in the file were
+missed, sometimes all of them, and constants named inside the comment were
+reported as references. ERB comments are now skipped, as packwerk does.
+
+pks also found nothing at all in an ERB file whose first tag was an encoding
+comment, such as `<%# encoding: iso-8859-1 %>`, unless it named UTF-8 or
+ASCII-8BIT. Those files are now checked like any other, so they may show new
+violations.
+
+Cached results aren't tied to the pks version, so an ERB file you haven't
+changed keeps its old result after you upgrade. Unless you've turned the cache
+off, run `pks delete-cache` once after upgrading so ERB files are read again.
+
 #### `check -o json` and `-o csv` list each strict violation once
 
 A strict violation that fails the run is both a new violation and a strict-mode
