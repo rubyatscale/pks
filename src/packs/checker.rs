@@ -100,6 +100,9 @@ struct CheckAllBuilder<'a> {
 #[derive(Debug)]
 struct FoundViolations {
     absolute_paths: HashSet<PathBuf>,
+    // Set when the caller named paths to check, even if none of them is an
+    // included file, so it cannot be derived from `absolute_paths`.
+    scoped: bool,
     violations: HashSet<Violation>,
 }
 
@@ -188,6 +191,7 @@ impl<'a> CheckAllBuilder<'a> {
             })
             .collect::<anyhow::Result<HashSet<&str>>>()?;
 
+        let scoped = self.found_violations.scoped;
         let stale_violations = recorded_violations
             .par_iter()
             .filter(|v_identifier| {
@@ -195,6 +199,7 @@ impl<'a> CheckAllBuilder<'a> {
                     &relative_files,
                     &found_violation_identifiers,
                     v_identifier,
+                    scoped,
                 )
             })
             .collect::<Vec<&ViolationIdentifier>>();
@@ -205,11 +210,14 @@ impl<'a> CheckAllBuilder<'a> {
         relative_files: &HashSet<&str>,
         found_violation_identifiers: &HashSet<&ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
+        scoped: bool,
     ) -> bool {
-        let violation_path_exists =
+        let file_was_checked =
             relative_files.contains(todo_violation_identifier.file.as_str());
-        if violation_path_exists {
+        if file_was_checked {
             !found_violation_identifiers.contains(todo_violation_identifier)
+        } else if scoped {
+            false
         } else {
             true // The todo violation references a file that no longer exists
         }
@@ -250,6 +258,7 @@ pub(crate) fn check_all(
         get_all_violations(configuration, &absolute_paths, &checkers)?;
     let found_violations = FoundViolations {
         absolute_paths,
+        scoped: !files.is_empty(),
         violations,
     };
     debug!("Building check-all result (diffing against package_todo.yml)");

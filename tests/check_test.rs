@@ -318,6 +318,223 @@ fn test_check_with_stale_violations_when_file_no_longer_exists(
 }
 
 #[test]
+fn test_check_with_recorded_strict_mode_violation_when_file_is_deleted(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("uses_strict_mode");
+    fs::remove_file(fixture.path("packs/foo/app/services/foo.rb"))?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check")
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "There were stale violations found, please run `packs update`",
+        ));
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_single_file_ignores_recorded_violations_in_other_files(
+) -> Result<(), Box<dyn Error>> {
+    // In `uses_strict_mode`, every recorded violation is in foo.rb, so a run
+    // that checks only bar.rb has no recorded violations in scope.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar/app/services/bar.rb")
+        .assert()
+        .code(0)
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_contents_ignores_recorded_violations_in_other_files(
+) -> Result<(), Box<dyn Error>> {
+    let project_root = "tests/fixtures/uses_strict_mode";
+    let relative_path = "packs/bar/app/services/bar.rb";
+    let bar_rb_contents =
+        fs::read_to_string(format!("{}/{}", project_root, relative_path))?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(project_root)
+        .arg("check-contents")
+        .arg(relative_path)
+        .write_stdin(bar_rb_contents)
+        .assert()
+        .code(0)
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_directory_ignores_recorded_violations_in_other_files(
+) -> Result<(), Box<dyn Error>> {
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar")
+        .assert()
+        .code(0)
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_only_unincluded_files_ignores_recorded_violations(
+) -> Result<(), Box<dyn Error>> {
+    // package.yml is not in the include globs, so this run checks no files at
+    // all. It is still a run given paths, not a full run.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/foo/package.yml")
+        .assert()
+        .code(0)
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_single_file_reports_stale_violations_in_foo_rb(
+) -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_stale_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/foo/app/services/foo.rb")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["stale_todo_count"], 1);
+    let stale_todos = json_output["stale_todos"].as_array().unwrap();
+    assert_eq!(stale_todos.len(), 1);
+    assert_eq!(stale_todos[0]["file"], "packs/foo/app/services/foo.rb");
+    assert_eq!(stale_todos[0]["constant_name"], "::Bar");
+    assert_eq!(stale_todos[0]["violation_type"], "dependency");
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_single_absolute_file_reports_stale_violations_in_foo_rb(
+) -> Result<(), Box<dyn Error>> {
+    // Editor integrations pass the absolute path of the file being saved.
+    let foo_rb = fs::canonicalize(
+        "tests/fixtures/contains_stale_violations/packs/foo/app/services/foo.rb",
+    )?;
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_stale_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg(foo_rb)
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["stale_todo_count"], 1);
+    let stale_todos = json_output["stale_todos"].as_array().unwrap();
+    assert_eq!(stale_todos.len(), 1);
+    assert_eq!(stale_todos[0]["file"], "packs/foo/app/services/foo.rb");
+    assert_eq!(stale_todos[0]["constant_name"], "::Bar");
+    assert_eq!(stale_todos[0]["violation_type"], "dependency");
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_single_file_reports_stale_violations_in_bar_rb(
+) -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_stale_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/bar/app/services/bar.rb")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(json_output["summary"]["stale_todo_count"], 2);
+    let mut stale_todos: Vec<(&str, &str, &str)> = json_output["stale_todos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["file"].as_str().unwrap(),
+                t["constant_name"].as_str().unwrap(),
+                t["violation_type"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    stale_todos.sort();
+    assert_eq!(
+        stale_todos,
+        vec![
+            ("packs/bar/app/services/bar.rb", "::Foo", "dependency"),
+            ("packs/bar/app/services/bar.rb", "::Foo", "privacy"),
+        ]
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_with_relationship_violations() -> Result<(), Box<dyn Error>> {
     cargo_bin_cmd!("pks")
         .arg("--project-root")

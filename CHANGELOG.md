@@ -12,6 +12,16 @@ identical entries. JSON also counted both in `violation_count`, so it could
 exceed the number of distinct violations. Each violation now appears once, and
 `violation_count` counts distinct violations. Text output is unchanged.
 
+#### `check <paths>` and `check-contents` no longer flag other files' entries as stale
+
+When given paths, `pks check` treated a `package_todo.yml` entry for any file
+it had not checked as if that file had been deleted, and reported it as stale.
+So checking one file, as editor integrations do on save, failed whenever any
+other file had an entry. `check-contents` behaved the same way. A run given
+paths now only considers entries for the files it checked. A full `pks check`
+still reports entries for deleted files as stale; a run given a directory, such
+as `pks check packs/foo` or `pks check .`, no longer does.
+
 ## 0.5.0
 
 ### Breaking Changes
