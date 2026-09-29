@@ -1,6 +1,6 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use std::{error::Error, fs};
+use std::{error::Error, fs, path::Path};
 mod common;
 
 fn assert_check_unused_dependencies(cmd: &str) -> Result<(), Box<dyn Error>> {
@@ -75,7 +75,42 @@ layer: technical_services
     let after_autocorrect = fs::read_to_string("tests/fixtures/app_with_unnecessary_dependencies/packs/foo/package.yml").unwrap();
     assert_eq!(after_autocorrect, expected_autocorrect);
 
+    assert_no_unused_dependencies(Path::new(
+        "tests/fixtures/app_with_unnecessary_dependencies",
+    ));
+
     Ok(())
+}
+
+fn assert_no_unused_dependencies(project_root: &Path) {
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(project_root)
+        .arg("check-unused-dependencies")
+        .assert()
+        .success();
+}
+
+fn auto_correct_foo_package_yml(before: &str) -> (String, String) {
+    let fixture = common::Fixture::new("app_with_unnecessary_dependencies");
+    let package_yml = fixture.path("packs/foo/package.yml");
+    fs::write(&package_yml, before).unwrap();
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check-unused-dependencies")
+        .arg("--auto-correct")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+
+    assert_no_unused_dependencies(fixture.root());
+    (
+        fs::read_to_string(&package_yml).unwrap(),
+        String::from_utf8(output.stderr).unwrap(),
+    )
 }
 
 #[test]
@@ -106,4 +141,55 @@ fn test_check_unnecessary_dependencies_no_issue() -> Result<(), Box<dyn Error>>
         .assert()
         .success();
     Ok(())
+}
+
+#[test]
+fn test_auto_correct_preserves_comments_in_hand_edited_layouts() {
+    let before = "\
+# Header comment.
+enforce_dependencies: true
+enforce_privacy: true
+dependencies: # keep sorted
+  # Comment inside the dependencies block.
+  - \"packs/bar\"
+
+  - packs/baz  # unused
+ignored_dependencies:
+  # Deliberately ignored: bop would cycle.
+  - packs/bop
+";
+    let expected = "\
+# Header comment.
+enforce_dependencies: true
+enforce_privacy: true
+dependencies: # keep sorted
+  # Comment inside the dependencies block.
+  - \"packs/bar\"
+
+ignored_dependencies:
+  # Deliberately ignored: bop would cycle.
+  - packs/bop
+";
+
+    let (after, stderr) = auto_correct_foo_package_yml(before);
+    assert_eq!(after, expected);
+    assert_eq!(stderr, "");
+}
+
+#[test]
+fn test_auto_correct_falls_back_to_rewriting_layouts_it_cannot_edit() {
+    let before = "\
+# This comment is lost by the rewrite.
+enforce_dependencies: true
+enforce_privacy: true
+dependencies: [packs/bar, packs/baz]
+";
+
+    let (after, stderr) = auto_correct_foo_package_yml(before);
+    assert!(!after.contains("packs/baz"), "{after}");
+    assert!(after.contains("- packs/bar"), "{after}");
+    assert!(
+        stderr.contains("could not edit the dependencies list"),
+        "{stderr}"
+    );
 }

@@ -24,6 +24,21 @@ excluded, and the old behavior (analyze everything) was rarely desired.
 respect_gitignore: false
 ```
 
+### Fixes
+
+#### `check-unused-dependencies --auto-correct` keeps comments in `package.yml`
+
+Auto-correct used to rewrite every `package.yml` it touched from scratch, which
+deleted all of its comments and reordered its keys. It now removes the unused
+entries from the `dependencies:` list and leaves the rest of the file as it
+was, line endings included. A comment directly above a removed entry is
+removed with it. If no dependencies remain, the `dependencies:` key is
+removed too, as before.
+
+If a list is written in a form that cannot be edited this way, such as
+`dependencies: [packs/a, packs/b]`, the file is rewritten as before and a
+warning is printed saying its comments were not preserved.
+
 ### Internal
 
 #### Replaced `serde_yaml` with `yaml_serde`
