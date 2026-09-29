@@ -624,7 +624,8 @@ fn test_check_with_single_file_reports_stale_violations_in_foo_rb(
 #[test]
 fn test_check_with_single_absolute_file_reports_stale_violations_in_foo_rb(
 ) -> Result<(), Box<dyn Error>> {
-    // Editor integrations pass the absolute path of the file being saved.
+    // Absolute arguments aren't joined onto the project root, so they take
+    // their own branch in `user_inputted_paths_to_absolute_filepaths`.
     let foo_rb = fs::canonicalize(
         "tests/fixtures/contains_stale_violations/packs/foo/app/services/foo.rb",
     )?;
@@ -687,6 +688,62 @@ fn test_check_with_single_file_reports_stale_violations_in_bar_rb(
             ("packs/bar/app/services/bar.rb", "::Foo", "privacy"),
         ]
     );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_directory_reports_stale_violations_in_that_directory(
+) -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/contains_stale_violations")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/foo")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(
+        sorted_stale_todos(&json_output),
+        vec![("packs/foo/app/services/foo.rb", "::Bar", "dependency")]
+    );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_contents_reports_stale_violations_in_that_file(
+) -> Result<(), Box<dyn Error>> {
+    // bar.rb's entries are out of scope and bar.rb is still on disk, so the
+    // stale line can only come from foo.rb's own `::Bar` dependency entry.
+    let project_root = "tests/fixtures/contains_stale_violations";
+    let relative_path = "packs/foo/app/services/foo.rb";
+    let foo_rb_contents =
+        fs::read_to_string(format!("{}/{}", project_root, relative_path))?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(project_root)
+        .arg("check-contents")
+        .arg(relative_path)
+        .write_stdin(foo_rb_contents)
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(
+            "There were stale violations found, please run `packs update`",
+        ));
 
     common::teardown();
     Ok(())
