@@ -9,7 +9,11 @@
 pks read every line of a multi-line `<%# %>` comment after the first as Ruby
 code. Depending on what the comment said, references elsewhere in the file were
 missed, sometimes all of them, and constants named inside the comment were
-reported as references. ERB comments are now skipped, as packwerk does.
+reported as references. ERB comments are now skipped, as packwerk does. This
+changes results in both directions: references that were missed are now
+reported, and a `package_todo.yml` entry recorded for a constant named inside a
+comment is no longer found, so `pks check` reports it as stale until you run
+`pks update`.
 
 pks also found nothing at all in an ERB file whose first tag was an encoding
 comment, such as `<%# encoding: iso-8859-1 %>`, unless it named UTF-8 or

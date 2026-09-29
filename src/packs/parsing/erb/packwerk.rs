@@ -279,9 +279,10 @@ mod tests {
     }
 
     #[test]
-    fn multiline_comment_contents_are_not_references() {
+    fn comment_contents_are_not_references() {
         let contents: String = String::from(
             "/
+<%# Qux %>
 <%#
   Foo
 %>
