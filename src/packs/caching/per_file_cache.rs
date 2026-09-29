@@ -222,4 +222,49 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_entry_from_another_pks_version_is_a_miss() -> anyhow::Result<()> {
+        let cache_dir = tempfile::tempdir()?;
+        let cache = PerFileCache {
+            cache_dir: cache_dir.path().to_path_buf(),
+        };
+        let path = PathBuf::from(
+            "tests/fixtures/simple_app/packs/bar/app/services/bar.rb",
+        );
+        let processed_file = ProcessedFile {
+            absolute_path: path.clone(),
+            unresolved_references: vec![],
+            definitions: vec![],
+        };
+
+        let CacheResult::Miss(empty_cache_entry) = cache.get(&path)? else {
+            panic!("expected a miss on an empty cache");
+        };
+        cache.write(&empty_cache_entry, &processed_file)?;
+        assert!(matches!(cache.get(&path)?, CacheResult::Processed(_)));
+
+        // The bare content digest is what entries held before they recorded
+        // the pks version.
+        let content_digest = file_content_digest(&path)?;
+        for file_contents_digest in
+            [content_digest.clone(), format!("{content_digest}-0.0.0")]
+        {
+            let entry = CacheEntry {
+                file_contents_digest,
+                processed_file: processed_file.clone(),
+            };
+            fs::write(
+                &empty_cache_entry.cache_file_path,
+                serde_json::to_string(&entry)?,
+            )?;
+            assert!(
+                matches!(cache.get(&path)?, CacheResult::Miss(_)),
+                "served an entry with digest {}",
+                entry.file_contents_digest
+            );
+        }
+
+        Ok(())
+    }
 }

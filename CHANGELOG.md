@@ -20,9 +20,12 @@ comment, such as `<%# encoding: iso-8859-1 %>`, unless it named UTF-8 or
 ASCII-8BIT. Those files are now checked like any other, so they may show new
 violations.
 
-Cached results aren't tied to the pks version, so an ERB file you haven't
-changed keeps its old result after you upgrade. Unless you've turned the cache
-off, run `pks delete-cache` once after upgrading so ERB files are read again.
+#### Upgrading pks invalidates cached results
+
+Cached results didn't record which version of pks produced them, so after an
+upgrade pks kept serving old results for files that hadn't changed, including
+results the ERB fix above corrects. Each entry now includes the pks version, so
+the first run after an upgrade re-reads every file.
 
 #### `check -o json` and `-o csv` list each strict violation once
 

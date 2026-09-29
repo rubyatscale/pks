@@ -29,7 +29,11 @@ impl EmptyCacheEntry {
         let file_name_digest = format!("{:x}", file_digest);
         let cache_file_path = cache_directory.join(&file_name_digest);
 
-        let file_contents_digest = file_content_digest(filepath)?;
+        let file_contents_digest = format!(
+            "{}-{}",
+            file_content_digest(filepath)?,
+            env!("CARGO_PKG_VERSION")
+        );
 
         Ok(EmptyCacheEntry {
             filepath: filepath.to_owned(),
