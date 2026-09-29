@@ -25,6 +25,25 @@ pub fn stripped_output(output: Vec<u8>) -> String {
     String::from_utf8_lossy(&strip_ansi_escapes::strip(output)).to_string()
 }
 
+fn sorted_stale_todos(
+    json_output: &serde_json::Value,
+) -> Vec<(&str, &str, &str)> {
+    let mut stale_todos: Vec<(&str, &str, &str)> = json_output["stale_todos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["file"].as_str().unwrap(),
+                t["constant_name"].as_str().unwrap(),
+                t["violation_type"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    stale_todos.sort();
+    stale_todos
+}
+
 #[test]
 fn test_check_with_privacy_dependency_error_template_overrides(
 ) -> Result<(), Box<dyn Error>> {
@@ -337,6 +356,158 @@ fn test_check_with_recorded_strict_mode_violation_when_file_is_deleted(
 }
 
 #[test]
+fn test_check_with_deleted_file_reports_its_recorded_violations_as_stale(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("uses_strict_mode");
+    fs::remove_file(fixture.path("packs/foo/app/services/foo.rb"))?;
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/foo/app/services/foo.rb")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(
+        sorted_stale_todos(&json_output),
+        vec![
+            ("packs/foo/app/services/foo.rb", "::Bar", "dependency"),
+            ("packs/foo/app/services/foo.rb", "::Bar", "privacy"),
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_directory_reports_recorded_violations_of_deleted_files_as_stale(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("uses_strict_mode");
+    fs::remove_file(fixture.path("packs/foo/app/services/foo.rb"))?;
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/foo")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(
+        sorted_stale_todos(&json_output),
+        vec![
+            ("packs/foo/app/services/foo.rb", "::Bar", "dependency"),
+            ("packs/foo/app/services/foo.rb", "::Bar", "privacy"),
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_dot_reports_recorded_violations_of_deleted_files_as_stale(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("uses_strict_mode");
+    fs::remove_file(fixture.path("packs/foo/app/services/foo.rb"))?;
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg(".")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(
+        sorted_stale_todos(&json_output),
+        vec![
+            ("packs/foo/app/services/foo.rb", "::Bar", "dependency"),
+            ("packs/foo/app/services/foo.rb", "::Bar", "privacy"),
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_other_paths_ignores_recorded_violations_of_deleted_files(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("uses_strict_mode");
+    fs::remove_file(fixture.path("packs/foo/app/services/foo.rb"))?;
+
+    for path in ["packs/bar", "packs/bar/app/services/bar.rb"] {
+        cargo_bin_cmd!("pks")
+            .arg("--project-root")
+            .arg(fixture.root())
+            .arg("check")
+            .arg(path)
+            .assert()
+            .code(0)
+            .stdout(
+                predicate::str::contains("There were stale violations found")
+                    .not(),
+            );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_check_with_absolute_directory_ignores_recorded_violations_of_existing_files(
+) -> Result<(), Box<dyn Error>> {
+    // Absolute directories aren't expanded into files, so this checks nothing.
+    // foo.rb is under the argument but still on disk, so its entries must not
+    // be reported as if it had been deleted.
+    let packs_foo =
+        fs::canonicalize("tests/fixtures/uses_strict_mode/packs/foo")?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg(packs_foo)
+        .assert()
+        .code(0)
+        .stdout(
+            predicate::str::contains("There were stale violations found").not(),
+        );
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_with_single_file_ignores_recorded_violations_in_other_files(
 ) -> Result<(), Box<dyn Error>> {
     // In `uses_strict_mode`, every recorded violation is in foo.rb, so a run
@@ -509,21 +680,8 @@ fn test_check_with_single_file_reports_stale_violations_in_bar_rb(
     validate_check_output_schema(&json_output);
 
     assert_eq!(json_output["summary"]["stale_todo_count"], 2);
-    let mut stale_todos: Vec<(&str, &str, &str)> = json_output["stale_todos"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|t| {
-            (
-                t["file"].as_str().unwrap(),
-                t["constant_name"].as_str().unwrap(),
-                t["violation_type"].as_str().unwrap(),
-            )
-        })
-        .collect();
-    stale_todos.sort();
     assert_eq!(
-        stale_todos,
+        sorted_stale_todos(&json_output),
         vec![
             ("packs/bar/app/services/bar.rb", "::Foo", "dependency"),
             ("packs/bar/app/services/bar.rb", "::Foo", "privacy"),
