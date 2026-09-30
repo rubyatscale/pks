@@ -409,6 +409,9 @@ fn test_check_with_directory_reports_recorded_violations_of_deleted_files_as_sta
         .arg("packs/foo")
         .assert()
         .code(1)
+        .stderr(predicate::str::contains(
+            "Warning: no included file matches `packs/foo`",
+        ))
         .get_output()
         .stdout
         .clone();
@@ -670,10 +673,31 @@ fn test_check_warns_only_about_paths_matching_no_included_file(
         .assert()
         .code(0)
         .stderr(predicate::str::contains(format!(
-            "Warning: no included file matches `{}`",
+            "Warning: `{}` was not checked. Pass it as `packs/foo` instead.",
             packs_foo.display()
         )))
         .stderr(predicate::str::contains("bar.rb").not());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_warns_about_absolute_project_root() -> Result<(), Box<dyn Error>>
+{
+    let root = fs::canonicalize("tests/fixtures/uses_strict_mode")?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg(&root)
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(format!(
+            "Warning: `{}` was not checked. Pass it as `.` instead.",
+            root.display()
+        )));
 
     common::teardown();
     Ok(())

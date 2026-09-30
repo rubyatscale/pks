@@ -319,27 +319,44 @@ fn warn_about_unmatched_path(configuration: &Configuration, file: &str) {
     let path = configuration.absolute_root.join(file);
     if !path.exists() {
         eprintln!("Warning: `{}` does not exist.", file);
-    } else if path.is_file() {
-        // Included files are listed under the canonical root with no `..`, so
-        // a symlinked or `..` spelling of one matches nothing.
-        let included = fs::canonicalize(&path)
-            .ok()
-            .filter(|c| configuration.included_files.contains(c));
-        if let Some(included) = included {
-            let relative = included
-                .strip_prefix(&configuration.absolute_root)
-                .unwrap_or(&included);
-            eprintln!(
-                "Warning: `{}` was not checked. Pass it as `{}` instead.",
-                file,
-                relative.display()
-            );
-        }
-    } else {
+    } else if let Some(relative) = included_spelling(configuration, &path) {
+        eprintln!(
+            "Warning: `{}` was not checked. Pass it as `{}` instead.",
+            file,
+            relative.display()
+        );
+    } else if !path.is_file() {
         eprintln!(
             "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
             file
         );
+    }
+}
+
+/// The root-relative path to pass instead of `path`, when `path` is an
+/// included file or a directory holding one, spelled in a way that matches
+/// nothing. Included files are listed under the canonical root with no `..`,
+/// and only relative directories are expanded, so a `..`, symlinked or
+/// absolute spelling misses them.
+fn included_spelling(
+    configuration: &Configuration,
+    path: &Path,
+) -> Option<PathBuf> {
+    let canonical = fs::canonicalize(path).ok()?;
+    let included = &configuration.included_files;
+    let holds_included = if path.is_file() {
+        included.contains(&canonical)
+    } else {
+        included.iter().any(|f| f.starts_with(&canonical))
+    };
+    if !holds_included {
+        return None;
+    }
+    let relative = canonical.strip_prefix(&configuration.absolute_root).ok()?;
+    if relative.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(relative.to_path_buf())
     }
 }
 
