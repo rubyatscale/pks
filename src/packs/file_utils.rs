@@ -109,7 +109,9 @@ pub(crate) fn convert_erb_to_ruby_without_sourcemaps(
 
     let extracted_contents: Vec<&str> = regex
         .captures_iter(&contents)
-        .filter(|capture| !capture[0].starts_with("<%#"))
+        .filter(|capture| {
+            !capture[0].starts_with("<%#") && !capture[0].starts_with("<%%")
+        })
         .map(|capture| capture.get(1).unwrap().as_str())
         .collect();
 

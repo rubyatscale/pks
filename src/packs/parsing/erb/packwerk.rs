@@ -328,6 +328,39 @@ mod tests {
     }
 
     #[test]
+    fn literal_tag_is_text_not_ruby() {
+        let contents: String = String::from(
+            "/
+<%= Foo %>
+<%%= Qux %>
+<%% if Quux %%>
+<%= Bar %>
+        ",
+        );
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![
+                UnresolvedReference {
+                    name: String::from("Foo"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                },
+                UnresolvedReference {
+                    name: String::from("Bar"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                }
+            ],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
+
+    #[test]
     fn hash_after_hyphen_or_space_is_code_not_comment() {
         let contents: String = String::from(
             "/

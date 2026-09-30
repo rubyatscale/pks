@@ -20,11 +20,18 @@ comment, such as `<%# encoding: iso-8859-1 %>`, unless it named UTF-8 or
 ASCII-8BIT. Those files are now checked like any other, so they may show new
 violations.
 
+#### `<%%` in ERB no longer hides references
+
+`<%%` writes a literal `<%`, but pks read the rest of the tag as Ruby, so a file
+using it lost some or all of its references. It's now treated as text, as Rails
+does. packwerk parses the literal as Ruby instead, so it fails on `<%%=` and can
+report constants from inside other literals.
+
 #### Upgrading pks invalidates cached results
 
 Cached results didn't record which version of pks produced them, so after an
 upgrade pks kept serving old results for files that hadn't changed, including
-results the ERB fix above corrects. Each entry now includes the pks version, so
+results the ERB fixes above correct. Each entry now includes the pks version, so
 the first run after an upgrade re-reads every file.
 
 #### `check -o json` and `-o csv` list each strict violation once
