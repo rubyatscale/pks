@@ -370,6 +370,10 @@ fn test_check_with_deleted_file_reports_its_recorded_violations_as_stale(
         .arg("packs/foo/app/services/foo.rb")
         .assert()
         .code(1)
+        .stderr(predicate::str::contains(
+            "Warning: `packs/foo/app/services/foo.rb` does not exist.",
+        ))
+        .stderr(predicate::str::contains("include and exclude globs").not())
         .get_output()
         .stdout
         .clone();
@@ -632,7 +636,7 @@ fn test_check_with_only_unincluded_files_ignores_recorded_violations(
 }
 
 #[test]
-fn test_check_warns_about_path_matching_no_included_file(
+fn test_check_warns_about_path_that_does_not_exist(
 ) -> Result<(), Box<dyn Error>> {
     cargo_bin_cmd!("pks")
         .arg("--project-root")
@@ -642,7 +646,7 @@ fn test_check_warns_about_path_matching_no_included_file(
         .assert()
         .code(0)
         .stderr(predicate::str::contains(
-            "Warning: no included file matches `packs/foo/app/services/typo.rb`",
+            "Warning: `packs/foo/app/services/typo.rb` does not exist.",
         ));
 
     common::teardown();
@@ -687,7 +691,7 @@ fn test_check_with_json_output_warns_on_stderr() -> Result<(), Box<dyn Error>> {
         .assert()
         .code(0)
         .stderr(predicate::str::contains(
-            "Warning: no included file matches `packs/foo/app/services/typo.rb`",
+            "Warning: `packs/foo/app/services/typo.rb` does not exist.",
         ))
         .get_output()
         .stdout

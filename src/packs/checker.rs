@@ -304,10 +304,14 @@ fn files_to_check(
     for file in files {
         let matched = configuration.intersect_files(vec![file.clone()]);
         if matched.is_empty() {
-            eprintln!(
-                "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
-                file
-            );
+            if configuration.absolute_root.join(file).exists() {
+                eprintln!(
+                    "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
+                    file
+                );
+            } else {
+                eprintln!("Warning: `{}` does not exist.", file);
+            }
         }
         absolute_paths.extend(matched);
     }
