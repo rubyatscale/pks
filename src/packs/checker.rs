@@ -26,6 +26,7 @@ use reference::Reference;
 use std::collections::HashMap;
 use std::{
     collections::HashSet,
+    fs,
     path::{Path, PathBuf},
 };
 use tracing::debug;
@@ -285,7 +286,7 @@ pub(crate) fn check_all(
 }
 
 /// Intersects each path argument with the included files on its own, so an
-/// argument that matches none of them can be named instead of silently
+/// argument that matches none of them can be reported instead of silently
 /// checking nothing. The union is what `intersect_files` returns for all of
 /// them at once.
 ///
@@ -304,18 +305,42 @@ fn files_to_check(
     for file in files {
         let matched = configuration.intersect_files(vec![file.clone()]);
         if matched.is_empty() {
-            if configuration.absolute_root.join(file).exists() {
-                eprintln!(
-                    "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
-                    file
-                );
-            } else {
-                eprintln!("Warning: `{}` does not exist.", file);
-            }
+            warn_about_unmatched_path(configuration, file);
         }
         absolute_paths.extend(matched);
     }
     absolute_paths
+}
+
+/// Stays silent for an existing file that simply isn't included (a README,
+/// `package.yml`, the Gemfile), so a hook passing every staged file doesn't
+/// warn on each of them.
+fn warn_about_unmatched_path(configuration: &Configuration, file: &str) {
+    let path = configuration.absolute_root.join(file);
+    if !path.exists() {
+        eprintln!("Warning: `{}` does not exist.", file);
+    } else if path.is_file() {
+        // Included files are listed under the canonical root with no `..`, so
+        // a symlinked or `..` spelling of one matches nothing.
+        let included = fs::canonicalize(&path)
+            .ok()
+            .filter(|c| configuration.included_files.contains(c));
+        if let Some(included) = included {
+            let relative = included
+                .strip_prefix(&configuration.absolute_root)
+                .unwrap_or(&included);
+            eprintln!(
+                "Warning: `{}` was not checked. Pass it as `{}` instead.",
+                file,
+                relative.display()
+            );
+        }
+    } else {
+        eprintln!(
+            "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
+            file
+        );
+    }
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {

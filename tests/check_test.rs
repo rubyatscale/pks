@@ -707,7 +707,7 @@ fn test_check_with_json_output_warns_on_stderr() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_check_contents_warns_about_path_matching_no_included_file(
+fn test_check_contents_does_not_warn_about_existing_file_that_is_not_included(
 ) -> Result<(), Box<dyn Error>> {
     // package.yml exists but is not in the include globs.
     cargo_bin_cmd!("pks")
@@ -718,8 +718,43 @@ fn test_check_contents_warns_about_path_matching_no_included_file(
         .write_stdin("enforce_dependencies: true\n")
         .assert()
         .code(0)
+        .stderr(predicate::str::is_empty());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_does_not_warn_about_existing_files_that_are_not_included(
+) -> Result<(), Box<dyn Error>> {
+    // What a hook passing every staged file sends alongside the Ruby files.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar/app/services/bar.rb")
+        .arg("packs/foo/package.yml")
+        .arg("packwerk.yml")
+        .assert()
+        .code(0)
+        .stderr(predicate::str::is_empty());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_warns_about_other_spelling_of_included_file(
+) -> Result<(), Box<dyn Error>> {
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar/../foo/app/services/foo.rb")
+        .assert()
+        .code(0)
         .stderr(predicate::str::contains(
-            "Warning: no included file matches `packs/foo/package.yml`",
+            "Warning: `packs/bar/../foo/app/services/foo.rb` was not checked. Pass it as `packs/foo/app/services/foo.rb` instead.",
         ));
 
     common::teardown();

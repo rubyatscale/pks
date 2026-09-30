@@ -25,10 +25,15 @@ given that file, a directory containing it, or `.`, as a full `pks check` does.
 #### `check` and `check-contents` warn about paths that match no included file
 
 A path argument that matched no included file was silently skipped, so a typo,
-an excluded file, a path containing `..`, or an absolute path through a symlink
-checked nothing without saying so. `check` and `check-contents` now print a
-warning on stderr naming each such argument. The exit code is unchanged, and so
-is stdout, so `-o json` and `-o csv` output still parses.
+a path containing `..`, an absolute directory, or an absolute path through a
+symlink checked nothing without saying so. `check` and `check-contents` now
+print a warning on stderr naming the argument: a missing path is reported as
+missing, a `..` or symlinked spelling of an included file gets the path to pass
+instead, and a directory with no included files gets a pointer to the include
+and exclude globs. An existing file that just isn't included, such as a README,
+`package.yml` or the Gemfile, is still skipped quietly, so passing every changed
+file doesn't warn about each of them. The exit code is unchanged, and so is
+stdout, so `-o json` and `-o csv` output still parses.
 
 ## 0.5.0
 
