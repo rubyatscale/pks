@@ -461,6 +461,48 @@ fn test_check_with_dot_reports_recorded_violations_of_deleted_files_as_stale(
 }
 
 #[test]
+fn test_check_with_dot_reports_recorded_violations_of_excluded_files_as_stale(
+) -> Result<(), Box<dyn Error>> {
+    // foo.rb is still on disk but no longer included, which a full run
+    // reports as stale too.
+    let fixture = common::Fixture::new("uses_strict_mode");
+    let packwerk_yml = fixture.path("packwerk.yml");
+    let config = fs::read_to_string(&packwerk_yml)?;
+    fs::write(
+        &packwerk_yml,
+        format!("{}\nexclude:\n- \"packs/foo/**/*\"\n", config),
+    )?;
+
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg(".")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    assert_eq!(
+        sorted_stale_todos(&json_output),
+        vec![
+            ("packs/foo/app/services/foo.rb", "::Bar", "dependency"),
+            ("packs/foo/app/services/foo.rb", "::Bar", "privacy"),
+        ]
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_check_with_other_paths_ignores_recorded_violations_of_deleted_files(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("uses_strict_mode");
@@ -484,11 +526,11 @@ fn test_check_with_other_paths_ignores_recorded_violations_of_deleted_files(
 }
 
 #[test]
-fn test_check_with_absolute_directory_ignores_recorded_violations_of_existing_files(
+fn test_check_with_absolute_directory_ignores_recorded_violations_of_included_files(
 ) -> Result<(), Box<dyn Error>> {
     // Absolute directories aren't expanded into files, so this checks nothing.
-    // foo.rb is under the argument but still on disk, so its entries must not
-    // be reported as if it had been deleted.
+    // foo.rb is under the argument but still an included file, so its entries
+    // must not be reported as stale.
     let packs_foo =
         fs::canonicalize("tests/fixtures/uses_strict_mode/packs/foo")?;
 

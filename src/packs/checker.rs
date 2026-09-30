@@ -196,6 +196,7 @@ impl<'a> CheckAllBuilder<'a> {
             .collect::<anyhow::Result<HashSet<&str>>>()?;
 
         let absolute_root = &self.configuration.absolute_root;
+        let included_files = &self.configuration.included_files;
         let supplied_paths = &self.found_violations.supplied_paths;
         let stale_violations = recorded_violations
             .par_iter()
@@ -205,6 +206,7 @@ impl<'a> CheckAllBuilder<'a> {
                     &found_violation_identifiers,
                     v_identifier,
                     absolute_root,
+                    included_files,
                     supplied_paths,
                 )
             })
@@ -217,6 +219,7 @@ impl<'a> CheckAllBuilder<'a> {
         found_violation_identifiers: &HashSet<&ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
         absolute_root: &Path,
+        included_files: &HashSet<PathBuf>,
         supplied_paths: &[PathBuf],
     ) -> bool {
         let file_was_checked =
@@ -225,9 +228,11 @@ impl<'a> CheckAllBuilder<'a> {
             !found_violation_identifiers.contains(todo_violation_identifier)
         } else if !supplied_paths.is_empty() {
             let path = absolute_root.join(&todo_violation_identifier.file);
-            // `Path::starts_with` compares whole components, so `packs/foo`
-            // does not cover `packs/foobar`.
-            supplied_paths.iter().any(|p| path.starts_with(p)) && !path.exists()
+            // Not being an included file is what makes an entry stale in a full
+            // run too. `Path::starts_with` compares whole components, so
+            // `packs/foo` does not cover `packs/foobar`.
+            supplied_paths.iter().any(|p| path.starts_with(p))
+                && !included_files.contains(&path)
         } else {
             true // The todo violation references a file that no longer exists
         }

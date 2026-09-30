@@ -18,9 +18,9 @@ When given paths, `pks check` treated a `package_todo.yml` entry for any file
 it had not checked as if that file had been deleted, and reported it as stale.
 So checking one file, as editor integrations do, failed whenever any other file
 had an entry. `check-contents` behaved the same way. A run given paths now only
-considers entries for files at or under those paths. An entry for a deleted
-file is still reported as stale when the run is given that file, a directory
-containing it, or `.`.
+considers entries for files at or under those paths. An entry for a file that
+was deleted or is no longer included is still reported as stale when the run is
+given that file, a directory containing it, or `.`, as a full `pks check` does.
 
 #### `check` and `check-contents` warn about paths that match no included file
 
