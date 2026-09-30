@@ -261,8 +261,7 @@ pub(crate) fn check_all(
     let checkers = get_checkers(configuration);
 
     debug!("Intersecting input files with configuration included files");
-    let absolute_paths: HashSet<PathBuf> =
-        configuration.intersect_files(files.clone());
+    let absolute_paths = files_to_check(configuration, &files);
 
     let violations: HashSet<Violation> =
         get_all_violations(configuration, &absolute_paths, &checkers)?;
@@ -278,6 +277,36 @@ pub(crate) fn check_all(
     let result = CheckAllBuilder::new(configuration, &found_violations).build();
     debug!("Finished building check-all result");
     result
+}
+
+/// Intersects each path argument with the included files on its own, so an
+/// argument that matches none of them can be named instead of silently
+/// checking nothing. The union is what `intersect_files` returns for all of
+/// them at once.
+///
+/// The warning goes to stderr and leaves the exit code alone: `-o json` and
+/// `-o csv` stay parseable, and editor plugins, which check one file on every
+/// open and save, don't treat it as a failure.
+fn files_to_check(
+    configuration: &Configuration,
+    files: &[String],
+) -> HashSet<PathBuf> {
+    if files.is_empty() {
+        return configuration.intersect_files(vec![]);
+    }
+
+    let mut absolute_paths = HashSet::new();
+    for file in files {
+        let matched = configuration.intersect_files(vec![file.clone()]);
+        if matched.is_empty() {
+            eprintln!(
+                "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
+                file
+            );
+        }
+        absolute_paths.extend(matched);
+    }
+    absolute_paths
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {

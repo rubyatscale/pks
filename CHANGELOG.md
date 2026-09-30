@@ -22,6 +22,14 @@ considers entries for files at or under those paths. An entry for a deleted
 file is still reported as stale when the run is given that file, a directory
 containing it, or `.`.
 
+#### `check` and `check-contents` warn about paths that match no included file
+
+A path argument that matched no included file was silently skipped, so a typo,
+an excluded file, a path containing `..`, or an absolute path through a symlink
+checked nothing without saying so. `check` and `check-contents` now print a
+warning on stderr naming each such argument. The exit code is unchanged, and so
+is stdout, so `-o json` and `-o csv` output still parses.
+
 ## 0.5.0
 
 ### Breaking Changes

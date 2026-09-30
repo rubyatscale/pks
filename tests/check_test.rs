@@ -590,6 +590,114 @@ fn test_check_with_only_unincluded_files_ignores_recorded_violations(
 }
 
 #[test]
+fn test_check_warns_about_path_matching_no_included_file(
+) -> Result<(), Box<dyn Error>> {
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/foo/app/services/typo.rb")
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "Warning: no included file matches `packs/foo/app/services/typo.rb`",
+        ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_warns_only_about_paths_matching_no_included_file(
+) -> Result<(), Box<dyn Error>> {
+    // Absolute directories aren't expanded into files, so this one matches
+    // nothing, while bar.rb is still checked.
+    let packs_foo =
+        fs::canonicalize("tests/fixtures/uses_strict_mode/packs/foo")?;
+
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar/app/services/bar.rb")
+        .arg(&packs_foo)
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(format!(
+            "Warning: no included file matches `{}`",
+            packs_foo.display()
+        )))
+        .stderr(predicate::str::contains("bar.rb").not());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_with_json_output_warns_on_stderr() -> Result<(), Box<dyn Error>> {
+    let output = cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("-o")
+        .arg("json")
+        .arg("packs/foo/app/services/typo.rb")
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "Warning: no included file matches `packs/foo/app/services/typo.rb`",
+        ))
+        .get_output()
+        .stdout
+        .clone();
+
+    let json_output: serde_json::Value =
+        serde_json::from_slice(&output).expect("Output should be valid JSON");
+
+    validate_check_output_schema(&json_output);
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_contents_warns_about_path_matching_no_included_file(
+) -> Result<(), Box<dyn Error>> {
+    // package.yml exists but is not in the include globs.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check-contents")
+        .arg("packs/foo/package.yml")
+        .write_stdin("enforce_dependencies: true\n")
+        .assert()
+        .code(0)
+        .stderr(predicate::str::contains(
+            "Warning: no included file matches `packs/foo/package.yml`",
+        ));
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
+fn test_check_does_not_warn_when_every_path_matches_an_included_file(
+) -> Result<(), Box<dyn Error>> {
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/uses_strict_mode")
+        .arg("check")
+        .arg("packs/bar/app/services/bar.rb")
+        .arg("packs/foo")
+        .assert()
+        .code(0)
+        .stderr(predicate::str::is_empty());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_with_single_file_reports_stale_violations_in_foo_rb(
 ) -> Result<(), Box<dyn Error>> {
     let output = cargo_bin_cmd!("pks")
