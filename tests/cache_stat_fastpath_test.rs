@@ -199,6 +199,136 @@ fn test_same_length_edit_invalidates_cache() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Mirrors the test above with the fields swapped: a matching mtime but a
+/// different length must also invalidate. The fast path compares the whole
+/// `SourceStat`, not `len` alone, and this is the case a mtime-only check would
+/// miss. Forged by restoring the exact original mtime after a length-changing
+/// edit, since a real edit would otherwise move the mtime on its own.
+#[test]
+fn test_matching_mtime_with_different_length_invalidates_cache(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_app()?;
+    let app = fixture.root();
+
+    let before = check(app)?;
+    assert!(before.contains("::Bar"));
+
+    let foo = fixture.path("packs/foo/app/services/foo.rb");
+    let original_mtime = fs::metadata(&foo)?.modified()?;
+
+    let contents = fs::read_to_string(&foo)?;
+    let edited = contents.replace("Bar", "SomethingLocal");
+    assert_ne!(
+        contents.len(),
+        edited.len(),
+        "expected the edit to change the file length"
+    );
+    fs::write(&foo, edited)?;
+    fs::File::options()
+        .write(true)
+        .open(&foo)?
+        .set_modified(original_mtime)?;
+
+    let after = check(app)?;
+    assert!(
+        !after.contains("::Bar"),
+        "a length-changing edit with a forged matching mtime was not \
+         detected: {after}"
+    );
+
+    Ok(())
+}
+
+/// Every other test in this file asserts correctness, which a regression that
+/// silently disabled the fast path (always falling back to the digest) would
+/// also satisfy -- the file would simply get reread and reparsed every time,
+/// correctly, and nothing here would notice. Prove the fast path is actually
+/// taken by forging the one scenario where reading the file would produce a
+/// *different*, and in this case wrong, answer: a same-length edit with the
+/// original mtime restored, which is the documented residual hole (what an
+/// `rsync -t` or `tar -p` can produce). If the fast path trusts the forged
+/// stat, the edit stays invisible; if it was skipped, the digest would catch it
+/// like `test_same_length_edit_invalidates_cache` does.
+#[test]
+fn test_fast_path_serves_the_entry_without_rereading_the_file(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_app()?;
+    let app = fixture.root();
+
+    let before = check_sorted(app)?;
+    assert!(before.iter().any(|l| l.contains("::Bar")));
+    assert!(
+        cache_entries(app)
+            .iter()
+            .any(|(_, e)| e.get("source_stat").is_some()),
+        "expected at least one entry to record a stat -- otherwise this test \
+         cannot distinguish the fast path from the digest fallback"
+    );
+
+    let foo = fixture.path("packs/foo/app/services/foo.rb");
+    let original_mtime = fs::metadata(&foo)?.modified()?;
+
+    let contents = fs::read_to_string(&foo)?;
+    let edited = contents.replace("Bar", "Baz");
+    assert_eq!(contents.len(), edited.len(), "edit changed the file length");
+    fs::write(&foo, edited)?;
+    fs::File::options()
+        .write(true)
+        .open(&foo)?
+        .set_modified(original_mtime)?;
+
+    let after = check_sorted(app)?;
+    assert_eq!(
+        before, after,
+        "the fast path reread the file instead of trusting the cache entry \
+         whose forged stat matched"
+    );
+
+    Ok(())
+}
+
+/// `--no-cache` is the documented escape hatch for the fast path's residual
+/// hole, so prove it actually closes it: forge the same mtime/length-preserving
+/// edit used above, confirm the plain (cached) run still serves the stale
+/// result, then confirm `--no-cache` reads the real content instead.
+#[test]
+fn test_no_cache_flag_bypasses_the_forged_fast_path(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_app()?;
+    let app = fixture.root();
+
+    let before = check_sorted(app)?;
+    assert!(before.iter().any(|l| l.contains("::Bar")));
+
+    let foo = fixture.path("packs/foo/app/services/foo.rb");
+    let original_mtime = fs::metadata(&foo)?.modified()?;
+
+    let contents = fs::read_to_string(&foo)?;
+    let edited = contents.replace("Bar", "Baz");
+    assert_eq!(contents.len(), edited.len(), "edit changed the file length");
+    fs::write(&foo, edited)?;
+    fs::File::options()
+        .write(true)
+        .open(&foo)?
+        .set_modified(original_mtime)?;
+
+    let (with_cache, _) = run(app, &["check"])?;
+    assert!(
+        with_cache.contains("::Bar"),
+        "sanity check: expected the forged stat to serve the stale entry, \
+         got: {with_cache}"
+    );
+
+    let (no_cache, _) = run(app, &["--no-cache", "check"])?;
+    assert!(
+        !no_cache.contains("::Bar"),
+        "--no-cache served a stale result instead of reading the file: \
+         {no_cache}"
+    );
+
+    Ok(())
+}
+
 /// Entries written by packwerk have no `source_stat`. Those must still be
 /// honored via the content digest rather than treated as a miss, and they get
 /// upgraded in place so later runs take the fast path.
@@ -395,6 +525,68 @@ fn test_stale_stat_with_matching_digest_is_repaired(
             "entry {} kept its stale length instead of being repaired",
             path.display()
         );
+    }
+
+    Ok(())
+}
+
+/// The in-place repair's write failure is tolerated, not propagated (see the
+/// test above), specifically so a persistent failure -- an unwritable cache
+/// dir, a full disk -- degrades to "re-hash every run" instead of breaking
+/// `check`. Forged by making the cache entry itself read-only, so the repair's
+/// `File::create` on that same path fails every time.
+#[test]
+#[cfg(unix)]
+fn test_repair_write_failure_does_not_break_check() -> Result<(), Box<dyn Error>>
+{
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = fixture_app()?;
+    let app = fixture.root();
+
+    let before = check_sorted(app)?;
+
+    // Same forged scenario as `test_stale_stat_with_matching_digest_is_repaired`
+    // -- a stat that no longer matches, with a digest that does -- except the
+    // entry is also made unwritable so the repair attempt itself fails.
+    let entries = cache_entries(app);
+    assert!(!entries.is_empty(), "expected a populated cache");
+    for (path, mut entry) in entries {
+        entry.as_object_mut().expect("json object").insert(
+            "source_stat".to_string(),
+            serde_json::json!({ "mtime_ns": 1, "len": 999_999 }),
+        );
+        fs::write(&path, serde_json::to_string(&entry)?)?;
+
+        let mut perms = fs::metadata(&path)?.permissions();
+        perms.set_mode(0o444);
+        fs::set_permissions(&path, perms)?;
+    }
+
+    let (output, code) = run(app, &["check"])?;
+    assert!(
+        !output.contains("panicked"),
+        "a repair-write failure panicked: {output}"
+    );
+    assert_eq!(
+        code,
+        Some(1),
+        "expected the usual violations-found exit despite the repair \
+         failure being unable to persist, got {code:?}: {output}"
+    );
+
+    let after = check_sorted(app)?;
+    assert_eq!(
+        before, after,
+        "a repair-write failure changed the reported result instead of \
+         just failing to persist"
+    );
+
+    // Restore write access so the fixture's temp dir can be cleaned up freely.
+    for (path, _) in cache_entries(app) {
+        let mut perms = fs::metadata(&path)?.permissions();
+        perms.set_mode(0o644);
+        fs::set_permissions(&path, perms)?;
     }
 
     Ok(())

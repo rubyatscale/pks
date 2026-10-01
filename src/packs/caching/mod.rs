@@ -63,6 +63,11 @@ pub enum CacheResult {
 /// and every other mtime-driven cache have the same hole, which is why they all
 /// document `touch` as a way to force a rebuild.
 ///
+/// A related but distinct hole: NFS's close-to-open consistency model means a
+/// client can serve a stat cached from before another client's very recent
+/// write, independent of granularity. Same cause category -- the stat lied --
+/// same escape hatches.
+///
 /// If it ever bites, `--no-cache` is the escape hatch, and `pks delete-cache`
 /// clears the state. A tool-side fix would mean giving up on stat-only
 /// validation and always hashing, which is precisely the cost this exists to
@@ -83,7 +88,7 @@ impl SourceStat {
     /// sub-second precision. Every such case falls back to the content digest,
     /// which is authoritative anyway, and which will produce a sensible error if
     /// the file is genuinely unreadable.
-    pub fn of(path: &Path) -> Option<SourceStat> {
+    pub fn from_path(path: &Path) -> Option<SourceStat> {
         let metadata = std::fs::metadata(path).ok()?;
         let since_epoch = metadata
             .modified()
@@ -130,17 +135,20 @@ impl CacheLookup {
         CacheLookup {
             filepath: filepath.to_owned(),
             cache_file_path: cache_directory.join(file_name_digest),
-            source_stat: SourceStat::of(filepath),
+            source_stat: SourceStat::from_path(filepath),
         }
     }
 
     /// Reads and hashes the file, producing the entry needed to write the cache.
     ///
-    /// Consuming the lookup is what makes the digest structural: an
-    /// `EmptyCacheEntry` can only be reached through here, so there is no state
-    /// in which [`cache::Cache::write`] could persist a placeholder digest --
-    /// which would produce an entry that never matches, silently making that file
-    /// uncacheable forever.
+    /// Consuming the lookup is what makes the digest structural for a real cache:
+    /// [`per_file_cache::PerFileCache::write`] only ever receives an
+    /// `EmptyCacheEntry` built here, so it can never be handed a placeholder
+    /// digest -- which would produce an entry that never matches, silently
+    /// making that file uncacheable forever. [`noop_cache::NoopCache`] is the one
+    /// exception: it builds a placeholder via `Default` instead, which is sound
+    /// only because its `write` ignores the argument entirely and never persists
+    /// anything.
     pub fn read_contents(self) -> anyhow::Result<EmptyCacheEntry> {
         let file_contents_digest = file_content_digest(&self.filepath)
             .context("Failed to create cache entry")?;
@@ -154,8 +162,10 @@ impl CacheLookup {
     }
 }
 
-/// A cache entry that has not been written yet. Always carries a digest -- see
-/// [`CacheLookup::read_contents`].
+/// A cache entry that has not been written yet. Carries a digest from
+/// [`CacheLookup::read_contents`] in every case that matters -- the exception
+/// is [`noop_cache::NoopCache`], which never reads a digest and never persists
+/// one either; see `read_contents` for why that is safe.
 #[derive(Debug, Default)]
 pub struct EmptyCacheEntry {
     #[allow(dead_code)]
