@@ -173,6 +173,11 @@ enum Command {
         about = "List the constants that packs sees and where it sees them (for debugging purposes)"
     )]
     ListDefinitions(ListDefinitionsArgs),
+
+    #[clap(
+        about = "Print the pack dependency graph as deterministic JSON (nodes + declared/ignored/todo edges)"
+    )]
+    Graph,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -334,5 +339,6 @@ pub fn run() -> anyhow::Result<()> {
             packs::lint_package_yml_files(&configuration)
         }
         Command::Create { name } => packs::create(&configuration, name),
+        Command::Graph => packs::dump_graph(&configuration),
     }
 }
