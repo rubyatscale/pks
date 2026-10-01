@@ -4,6 +4,36 @@
 
 ### Fixes
 
+#### ERB comments no longer hide or invent references
+
+pks read every line of a multi-line `<%# %>` comment after the first as Ruby
+code. Depending on what the comment said, references elsewhere in the file were
+missed, sometimes all of them, and constants named inside the comment were
+reported as references. ERB comments are now skipped, as packwerk does. This
+changes results in both directions: references that were missed are now
+reported, and a `package_todo.yml` entry recorded for a constant named inside a
+comment is no longer found, so `pks check` reports it as stale until you run
+`pks update`.
+
+pks also found nothing at all in an ERB file whose first tag was an encoding
+comment, such as `<%# encoding: iso-8859-1 %>`, unless it named UTF-8 or
+ASCII-8BIT. Those files are now checked like any other, so they may show new
+violations.
+
+#### `<%%` in ERB no longer hides references
+
+`<%%` writes a literal `<%`, but pks read the rest of the tag as Ruby, so a file
+using it lost some or all of its references. It's now treated as text, as Rails
+does. packwerk parses the literal as Ruby instead, so it fails on `<%%=` and can
+report constants from inside other literals.
+
+#### Upgrading pks invalidates cached results
+
+Cached results didn't record which version of pks produced them, so after an
+upgrade pks kept serving old results for files that hadn't changed, including
+results the ERB fixes above correct. Each entry now includes the pks version, so
+the first run after an upgrade re-reads every file.
+
 #### `check -o json` and `-o csv` list each strict violation once
 
 A strict violation that fails the run is both a new violation and a strict-mode
