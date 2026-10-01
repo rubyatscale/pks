@@ -311,9 +311,7 @@ mod tests {
         {
             let entry = CacheEntry {
                 file_contents_digest,
-                // `None` forces the digest comparison this test is about; the
-                // real stat would otherwise take the fast path and never reach
-                // it.
+                // None forces the digest comparison; a real stat would hit the fast path instead.
                 source_stat: None,
                 processed_file: processed_file.clone(),
             };
