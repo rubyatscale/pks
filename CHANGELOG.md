@@ -42,6 +42,27 @@ identical entries. JSON also counted both in `violation_count`, so it could
 exceed the number of distinct violations. Each violation now appears once, and
 `violation_count` counts distinct violations. Text output is unchanged.
 
+#### `check <paths>` and `check-contents` no longer flag other files' entries as stale
+
+When given paths, `pks check` treated a `package_todo.yml` entry for any file
+it had not checked as if that file had been deleted, and reported it as stale.
+So checking one file, as editor integrations do, failed whenever any other file
+had an entry. `check-contents` behaved the same way. A run given paths now only
+considers entries for files at or under those paths. An entry for a file that
+was deleted or is no longer included is still reported as stale when the run is
+given that file, a directory containing it, or `.`, as a full `pks check` does.
+
+#### `check` and `check-contents` warn about paths that match no included file
+
+A path argument that matched no included file was silently skipped, so a typo,
+a path containing `..`, an absolute directory, or an absolute path through a
+symlink checked nothing without saying so. `check` and `check-contents` now warn
+on stderr, naming the argument and, where there is one, the path to pass
+instead. An existing file that just isn't included, such as a README or the
+Gemfile, is still skipped quietly, so passing every changed file doesn't warn
+about each of them. The exit code and stdout are unchanged, so `-o json` and
+`-o csv` output still parses.
+
 ## 0.5.0
 
 ### Breaking Changes

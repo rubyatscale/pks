@@ -24,7 +24,11 @@ use rayon::prelude::IntoParallelRefIterator;
 use rayon::prelude::ParallelIterator;
 use reference::Reference;
 use std::collections::HashMap;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
 use tracing::debug;
 
 use super::bin_locater;
@@ -100,6 +104,10 @@ struct CheckAllBuilder<'a> {
 #[derive(Debug)]
 struct FoundViolations {
     absolute_paths: HashSet<PathBuf>,
+    // The paths the caller named, joined onto the root; empty for a full run.
+    // A named path can match no included file, or be a deleted one, so this
+    // cannot be derived from `absolute_paths`.
+    supplied_paths: Vec<PathBuf>,
     violations: HashSet<Violation>,
 }
 
@@ -188,6 +196,9 @@ impl<'a> CheckAllBuilder<'a> {
             })
             .collect::<anyhow::Result<HashSet<&str>>>()?;
 
+        let absolute_root = &self.configuration.absolute_root;
+        let included_files = &self.configuration.included_files;
+        let supplied_paths = &self.found_violations.supplied_paths;
         let stale_violations = recorded_violations
             .par_iter()
             .filter(|v_identifier| {
@@ -195,6 +206,9 @@ impl<'a> CheckAllBuilder<'a> {
                     &relative_files,
                     &found_violation_identifiers,
                     v_identifier,
+                    absolute_root,
+                    included_files,
+                    supplied_paths,
                 )
             })
             .collect::<Vec<&ViolationIdentifier>>();
@@ -205,11 +219,21 @@ impl<'a> CheckAllBuilder<'a> {
         relative_files: &HashSet<&str>,
         found_violation_identifiers: &HashSet<&ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
+        absolute_root: &Path,
+        included_files: &HashSet<PathBuf>,
+        supplied_paths: &[PathBuf],
     ) -> bool {
-        let violation_path_exists =
+        let file_was_checked =
             relative_files.contains(todo_violation_identifier.file.as_str());
-        if violation_path_exists {
+        if file_was_checked {
             !found_violation_identifiers.contains(todo_violation_identifier)
+        } else if !supplied_paths.is_empty() {
+            let path = absolute_root.join(&todo_violation_identifier.file);
+            // Not being an included file is what makes an entry stale in a full
+            // run too. `Path::starts_with` compares whole components, so
+            // `packs/foo` does not cover `packs/foobar`.
+            supplied_paths.iter().any(|p| path.starts_with(p))
+                && !included_files.contains(&path)
         } else {
             true // The todo violation references a file that no longer exists
         }
@@ -243,19 +267,97 @@ pub(crate) fn check_all(
     let checkers = get_checkers(configuration);
 
     debug!("Intersecting input files with configuration included files");
-    let absolute_paths: HashSet<PathBuf> =
-        configuration.intersect_files(files.clone());
+    let absolute_paths = files_to_check(configuration, &files);
 
     let violations: HashSet<Violation> =
         get_all_violations(configuration, &absolute_paths, &checkers)?;
     let found_violations = FoundViolations {
         absolute_paths,
+        supplied_paths: files
+            .iter()
+            .map(|f| configuration.absolute_root.join(f))
+            .collect(),
         violations,
     };
     debug!("Building check-all result (diffing against package_todo.yml)");
     let result = CheckAllBuilder::new(configuration, &found_violations).build();
     debug!("Finished building check-all result");
     result
+}
+
+/// Intersects each path argument with the included files on its own, so an
+/// argument that matches none of them can be reported instead of silently
+/// checking nothing. The union is what `intersect_files` returns for all of
+/// them at once.
+///
+/// The warning goes to stderr and leaves the exit code alone: `-o json` and
+/// `-o csv` stay parseable, and editor plugins, which check one file on every
+/// open and save, don't treat it as a failure.
+fn files_to_check(
+    configuration: &Configuration,
+    files: &[String],
+) -> HashSet<PathBuf> {
+    if files.is_empty() {
+        return configuration.intersect_files(vec![]);
+    }
+
+    let mut absolute_paths = HashSet::new();
+    for file in files {
+        let matched = configuration.intersect_files(vec![file.clone()]);
+        if matched.is_empty() {
+            warn_about_unmatched_path(configuration, file);
+        }
+        absolute_paths.extend(matched);
+    }
+    absolute_paths
+}
+
+/// Stays silent for an existing file that simply isn't included (a README,
+/// `package.yml`, the Gemfile), so a hook passing every staged file doesn't
+/// warn on each of them.
+fn warn_about_unmatched_path(configuration: &Configuration, file: &str) {
+    let path = configuration.absolute_root.join(file);
+    if !path.exists() {
+        eprintln!("Warning: `{}` does not exist.", file);
+    } else if let Some(relative) = included_spelling(configuration, &path) {
+        eprintln!(
+            "Warning: `{}` was not checked. Pass it as `{}` instead.",
+            file,
+            relative.display()
+        );
+    } else if !path.is_file() {
+        eprintln!(
+            "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
+            file
+        );
+    }
+}
+
+/// The root-relative path to pass instead of `path`, when `path` is an
+/// included file or a directory holding one, spelled in a way that matches
+/// nothing. Included files are listed under the canonical root with no `..`,
+/// and only relative directories are expanded, so a `..`, symlinked or
+/// absolute spelling misses them.
+fn included_spelling(
+    configuration: &Configuration,
+    path: &Path,
+) -> Option<PathBuf> {
+    let canonical = fs::canonicalize(path).ok()?;
+    let included = &configuration.included_files;
+    let holds_included = if path.is_file() {
+        included.contains(&canonical)
+    } else {
+        included.iter().any(|f| f.starts_with(&canonical))
+    };
+    if !holds_included {
+        return None;
+    }
+    let relative = canonical.strip_prefix(&configuration.absolute_root).ok()?;
+    if relative.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(relative.to_path_buf())
+    }
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {
