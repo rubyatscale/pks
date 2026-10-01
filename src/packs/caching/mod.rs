@@ -150,8 +150,15 @@ impl CacheLookup {
     /// only because its `write` ignores the argument entirely and never persists
     /// anything.
     pub fn read_contents(self) -> anyhow::Result<EmptyCacheEntry> {
-        let file_contents_digest = file_content_digest(&self.filepath)
-            .context("Failed to create cache entry")?;
+        // Suffixed with the pks version so an upgrade that changes parsing
+        // behavior (e.g. the ERB comment fix) invalidates every entry, not just
+        // the files that actually changed.
+        let file_contents_digest = format!(
+            "{}-{}",
+            file_content_digest(&self.filepath)
+                .context("Failed to create cache entry")?,
+            env!("CARGO_PKG_VERSION")
+        );
 
         Ok(EmptyCacheEntry {
             file_contents_digest,

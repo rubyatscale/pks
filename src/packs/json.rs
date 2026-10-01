@@ -3,7 +3,6 @@
 //! Serializes check results (violations, stale TODOs, and summary) to JSON.
 //! See `schema/check-output.json` for the JSON Schema specification.
 
-use itertools::chain;
 use serde::Serialize;
 
 use super::checker::{
@@ -53,7 +52,7 @@ struct JsonSummary {
 /// Build message from violation using template expansion.
 /// For JSON, reference_location is cleared (location is in separate fields).
 fn build_message(v: &Violation, config: &Configuration) -> String {
-    if v.identifier.strict {
+    if v.strict {
         build_strict_violation_message(&v.identifier)
     } else {
         let checker_config =
@@ -71,10 +70,9 @@ pub fn write_json<W: std::io::Write>(
     config: &Configuration,
     writer: W,
 ) -> anyhow::Result<()> {
-    let all_violations = chain!(
-        &result.reportable_violations,
-        &result.strict_mode_violations
-    );
+    let all_violations = result
+        .reportable_violations
+        .union(&result.strict_mode_violations);
 
     // JSON outputs raw structured data - consumers can format as needed.
     // Location is provided as separate file/line/column fields.
@@ -87,7 +85,7 @@ pub fn write_json<W: std::io::Write>(
             constant_name: &v.identifier.constant_name,
             referencing_pack_name: &v.identifier.referencing_pack_name,
             defining_pack_name: &v.identifier.defining_pack_name,
-            strict: v.identifier.strict,
+            strict: v.strict,
             message: build_message(v, config),
         })
         .collect();

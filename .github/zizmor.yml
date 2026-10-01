@@ -19,15 +19,25 @@ rules:
       - release.yml
   template-injection:
     ignore:
-      # dist interpolates `github.ref_name`, `needs.plan.outputs.tag*` and its
-      # `matrix.*` build parameters straight into run blocks. The tag-derived
-      # values only expand on `push:` of a tag, which requires push access, and
-      # expand to '' on pull_request. The matrix values come from dist's own
-      # plan output, not from user input.
+      # dist interpolates the `tag` dispatch input, `needs.plan.outputs.tag*` and
+      # its `matrix.*` build parameters straight into run blocks. The
+      # tag-derived values come from a workflow_dispatch, which requires write
+      # access, and expand to '' on pull_request. The matrix values come from
+      # dist's own plan output, not from user input.
       - release.yml
   unpinned-images:
     ignore:
       # `container: ${{ matrix.container && matrix.container.image || null }}`.
       # This repo configures no custom container runners, so matrix.container is
       # always null and no image is ever pulled.
+      - release.yml
+  secrets-inherit:
+    ignore:
+      # dist calls every custom job (`post-announce-jobs` in dist-workspace.toml)
+      # with `secrets: inherit`. The only one is publish-dotslash.yml in this
+      # repo, which uses nothing but GITHUB_TOKEN.
+      - release.yml
+  self-repository:
+    ignore:
+      # dist calls custom jobs as `./.github/workflows/<name>.yml`.
       - release.yml

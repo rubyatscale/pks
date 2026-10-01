@@ -33,26 +33,31 @@ use super::reference_extractor::get_all_references;
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct ViolationIdentifier {
     pub violation_type: CheckerType,
-    pub strict: bool,
     pub file: String,
     pub constant_name: String,
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
+
 /// A violation combines an identifier with display metadata.
 ///
 /// `source_location` is intentionally separate from `ViolationIdentifier` because:
-/// - The identifier defines "sameness" for deduplication and comparison with
-///   recorded violations in `package_todo.yml`, which doesn't store line/column
-/// - Multiple references to the same constant in the same file are considered
-///   one violation, even if they occur at different lines
+/// - The identifier defines "sameness" for comparison with recorded violations
+///   in `package_todo.yml`, which doesn't store line/column
+/// - Violations at different lines stay distinct, but those of the same type on
+///   the same constant in the same file share an identifier, so one recorded
+///   entry covers them all
 /// - Keeping line/column out of the identity makes violations stable across
 ///   minor code movements that shift line numbers
+///
+/// `strict` is kept out of the identifier too: it says how to treat the
+/// violation, not which violation it is, and `package_todo.yml` cannot record it.
 ///
 /// Violations store only data - template expansion happens in formatters.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
     pub identifier: ViolationIdentifier,
+    pub strict: bool,
     pub source_location: SourceLocation,
     // Additional data for template expansion:
     pub referencing_pack_relative_yml: String,
@@ -124,7 +129,7 @@ impl<'a> CheckAllBuilder<'a> {
                 .cloned()
                 .collect(),
             strict_mode_violations: self
-                .build_strict_mode_violations()
+                .build_strict_mode_violations(recorded_violations)
                 .into_iter()
                 .collect(),
         })
@@ -210,11 +215,22 @@ impl<'a> CheckAllBuilder<'a> {
         }
     }
 
-    fn build_strict_mode_violations(&self) -> Vec<Violation> {
+    /// Strict mode reports violations that are not already recorded in a
+    /// `package_todo.yml`, matching packwerk's `unlisted_strict_mode_violations`
+    /// (Shopify/packwerk#368). Turning strict on therefore blocks new violations
+    /// without also requiring every recorded one to be fixed first.
+    fn build_strict_mode_violations(
+        &self,
+        recorded_violations: &HashSet<ViolationIdentifier>,
+    ) -> Vec<Violation> {
         self.found_violations
             .violations
             .iter()
-            .filter(|v| v.identifier.strict)
+            .filter(|v| v.strict)
+            .filter(|v| {
+                self.configuration.ignore_recorded_violations
+                    || !recorded_violations.contains(&v.identifier)
+            })
             .cloned()
             .collect()
     }
@@ -305,22 +321,35 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         &checkers,
     )?;
 
-    let strict_violations = &violations
+    let recorded_violations = &configuration.pack_set.all_violations;
+
+    // Only *unlisted* strict violations make `check` fail, so only those are
+    // worth reporting here. Reporting recorded ones too claimed `check` would
+    // fail when it succeeds. Same filter as `build_strict_mode_violations`, and
+    // as packwerk's `unlisted_strict_mode_violations`.
+    let unlisted_strict_violations = &violations
         .iter()
-        .filter(|v| v.identifier.strict)
+        .filter(|v| v.strict)
+        .filter(|v| !recorded_violations.contains(&v.identifier))
         .collect::<Vec<&Violation>>();
-    if !strict_violations.is_empty() {
-        for violation in strict_violations {
+    if !unlisted_strict_violations.is_empty() {
+        for violation in unlisted_strict_violations {
             let strict_message =
                 build_strict_violation_message(&violation.identifier);
             println!("{}", strict_message);
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            strict_violations.len()
+            unlisted_strict_violations.len()
         );
+        // TODO: packwerk's `update-todo` exits non-zero here; `update` returns
+        // Ok and prints a success line. Pre-existing, separate breaking change.
     }
-    package_todo::write_violations_to_disk(configuration, violations);
+    package_todo::write_violations_to_disk(
+        configuration,
+        violations,
+        recorded_violations,
+    );
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())

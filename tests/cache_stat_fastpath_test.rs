@@ -546,9 +546,6 @@ fn test_repair_write_failure_does_not_break_check() -> Result<(), Box<dyn Error>
 
     let before = check_sorted(app)?;
 
-    // Same forged scenario as `test_stale_stat_with_matching_digest_is_repaired`
-    // -- a stat that no longer matches, with a digest that does -- except the
-    // entry is also made unwritable so the repair attempt itself fails.
     let entries = cache_entries(app);
     assert!(!entries.is_empty(), "expected a populated cache");
     for (path, mut entry) in entries {
