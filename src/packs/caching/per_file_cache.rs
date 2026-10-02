@@ -13,6 +13,7 @@ use super::CacheLookup;
 use super::CacheResult;
 use super::EmptyCacheEntry;
 use super::SourceStat;
+use super::DIGEST_VERSION_SUFFIX;
 
 pub struct PerFileCache {
     pub cache_dir: PathBuf,
@@ -30,7 +31,13 @@ impl Cache for PerFileCache {
         };
 
         // Fast path: the file has the same mtime and length as when we cached
-        // it, so it cannot have changed in any way we care about.
+        // it, so the file itself has not changed. That alone does not make the
+        // entry current.
+        //
+        // The version check stands in for the digest comparison this path
+        // skips. Without it, an entry written by another version of pks would
+        // be served whenever its file is untouched, and an upgrade that changes
+        // parsing would keep the old results.
         //
         // `is_some()` is not redundant with the equality check and must not be
         // folded into it. Both sides are `None` whenever no usable stat exists --
@@ -41,13 +48,17 @@ impl Cache for PerFileCache {
         // to protect. Covered by `test_whole_second_mtime_is_not_trusted`.
         if cache_entry.source_stat.is_some()
             && cache_entry.source_stat == lookup.source_stat
+            && cache_entry
+                .file_contents_digest
+                .ends_with(DIGEST_VERSION_SUFFIX)
         {
             return Ok(CacheResult::Processed(cache_entry.processed_file));
         }
 
         // Slow path: no stat recorded (entry predates this feature, or was
-        // written by packwerk), or the stat moved. The content digest is still
-        // the authority, so fall back to it.
+        // written by packwerk), the stat moved, or the entry was written by
+        // another version of pks. The content digest is still the authority,
+        // so fall back to it.
         let empty_cache_entry = lookup.read_contents()?;
         if cache_entry.file_contents_digest
             != empty_cache_entry.file_contents_digest
@@ -304,26 +315,34 @@ mod tests {
         assert!(matches!(cache.get(&path)?, CacheResult::Processed(_)));
 
         // The bare content digest is what entries held before they recorded
-        // the pks version.
+        // the pks version. No stat forces the digest comparison, and the
+        // file's own stat takes the fast path; both must miss.
+        assert!(
+            empty_cache_entry.source_stat.is_some(),
+            "expected the file to have a usable stat, or this test cannot \
+             reach the fast path"
+        );
         let content_digest = file_content_digest(&path)?;
-        for file_contents_digest in
-            [content_digest.clone(), format!("{content_digest}-0.0.0")]
-        {
-            let entry = CacheEntry {
-                file_contents_digest,
-                // None forces the digest comparison; a real stat would hit the fast path instead.
-                source_stat: None,
-                processed_file: processed_file.clone(),
-            };
-            fs::write(
-                &empty_cache_entry.cache_file_path,
-                serde_json::to_string(&entry)?,
-            )?;
-            assert!(
-                matches!(cache.get(&path)?, CacheResult::Miss(_)),
-                "served an entry with digest {}",
-                entry.file_contents_digest
-            );
+        for source_stat in [None, empty_cache_entry.source_stat] {
+            for file_contents_digest in
+                [content_digest.clone(), format!("{content_digest}-0.0.0")]
+            {
+                let entry = CacheEntry {
+                    file_contents_digest,
+                    source_stat,
+                    processed_file: processed_file.clone(),
+                };
+                fs::write(
+                    &empty_cache_entry.cache_file_path,
+                    serde_json::to_string(&entry)?,
+                )?;
+                assert!(
+                    matches!(cache.get(&path)?, CacheResult::Miss(_)),
+                    "served an entry with digest {} and stat {:?}",
+                    entry.file_contents_digest,
+                    entry.source_stat
+                );
+            }
         }
 
         Ok(())
