@@ -452,7 +452,7 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         configuration,
         violations,
         recorded_violations,
-    );
+    )?;
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())
