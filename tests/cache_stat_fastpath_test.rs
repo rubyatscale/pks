@@ -367,6 +367,50 @@ fn test_entry_without_stat_is_still_valid() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// After an upgrade that changes parsing, files that haven't changed must not
+/// keep their old results. Simulated by rewriting every entry as if another
+/// version of pks had written it, with its references removed, while keeping
+/// the stat that still matches the file. If the fast path trusted the stat
+/// alone, the violations would disappear.
+#[test]
+fn test_entry_from_another_pks_version_is_not_served_on_the_fast_path(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_app()?;
+    let app = fixture.root();
+
+    let before = check_sorted(app)?;
+    assert!(before.iter().any(|l| l.contains("::Bar")));
+
+    let entries = cache_entries(app);
+    assert!(
+        entries.iter().any(|(_, e)| e.get("source_stat").is_some()),
+        "expected at least one entry to record a stat, or this test cannot \
+         reach the fast path"
+    );
+
+    for (path, mut entry) in entries {
+        let digest = entry["file_contents_digest"]
+            .as_str()
+            .expect("digest is a string");
+        let (content_digest, _) = digest
+            .rsplit_once('-')
+            .expect("digest has a version suffix");
+        entry["file_contents_digest"] =
+            serde_json::json!(format!("{content_digest}-0.0.0"));
+        entry["processed_file"]["unresolved_references"] =
+            serde_json::json!([]);
+        fs::write(&path, serde_json::to_string(&entry)?)?;
+    }
+
+    assert_eq!(
+        before,
+        check_sorted(app)?,
+        "served a cache entry written by another version of pks"
+    );
+
+    Ok(())
+}
+
 /// A filesystem that reports whole-second mtimes cannot tell us about an edit
 /// made within the same second, so the stat must not be recorded at all and the
 /// digest must carry the entry instead.
