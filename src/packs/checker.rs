@@ -11,9 +11,8 @@ mod visibility;
 
 use crate::packs::checker_configuration::CheckerType;
 // Internal imports
-use crate::packs::pack::write_pack_to_disk;
 use crate::packs::pack::Pack;
-use crate::packs::pack_list;
+use crate::packs::pack_list::{self, PackList};
 use crate::packs::package_todo;
 use crate::packs::Configuration;
 use crate::packs::SourceLocation;
@@ -463,7 +462,11 @@ pub(crate) fn remove_unnecessary_dependencies(
 ) -> anyhow::Result<()> {
     let unnecessary_dependencies = get_unnecessary_dependencies(configuration)?;
     for (pack, dependency_names) in unnecessary_dependencies.iter() {
-        remove_reference_to_dependency(pack, dependency_names)?;
+        pack_list::remove_from_package_yml(
+            pack,
+            &[PackList::Dependencies],
+            dependency_names,
+        )?;
     }
     Ok(())
 }
@@ -603,41 +606,5 @@ fn get_checkers(
     ]
 }
 
-fn remove_reference_to_dependency(
-    pack: &Pack,
-    dependency_names: &[String],
-) -> anyhow::Result<()> {
-    let contents = std::fs::read_to_string(&pack.yml).map_err(|e| {
-        anyhow::Error::new(e)
-            .context(format!("Failed to read pack {:?}", pack.yml))
-    })?;
-
-    match pack_list::remove_dependencies(&contents, dependency_names) {
-        Some(updated) if updated == contents => {}
-        Some(updated) => std::fs::write(&pack.yml, updated).map_err(|e| {
-            anyhow::Error::new(e)
-                .context(format!("Failed to write pack to disk {:?}", pack.yml))
-        })?,
-        None => {
-            eprintln!(
-                "Warning: could not edit the dependencies list in {} in \
-                 place, so the file was rewritten and its comments were \
-                 not preserved.",
-                pack.yml.display()
-            );
-            let without_dependency = pack
-                .dependencies
-                .iter()
-                .filter(|dependency| !dependency_names.contains(dependency));
-            let updated_pack = Pack {
-                dependencies: without_dependency.cloned().collect(),
-                ..pack.clone()
-            };
-            write_pack_to_disk(&updated_pack)?;
-        }
-    }
-
-    Ok(())
-}
 // Note: Display impl was removed from CheckAllResult. Use write_text() directly with Configuration.
 // Tests for text formatting are in text.rs

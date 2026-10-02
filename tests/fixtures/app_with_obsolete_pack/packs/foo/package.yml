@@ -1,0 +1,6 @@
+# Foo's package.
+enforce_dependencies: true
+dependencies:
+# Remove once Old is gone.
+- packs/old
+- packs/baz

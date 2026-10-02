@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Features
+
+#### `pks rm` removes a pack
+
+`pks rm packs/foo` deletes the pack's directory, after removing every mention of
+it from other packs: their `dependencies`, `ignored_dependencies` and
+`visible_to` lists, and the violations their `package_todo.yml` files record on
+it. A todo file with nothing left in it is deleted. The lists are edited in
+place, so the rest of each `package.yml`, comments and key order included, is
+unchanged.
+
+By default it won't remove a pack that other packs may still use. It first
+looks for references from other packs to the pack's constants and lists any it
+finds, because once the pack is gone `pks check` can no longer see them. It also
+won't remove a pack with Ruby files under `lib/` that are outside the autoload
+roots, since pks can't see references to the constants those files define. The
+experimental parser reads definitions from every file, so with
+`--experimental-parser` that check is skipped. `--force` removes the pack anyway
+and leaves any remaining references for you to fix.
+
+The root pack can't be removed. Neither can a pack with other packs inside it,
+until those are removed.
+
 ### Fixes
 
 #### ERB comments no longer hide or invent references
