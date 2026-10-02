@@ -306,6 +306,41 @@ end
     }
 
     #[test]
+    fn polymorphic_belongs_to_association() {
+        let contents: String = String::from(
+            "\
+class Foo
+  belongs_to :event, polymorphic: true
+end
+            ",
+        );
+
+        let configuration = Configuration::default();
+
+        let absolute_path = PathBuf::from("path/to/file.rb");
+        let unresolved_references = vec![];
+
+        let definitions = vec![ParsedDefinition {
+            fully_qualified_name: String::from("::Foo"),
+            location: Range {
+                start_row: 1,
+                start_col: 6,
+                end_row: 1,
+                end_col: 10,
+            },
+        }];
+
+        let actual =
+            process_from_contents(contents, &absolute_path, &configuration);
+        let expected = ProcessedFile {
+            absolute_path,
+            unresolved_references,
+            definitions,
+        };
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(
             "\
