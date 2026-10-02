@@ -86,6 +86,26 @@ Gemfile, is still skipped quietly, so passing every changed file doesn't warn
 about each of them. The exit code and stdout are unchanged, so `-o json` and
 `-o csv` output still parses.
 
+#### pks no longer infers a class from a polymorphic association
+
+pks read `belongs_to :event, polymorphic: true` as a reference to `Event`, so it
+could report a privacy or dependency violation when another pack defined
+`Event`. Rails reads a polymorphic association's class from a type column
+(`event_type` by default) at runtime, so pks no longer reports a reference for
+an association declared `polymorphic: true`. That includes one that sets
+`class_name:`, which Rails 8.1 rejects there. Earlier versions use it only to
+load the class for `counter_cache:`, which pks doesn't count as a reference.
+
+The inherited_resources gem's `belongs_to` does load the class, so a
+polymorphic `belongs_to` is still a reference in a class whose name ends in
+`Controller`, or outside any class or module, as in an ActiveAdmin `register`
+block.
+
+A `package_todo.yml` entry recorded for an association pks now skips is no
+longer found, so `pks check` reports it as stale until you run `pks update`. For
+the same reason, `check-unused-dependencies` may now report a dependency that
+only such an association used. packwerk still reports these references.
+
 ## 0.5.0
 
 ### Breaking Changes

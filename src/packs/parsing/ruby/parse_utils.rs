@@ -120,10 +120,22 @@ pub fn get_reference_from_active_record_association(
 
     if is_association {
         let first_arg: Option<&Node> = node.args.first();
+        let inherited_resources =
+            may_be_inherited_resources(current_namespaces);
 
         let mut name: Option<String> = None;
         for node in node.args.iter() {
             if let Node::Kwargs(kwargs) = node {
+                // Rails reads a polymorphic association's class from a type
+                // column at runtime, so the declaration names no class, even
+                // with `class_name:`. Rails 8.1 rejects that option here, and
+                // before 8.1 it was used only to load the class for
+                // `counter_cache:`. With `counter_cache:`, 8.1 still loads the
+                // class named after the association. pks counts neither load
+                // as a reference.
+                if is_polymorphic(kwargs) && !inherited_resources {
+                    return None;
+                }
                 if let Some(found) = extract_class_name_from_kwargs(kwargs) {
                     name = Some(found);
                 }
@@ -178,6 +190,30 @@ fn extract_class_name_from_kwargs(kwargs: &nodes::Kwargs) -> Option<String> {
     }
 
     None
+}
+
+fn is_polymorphic(kwargs: &nodes::Kwargs) -> bool {
+    for pair_node in kwargs.pairs.iter() {
+        if let Node::Pair(pair) = pair_node {
+            if let (Node::Sym(k), Node::True(_)) = (&*pair.key, &*pair.value) {
+                if k.name.to_string_lossy() == "polymorphic" {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// InheritedResources' `belongs_to` loads the class even when polymorphic. It
+/// runs in a controller, or at the top level of an ActiveAdmin `register` or
+/// `controller do` block, which passes its options through. An Active Record
+/// model declares its associations inside its class.
+fn may_be_inherited_resources(current_namespaces: &[String]) -> bool {
+    current_namespaces
+        .last()
+        .is_none_or(|namespace| namespace.ends_with("Controller"))
 }
 
 pub fn get_constant_assignment_definition(

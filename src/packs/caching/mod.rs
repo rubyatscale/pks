@@ -113,6 +113,11 @@ impl SourceStat {
     }
 }
 
+/// Appended to every content digest so a parsing-behavior upgrade invalidates
+/// every entry, not just the files that actually changed. The stat fast path
+/// checks for it too, since it never compares the digest itself.
+pub const DIGEST_VERSION_SUFFIX: &str = concat!("-", env!("CARGO_PKG_VERSION"));
+
 /// Everything about a source file that can be known without reading it: where
 /// its cache entry lives, and the stat used to check that entry against the file.
 ///
@@ -150,13 +155,11 @@ impl CacheLookup {
     /// only because its `write` ignores the argument entirely and never persists
     /// anything.
     pub fn read_contents(self) -> anyhow::Result<EmptyCacheEntry> {
-        // Suffixed with the pks version so a parsing-behavior upgrade
-        // invalidates every entry, not just the files that actually changed.
         let file_contents_digest = format!(
-            "{}-{}",
+            "{}{}",
             file_content_digest(&self.filepath)
                 .context("Failed to create cache entry")?,
-            env!("CARGO_PKG_VERSION")
+            DIGEST_VERSION_SUFFIX
         );
 
         Ok(EmptyCacheEntry {

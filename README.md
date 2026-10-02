@@ -92,9 +92,10 @@ Directions:
 - extensible plugin system
 
 # Behavioral differences
-There are still some known behavioral differences between `pks` and `packwerk`. If you find any, please file an issue!
+There are some known behavioral differences between `pks` and `packwerk`. Some are deliberate. If you find one that isn't listed, please file an issue!
 - `package_paths` must not end in a slash, e.g. `pks/*/` is not supported, but `pks/*` is.
 - A `**` in `package_paths` is supported, but is not a substitute for a single `*`, e.g. `pks/**` is supported and will match `pks/*/*/package.yml`, but will not match `pks/*/package.yml`. `pks/*` must be used to match that.
+- An association declared `polymorphic: true`, e.g. `belongs_to :event, polymorphic: true`, is not a reference to `Event`, since Rails reads the class from a type column (`event_type` by default) at runtime. packwerk reports it as one. pks still reports it in a class whose name ends in `Controller`, or outside any class or module, as in an ActiveAdmin `register` block, because the [inherited_resources](https://github.com/activeadmin/inherited_resources) gem's `belongs_to` loads the class there.
 
 ## Gitignore Support (pks-specific feature)
 `pks` automatically respects `.gitignore` files when analyzing your codebase. This means:
