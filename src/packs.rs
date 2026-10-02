@@ -16,8 +16,10 @@ pub(crate) mod ignored;
 pub(crate) mod json;
 pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
+pub(crate) mod pack_list;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod remover;
 pub(crate) mod template;
 pub(crate) mod text;
 pub mod walk_directory;
@@ -73,6 +75,14 @@ pub fn create(
         }
     }
     Ok(())
+}
+
+pub fn remove(
+    configuration: &Configuration,
+    name: String,
+    force: bool,
+) -> anyhow::Result<()> {
+    remover::remove(configuration, &name, force)
 }
 
 /// Determine whether to use colors based on the color choice

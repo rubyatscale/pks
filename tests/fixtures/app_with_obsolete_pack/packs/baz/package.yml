@@ -1,0 +1,5 @@
+enforce_visibility: true
+ignored_dependencies:
+- packs/old
+visible_to:
+- packs/old

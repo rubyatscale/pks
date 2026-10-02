@@ -84,6 +84,18 @@ enum Command {
     #[clap(about = "Create a new pack")]
     Create { name: String },
 
+    #[clap(
+        about = "Delete a pack and remove references to it from other packs"
+    )]
+    Rm {
+        /// The pack to delete
+        pack: String,
+
+        /// Delete the pack even if other packs may still use its constants
+        #[arg(short, long)]
+        force: bool,
+    },
+
     #[clap(about = "Look for violations in the codebase")]
     Check {
         /// Ignore recorded violations when reporting violations
@@ -334,5 +346,8 @@ pub fn run() -> anyhow::Result<()> {
             packs::lint_package_yml_files(&configuration)
         }
         Command::Create { name } => packs::create(&configuration, name),
+        Command::Rm { pack, force } => {
+            packs::remove(&configuration, pack, force)
+        }
     }
 }
