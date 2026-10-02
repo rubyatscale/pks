@@ -3,6 +3,7 @@ mod dependency;
 pub(crate) mod layer;
 
 mod common_test;
+mod dependency_removal;
 mod folder_privacy;
 pub(crate) mod pack_checker;
 mod privacy;
@@ -606,15 +607,36 @@ fn remove_reference_to_dependency(
     pack: &Pack,
     dependency_names: &[String],
 ) -> anyhow::Result<()> {
-    let without_dependency = pack
-        .dependencies
-        .iter()
-        .filter(|dependency| !dependency_names.contains(dependency));
-    let updated_pack = Pack {
-        dependencies: without_dependency.cloned().collect(),
-        ..pack.clone()
-    };
-    write_pack_to_disk(&updated_pack)?;
+    let contents = std::fs::read_to_string(&pack.yml).map_err(|e| {
+        anyhow::Error::new(e)
+            .context(format!("Failed to read pack {:?}", pack.yml))
+    })?;
+
+    match dependency_removal::remove_dependencies(&contents, dependency_names) {
+        Some(updated) if updated == contents => {}
+        Some(updated) => std::fs::write(&pack.yml, updated).map_err(|e| {
+            anyhow::Error::new(e)
+                .context(format!("Failed to write pack to disk {:?}", pack.yml))
+        })?,
+        None => {
+            eprintln!(
+                "Warning: could not edit the dependencies list in {} in \
+                 place, so the file was rewritten and its comments were \
+                 not preserved.",
+                pack.yml.display()
+            );
+            let without_dependency = pack
+                .dependencies
+                .iter()
+                .filter(|dependency| !dependency_names.contains(dependency));
+            let updated_pack = Pack {
+                dependencies: without_dependency.cloned().collect(),
+                ..pack.clone()
+            };
+            write_pack_to_disk(&updated_pack)?;
+        }
+    }
+
     Ok(())
 }
 // Note: Display impl was removed from CheckAllResult. Use write_text() directly with Configuration.
