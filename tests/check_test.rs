@@ -979,6 +979,24 @@ fn test_check_with_relationship_violations() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_check_ignores_polymorphic_association() -> Result<(), Box<dyn Error>> {
+    // `:event` matches the private `::Event` in packs/baz, but a polymorphic
+    // association names no class. An empty stderr means the path matched.
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg("tests/fixtures/app_with_rails_relationships")
+        .arg("check")
+        .arg("packs/bar/app/models/notification.rb")
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains("No violations detected!"))
+        .stderr(predicate::str::is_empty());
+
+    common::teardown();
+    Ok(())
+}
+
+#[test]
 fn test_check_without_stale_violations() -> Result<(), Box<dyn Error>> {
     cargo_bin_cmd!("pks")
         .arg("--project-root")
