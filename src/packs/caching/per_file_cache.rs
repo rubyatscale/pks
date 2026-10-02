@@ -31,7 +31,8 @@ impl Cache for PerFileCache {
         };
 
         // Fast path: the file has the same mtime and length as when we cached
-        // it, so it cannot have changed in any way we care about.
+        // it, so the file itself has not changed. That alone does not make the
+        // entry current.
         //
         // The version check stands in for the digest comparison this path
         // skips. Without it, an entry written by another version of pks would
@@ -55,8 +56,9 @@ impl Cache for PerFileCache {
         }
 
         // Slow path: no stat recorded (entry predates this feature, or was
-        // written by packwerk), or the stat moved. The content digest is still
-        // the authority, so fall back to it.
+        // written by packwerk), the stat moved, or the entry was written by
+        // another version of pks. The content digest is still the authority,
+        // so fall back to it.
         let empty_cache_entry = lookup.read_contents()?;
         if cache_entry.file_contents_digest
             != empty_cache_entry.file_contents_digest
@@ -315,6 +317,11 @@ mod tests {
         // The bare content digest is what entries held before they recorded
         // the pks version. No stat forces the digest comparison, and the
         // file's own stat takes the fast path; both must miss.
+        assert!(
+            empty_cache_entry.source_stat.is_some(),
+            "expected the file to have a usable stat, or this test cannot \
+             reach the fast path"
+        );
         let content_digest = file_content_digest(&path)?;
         for source_stat in [None, empty_cache_entry.source_stat] {
             for file_contents_digest in

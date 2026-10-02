@@ -392,9 +392,8 @@ fn test_entry_from_another_pks_version_is_not_served_on_the_fast_path(
         let digest = entry["file_contents_digest"]
             .as_str()
             .expect("digest is a string");
-        let (content_digest, _) = digest
-            .rsplit_once('-')
-            .expect("digest has a version suffix");
+        let (content_digest, _) =
+            digest.split_once('-').expect("digest has a version suffix");
         entry["file_contents_digest"] =
             serde_json::json!(format!("{content_digest}-0.0.0"));
         entry["processed_file"]["unresolved_references"] =
