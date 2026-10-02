@@ -3,7 +3,6 @@ mod dependency;
 pub(crate) mod layer;
 
 mod common_test;
-mod dependency_removal;
 mod folder_privacy;
 pub(crate) mod pack_checker;
 mod privacy;
@@ -14,6 +13,7 @@ use crate::packs::checker_configuration::CheckerType;
 // Internal imports
 use crate::packs::pack::write_pack_to_disk;
 use crate::packs::pack::Pack;
+use crate::packs::pack_list;
 use crate::packs::package_todo;
 use crate::packs::Configuration;
 use crate::packs::SourceLocation;
@@ -612,7 +612,7 @@ fn remove_reference_to_dependency(
             .context(format!("Failed to read pack {:?}", pack.yml))
     })?;
 
-    match dependency_removal::remove_dependencies(&contents, dependency_names) {
+    match pack_list::remove_dependencies(&contents, dependency_names) {
         Some(updated) if updated == contents => {}
         Some(updated) => std::fs::write(&pack.yml, updated).map_err(|e| {
             anyhow::Error::new(e)

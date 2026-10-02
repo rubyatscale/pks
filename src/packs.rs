@@ -16,6 +16,7 @@ pub(crate) mod ignored;
 pub(crate) mod json;
 pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
+pub(crate) mod pack_list;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
 pub(crate) mod template;
