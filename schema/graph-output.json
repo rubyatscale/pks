@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pks graph JSON output",
+  "type": "object",
+  "required": ["nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Edge" }
+    }
+  },
+  "$defs": {
+    "EdgeKind": {
+      "type": "string",
+      "enum": ["declared", "ignored", "todo"],
+      "description": "How the dependency is expressed in the source pack's config: `declared` (dependencies:), `ignored` (ignored_dependencies:), or `todo` (a recorded violation in package_todo.yml)."
+    },
+    "Node": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Pack name (path relative to the project root)."
+        },
+        "layer": {
+          "type": "string",
+          "description": "The pack's architecture layer, if configured."
+        },
+        "owner": {
+          "type": "string",
+          "description": "The pack's owner, if configured."
+        }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Source pack name (the depending pack)."
+        },
+        "to": {
+          "type": "string",
+          "description": "Target pack name (the depended-on pack)."
+        },
+        "kind": { "$ref": "#/$defs/EdgeKind" }
+      }
+    }
+  }
+}
