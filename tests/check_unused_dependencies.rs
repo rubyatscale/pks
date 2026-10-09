@@ -186,10 +186,18 @@ dependencies: [packs/bar, packs/baz]
 ";
 
     let (after, stderr) = auto_correct_foo_package_yml(before);
-    assert!(!after.contains("packs/baz"), "{after}");
-    assert!(after.contains("- packs/bar"), "{after}");
-    assert!(
-        stderr.contains("could not edit the dependencies list"),
-        "{stderr}"
+    let expected = "\
+enforce_privacy: true
+enforce_dependencies: true
+dependencies:
+- packs/bar
+";
+    assert_eq!(after, expected);
+    assert_eq!(
+        stderr,
+        "Warning: could not edit the dependencies list in \
+         `packs/foo/package.yml` in place to remove `packs/baz`, so the file \
+         was rewritten: its comments were not preserved and its keys may be \
+         reordered.\n"
     );
 }

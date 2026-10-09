@@ -613,17 +613,21 @@ fn remove_reference_to_dependency(
     })?;
 
     match dependency_removal::remove_dependencies(&contents, dependency_names) {
-        Some(updated) if updated == contents => {}
         Some(updated) => std::fs::write(&pack.yml, updated).map_err(|e| {
             anyhow::Error::new(e)
                 .context(format!("Failed to write pack to disk {:?}", pack.yml))
         })?,
         None => {
             eprintln!(
-                "Warning: could not edit the dependencies list in {} in \
-                 place, so the file was rewritten and its comments were \
-                 not preserved.",
-                pack.yml.display()
+                "Warning: could not edit the dependencies list in `{}` in \
+                 place to remove {}, so the file was rewritten: its comments \
+                 were not preserved and its keys may be reordered.",
+                pack.relative_yml().display(),
+                dependency_names
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
             );
             let without_dependency = pack
                 .dependencies

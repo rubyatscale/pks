@@ -25,56 +25,117 @@ fn is_exact_removal(original: &str, edited: &str, names: &[String]) -> bool {
     expected == actual
 }
 
-/// Drops each matching item, along with any comment lines directly above it.
-/// Other comments, blank lines and blocks are kept verbatim. If no items are
-/// left, the `dependencies:` key goes too, as serializing the pack would do.
+/// Drops each matching item. A comment covers the items below it, up to the
+/// next blank line or comment, and is dropped only when all of them are,
+/// unless it holds a commented-out entry. If no items are left, the whole
+/// block goes, as serializing the pack would do. Everything else is verbatim.
 fn remove_dependency_lines(contents: &str, names: &[String]) -> String {
-    let mut out: Vec<&str> = Vec::new();
-    // Comments seen inside the block, held until we know whether the item
-    // below them is kept.
-    let mut pending_comments: Vec<&str> = Vec::new();
-    let mut key_index = None;
-    let mut in_block = false;
+    let lines: Vec<&str> = contents.split_inclusive('\n').collect();
+    let Some(key) = lines.iter().position(|line| is_dependencies_key(line))
+    else {
+        return contents.to_string();
+    };
+    let mut block_end = key + 1;
+    while lines.get(block_end).is_some_and(|line| {
+        let trimmed = line.trim_start();
+        trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("- ")
+    }) {
+        block_end += 1;
+    }
+    // Comments directly above the next key belong to the key.
+    let mut tail = block_end;
+    while tail > key + 1 && lines[tail - 1].trim_start().starts_with('#') {
+        tail -= 1;
+    }
+
+    let block = edit_block(&lines[key + 1..tail], names);
+    let mut out: Vec<&str> = lines[..key].to_vec();
+    if let Some(block) = block {
+        out.push(lines[key]);
+        out.extend(block);
+    }
+    out.extend(&lines[tail..]);
+    out.concat()
+}
+
+/// The block's lines with the named items removed, or `None` if no items are
+/// left.
+fn edit_block<'a>(lines: &[&'a str], names: &[String]) -> Option<Vec<&'a str>> {
+    let mut out: Vec<&'a str> = Vec::new();
+    let mut group = Group::default();
     let mut kept_items = 0;
 
-    for line in contents.split_inclusive('\n') {
-        if in_block {
-            let trimmed = line.trim_start();
-            if let Some(item) = trimmed.strip_prefix("- ") {
-                if names.iter().any(|name| name == item_value(item)) {
-                    pending_comments.clear();
-                } else {
-                    out.append(&mut pending_comments);
-                    out.push(line);
-                    kept_items += 1;
-                }
-                continue;
-            }
-            if trimmed.starts_with('#') {
-                pending_comments.push(line);
-                continue;
-            }
-            if trimmed.is_empty() {
-                out.append(&mut pending_comments);
-                out.push(line);
-                continue;
-            }
-            // A comment between the last item and the next key belongs to
-            // the key.
-            out.append(&mut pending_comments);
-            in_block = false;
-        } else if key_index.is_none() && is_dependencies_key(line) {
-            key_index = Some(out.len());
-            in_block = true;
+    for &line in lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("- ") {
+            group.items.push(line);
+            continue;
         }
-        out.push(line);
+        if trimmed.starts_with('#') && group.items.is_empty() {
+            group.comments.push(line);
+            continue;
+        }
+        let vanished = group.flush(&mut out, names, &mut kept_items);
+        if trimmed.starts_with('#') {
+            group.comments.push(line);
+        } else if !(vanished && out.last().is_some_and(|l| l.trim().is_empty()))
+        {
+            // Skipped when a removed group sat between two blank lines.
+            out.push(line);
+        }
     }
-    out.append(&mut pending_comments);
+    group.flush(&mut out, names, &mut kept_items);
+    (kept_items > 0).then_some(out)
+}
 
-    if let Some(index) = key_index.filter(|_| kept_items == 0) {
-        out.remove(index);
+/// A run of comment lines and the items below them.
+#[derive(Default)]
+struct Group<'a> {
+    comments: Vec<&'a str>,
+    items: Vec<&'a str>,
+}
+
+impl<'a> Group<'a> {
+    /// Moves the group's surviving lines to `out`, returning whether it had
+    /// lines and none survived.
+    fn flush(
+        &mut self,
+        out: &mut Vec<&'a str>,
+        names: &[String],
+        kept_items: &mut usize,
+    ) -> bool {
+        let had_lines = !self.comments.is_empty() || !self.items.is_empty();
+        let had_items = !self.items.is_empty();
+        let kept: Vec<&'a str> = self
+            .items
+            .drain(..)
+            .filter(|line| !is_named_item(line, names))
+            .collect();
+        *kept_items += kept.len();
+        let keep_comments = !had_items
+            || !kept.is_empty()
+            || self.comments.iter().any(|line| is_commented_out_item(line));
+        if !keep_comments {
+            self.comments.clear();
+        }
+        let vanished = had_lines && self.comments.is_empty() && kept.is_empty();
+        out.append(&mut self.comments);
+        out.extend(kept);
+        vanished
     }
-    out.concat()
+}
+
+fn is_named_item(line: &str, names: &[String]) -> bool {
+    let item = &line.trim_start()["- ".len()..];
+    names.iter().any(|name| name == item_value(item))
+}
+
+fn is_commented_out_item(line: &str) -> bool {
+    line.trim_start()
+        .strip_prefix('#')
+        .is_some_and(|rest| rest.trim_start().starts_with("- "))
 }
 
 /// Matches the top-level key only: a nested `dependencies:` is indented.
@@ -221,7 +282,7 @@ mod tests {
         assert_removes(
             "dependencies:\n- packs/a\n\n- packs/b\n\nlayer: utilities\n",
             &["packs/b"],
-            "dependencies:\n- packs/a\n\n\nlayer: utilities\n",
+            "dependencies:\n- packs/a\n\nlayer: utilities\n",
         );
     }
 
@@ -286,6 +347,43 @@ ignored_dependencies:
             "# Header.\r\ndependencies:\r\n- packs/a\r\n- packs/b\r\n",
             &["packs/b"],
             "# Header.\r\ndependencies:\r\n- packs/a\r\n",
+        );
+    }
+
+    #[test]
+    fn keeps_a_comment_while_any_item_it_covers_remains() {
+        assert_removes(
+            "dependencies:\n# Keep this list sorted.\n- packs/baz\n- packs/bar\n",
+            &["packs/baz"],
+            "dependencies:\n# Keep this list sorted.\n- packs/bar\n",
+        );
+        assert_removes(
+            "dependencies:\n# Keep this list sorted.\n- packs/baz\n- packs/bar\n\n- packs/bop\n",
+            &["packs/baz", "packs/bar"],
+            "dependencies:\n\n- packs/bop\n",
+        );
+    }
+
+    #[test]
+    fn keeps_a_commented_out_entry() {
+        assert_removes(
+            "dependencies:\n- packs/bar\n# - packs/bop  # re-add after the migration\n- packs/baz\n",
+            &["packs/baz"],
+            "dependencies:\n- packs/bar\n# - packs/bop  # re-add after the migration\n",
+        );
+    }
+
+    #[test]
+    fn removes_the_whole_block_when_no_items_remain() {
+        assert_removes(
+            "enforce_dependencies: true\ndependencies: # keep sorted\n  - packs/a\n  # Keep sorted.\n\nenforce_privacy: true\n",
+            &["packs/a"],
+            "enforce_dependencies: true\nenforce_privacy: true\n",
+        );
+        assert_removes(
+            "metadata:\n  notes: |\n    Some notes.\ndependencies:\n  # Needed for A.\n  - packs/a\n\n  # Needed for B.\n  - packs/b\nlayer: utilities\n",
+            &["packs/a", "packs/b"],
+            "metadata:\n  notes: |\n    Some notes.\nlayer: utilities\n",
         );
     }
 
