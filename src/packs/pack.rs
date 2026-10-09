@@ -192,7 +192,6 @@ impl Pack {
                     for file in &violation_group.files {
                         let identifier = ViolationIdentifier {
                             violation_type: violation_type.clone(),
-                            strict: false,
                             file: file.clone(),
                             constant_name: constant_name.clone(),
                             referencing_pack_name: self.name.clone(),
@@ -793,7 +792,6 @@ ignored_private_constants:
         let expected = vec![
             ViolationIdentifier {
                 violation_type: CheckerType::Dependency,
-                strict: false,
                 file: "packs/foo/app/services/foo.rb".to_string(),
                 constant_name: "::Bar".to_string(),
                 referencing_pack_name: "packs/foo".to_string(),
@@ -801,7 +799,6 @@ ignored_private_constants:
             },
             ViolationIdentifier {
                 violation_type: CheckerType::Dependency,
-                strict: false,
                 file: "packs/foo/app/services/other_foo.rb".to_string(),
                 constant_name: "::Bar".to_string(),
                 referencing_pack_name: "packs/foo".to_string(),

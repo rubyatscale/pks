@@ -163,6 +163,7 @@ impl<'a> PackChecker<'a> {
         };
         Ok(Some(Violation {
             identifier: self.violation_identifier(),
+            strict: self.is_strict(),
             source_location: self.reference.source_location.clone(),
             referencing_pack_relative_yml: self
                 .referencing_pack
@@ -177,7 +178,6 @@ impl<'a> PackChecker<'a> {
     pub fn violation_identifier(&self) -> ViolationIdentifier {
         ViolationIdentifier {
             violation_type: self.checker_type.clone(),
-            strict: self.is_strict(),
             file: self.reference.relative_referencing_file.clone(),
             constant_name: self.reference.constant_name.clone(),
             referencing_pack_name: self.referencing_pack.name.clone(),

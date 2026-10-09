@@ -1207,6 +1207,215 @@ end
     }
 
     #[test]
+    fn polymorphic_belongs_to_association() {
+        let contents: String = String::from(
+            "\
+class Foo
+  belongs_to :event, polymorphic: true
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let references = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references;
+        assert_eq!(references.len(), 1);
+        let reference = references
+            .first()
+            .expect("There should be a reference at index 0");
+        assert_eq!(reference.name, String::from("::Foo"));
+    }
+
+    #[test]
+    fn polymorphic_belongs_to_association_with_class_name() {
+        let contents: String = String::from(
+            "\
+class Foo
+  belongs_to :event, class_name: 'Event', polymorphic: true
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let references = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references;
+        assert_eq!(references.len(), 1);
+        let reference = references
+            .first()
+            .expect("There should be a reference at index 0");
+        assert_eq!(reference.name, String::from("::Foo"));
+    }
+
+    #[test]
+    fn polymorphic_belongs_to_association_with_scope() {
+        let contents: String = String::from(
+            "\
+class Foo
+  belongs_to :event, -> { merge(Taco.all) }, polymorphic: true
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let references = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references;
+        assert_eq!(references.len(), 2);
+        let reference = references
+            .get(1)
+            .expect("There should be a reference at index 1");
+        assert_eq!(
+            UnresolvedReference {
+                name: String::from("Taco"),
+                namespace_path: vec![String::from("Foo")],
+                location: Range {
+                    start_row: 2,
+                    start_col: 32,
+                    end_row: 2,
+                    end_col: 37
+                }
+            },
+            *reference,
+        );
+    }
+
+    #[test]
+    fn polymorphic_belongs_to_association_in_controller() {
+        let contents: String = String::from(
+            "\
+class CommentsController
+  belongs_to :event, polymorphic: true
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let references = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references;
+        assert_eq!(references.len(), 2);
+        let reference = references
+            .get(1)
+            .expect("There should be a reference at index 1");
+        assert_eq!(
+            UnresolvedReference {
+                name: String::from("Event"),
+                namespace_path: vec![String::from("CommentsController")],
+                location: Range {
+                    start_row: 2,
+                    start_col: 2,
+                    end_row: 2,
+                    end_col: 39
+                }
+            },
+            *reference,
+        );
+    }
+
+    #[test]
+    fn polymorphic_belongs_to_association_in_class_inside_controller() {
+        let contents: String = String::from(
+            "\
+module Admin
+  class CommentsController
+    belongs_to :event, polymorphic: true
+
+    class Form
+      belongs_to :post, polymorphic: true
+    end
+  end
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let names: Vec<String> = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references
+        .into_iter()
+        .map(|reference| reference.name)
+        .collect();
+        assert!(names.contains(&String::from("Event")));
+        assert!(!names.contains(&String::from("Post")));
+    }
+
+    #[test]
+    fn polymorphic_belongs_to_association_outside_any_class() {
+        let contents: String = String::from(
+            "\
+ActiveAdmin.register Comment do
+  belongs_to :event, polymorphic: true
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let names: Vec<String> = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references
+        .into_iter()
+        .map(|reference| reference.name)
+        .collect();
+        assert!(names.contains(&String::from("Event")));
+    }
+
+    #[test]
+    fn belongs_to_association_with_polymorphic_false() {
+        let contents: String = String::from(
+            "\
+class Foo
+  belongs_to :event, polymorphic: false
+end
+        ",
+        );
+        let configuration = Configuration::default();
+
+        let references = process_from_contents(
+            contents,
+            &PathBuf::from("path/to/file.rb"),
+            &configuration,
+        )
+        .unresolved_references;
+        assert_eq!(references.len(), 2);
+        let reference = references
+            .get(1)
+            .expect("There should be a reference at index 1");
+        assert_eq!(
+            UnresolvedReference {
+                name: String::from("Event"),
+                namespace_path: vec![String::from("Foo")],
+                location: Range {
+                    start_row: 2,
+                    start_col: 2,
+                    end_row: 2,
+                    end_col: 40
+                }
+            },
+            *reference,
+        );
+    }
+
+    #[test]
     fn it_uses_the_namespace_of_inherited_class_when_referencing_inherited_class(
     ) {
         let contents: String = String::from(

@@ -99,12 +99,12 @@ mod tests {
         Violation {
             identifier: ViolationIdentifier {
                 violation_type: CheckerType::Privacy,
-                strict: false,
                 file: "foo/bar/file.rb".to_string(),
                 constant_name: "Foo".to_string(),
                 referencing_pack_name: "bar".to_string(),
                 defining_pack_name: "foo".to_string(),
             },
+            strict: false,
             source_location: SourceLocation {
                 line: 10,
                 column: 5,

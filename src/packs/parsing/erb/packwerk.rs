@@ -234,4 +234,162 @@ mod tests {
             .unresolved_references
         );
     }
+
+    #[test]
+    fn multiline_comment_does_not_hide_surrounding_references() {
+        let configuration = Configuration::default();
+        let expected: Vec<UnresolvedReference> = ["Foo", "Bar", "Baz"]
+            .iter()
+            .map(|name| UnresolvedReference {
+                name: String::from(*name),
+                namespace_path: vec![],
+                location: Range::default(),
+            })
+            .collect();
+
+        for text in [
+            "second line.",
+            "it's here",
+            "the end",
+            "see } here",
+            "second (line",
+            "class foo",
+            "def x",
+        ] {
+            let contents = format!(
+                "/
+<%= Foo %>
+<%# first line
+    {text} %>
+<%= Bar %>
+<%= Baz %>
+        "
+            );
+            assert_eq!(
+                expected,
+                process_from_contents(
+                    contents,
+                    &PathBuf::from("path/to/file.rb"),
+                    &configuration
+                )
+                .unresolved_references,
+                "comment ending with {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn comment_contents_are_not_references() {
+        let contents: String = String::from(
+            "/
+<%# Qux %>
+<%#
+  Foo
+%>
+<%# uses
+    Baz -%>
+<%= Bar %>
+        ",
+        );
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![UnresolvedReference {
+                name: String::from("Bar"),
+                namespace_path: vec![],
+                location: Range::default()
+            }],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
+
+    #[test]
+    fn leading_encoding_comment_does_not_hide_references() {
+        let contents: String =
+            String::from("<%# encoding: iso-8859-1 %>\n<%= Foo %>");
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![UnresolvedReference {
+                name: String::from("Foo"),
+                namespace_path: vec![],
+                location: Range::default()
+            }],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
+
+    #[test]
+    fn literal_tag_is_text_not_ruby() {
+        let contents: String = String::from(
+            "/
+<%= Foo %>
+<%%= Qux %>
+<%% if Quux %%>
+<%= Bar %>
+        ",
+        );
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![
+                UnresolvedReference {
+                    name: String::from("Foo"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                },
+                UnresolvedReference {
+                    name: String::from("Bar"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                }
+            ],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
+
+    #[test]
+    fn hash_after_hyphen_or_space_is_code_not_comment() {
+        let contents: String = String::from(
+            "/
+<%-# first line
+  Foo %>
+<% # first line
+  Bar %>
+        ",
+        );
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![
+                UnresolvedReference {
+                    name: String::from("Foo"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                },
+                UnresolvedReference {
+                    name: String::from("Bar"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                }
+            ],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
 }

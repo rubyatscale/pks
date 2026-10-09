@@ -25,7 +25,11 @@ use rayon::prelude::IntoParallelRefIterator;
 use rayon::prelude::ParallelIterator;
 use reference::Reference;
 use std::collections::HashMap;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+};
 use tracing::debug;
 
 use super::bin_locater;
@@ -34,26 +38,31 @@ use super::reference_extractor::get_all_references;
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct ViolationIdentifier {
     pub violation_type: CheckerType,
-    pub strict: bool,
     pub file: String,
     pub constant_name: String,
     pub referencing_pack_name: String,
     pub defining_pack_name: String,
 }
+
 /// A violation combines an identifier with display metadata.
 ///
 /// `source_location` is intentionally separate from `ViolationIdentifier` because:
-/// - The identifier defines "sameness" for deduplication and comparison with
-///   recorded violations in `package_todo.yml`, which doesn't store line/column
-/// - Multiple references to the same constant in the same file are considered
-///   one violation, even if they occur at different lines
+/// - The identifier defines "sameness" for comparison with recorded violations
+///   in `package_todo.yml`, which doesn't store line/column
+/// - Violations at different lines stay distinct, but those of the same type on
+///   the same constant in the same file share an identifier, so one recorded
+///   entry covers them all
 /// - Keeping line/column out of the identity makes violations stable across
 ///   minor code movements that shift line numbers
+///
+/// `strict` is kept out of the identifier too: it says how to treat the
+/// violation, not which violation it is, and `package_todo.yml` cannot record it.
 ///
 /// Violations store only data - template expansion happens in formatters.
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
 pub struct Violation {
     pub identifier: ViolationIdentifier,
+    pub strict: bool,
     pub source_location: SourceLocation,
     // Additional data for template expansion:
     pub referencing_pack_relative_yml: String,
@@ -96,6 +105,10 @@ struct CheckAllBuilder<'a> {
 #[derive(Debug)]
 struct FoundViolations {
     absolute_paths: HashSet<PathBuf>,
+    // The paths the caller named, joined onto the root; empty for a full run.
+    // A named path can match no included file, or be a deleted one, so this
+    // cannot be derived from `absolute_paths`.
+    supplied_paths: Vec<PathBuf>,
     violations: HashSet<Violation>,
 }
 
@@ -125,7 +138,7 @@ impl<'a> CheckAllBuilder<'a> {
                 .cloned()
                 .collect(),
             strict_mode_violations: self
-                .build_strict_mode_violations()
+                .build_strict_mode_violations(recorded_violations)
                 .into_iter()
                 .collect(),
         })
@@ -184,6 +197,9 @@ impl<'a> CheckAllBuilder<'a> {
             })
             .collect::<anyhow::Result<HashSet<&str>>>()?;
 
+        let absolute_root = &self.configuration.absolute_root;
+        let included_files = &self.configuration.included_files;
+        let supplied_paths = &self.found_violations.supplied_paths;
         let stale_violations = recorded_violations
             .par_iter()
             .filter(|v_identifier| {
@@ -191,6 +207,9 @@ impl<'a> CheckAllBuilder<'a> {
                     &relative_files,
                     &found_violation_identifiers,
                     v_identifier,
+                    absolute_root,
+                    included_files,
+                    supplied_paths,
                 )
             })
             .collect::<Vec<&ViolationIdentifier>>();
@@ -201,21 +220,42 @@ impl<'a> CheckAllBuilder<'a> {
         relative_files: &HashSet<&str>,
         found_violation_identifiers: &HashSet<&ViolationIdentifier>,
         todo_violation_identifier: &ViolationIdentifier,
+        absolute_root: &Path,
+        included_files: &HashSet<PathBuf>,
+        supplied_paths: &[PathBuf],
     ) -> bool {
-        let violation_path_exists =
+        let file_was_checked =
             relative_files.contains(todo_violation_identifier.file.as_str());
-        if violation_path_exists {
+        if file_was_checked {
             !found_violation_identifiers.contains(todo_violation_identifier)
+        } else if !supplied_paths.is_empty() {
+            let path = absolute_root.join(&todo_violation_identifier.file);
+            // Not being an included file is what makes an entry stale in a full
+            // run too. `Path::starts_with` compares whole components, so
+            // `packs/foo` does not cover `packs/foobar`.
+            supplied_paths.iter().any(|p| path.starts_with(p))
+                && !included_files.contains(&path)
         } else {
             true // The todo violation references a file that no longer exists
         }
     }
 
-    fn build_strict_mode_violations(&self) -> Vec<Violation> {
+    /// Strict mode reports violations that are not already recorded in a
+    /// `package_todo.yml`, matching packwerk's `unlisted_strict_mode_violations`
+    /// (Shopify/packwerk#368). Turning strict on therefore blocks new violations
+    /// without also requiring every recorded one to be fixed first.
+    fn build_strict_mode_violations(
+        &self,
+        recorded_violations: &HashSet<ViolationIdentifier>,
+    ) -> Vec<Violation> {
         self.found_violations
             .violations
             .iter()
-            .filter(|v| v.identifier.strict)
+            .filter(|v| v.strict)
+            .filter(|v| {
+                self.configuration.ignore_recorded_violations
+                    || !recorded_violations.contains(&v.identifier)
+            })
             .cloned()
             .collect()
     }
@@ -228,19 +268,97 @@ pub(crate) fn check_all(
     let checkers = get_checkers(configuration);
 
     debug!("Intersecting input files with configuration included files");
-    let absolute_paths: HashSet<PathBuf> =
-        configuration.intersect_files(files.clone());
+    let absolute_paths = files_to_check(configuration, &files);
 
     let violations: HashSet<Violation> =
         get_all_violations(configuration, &absolute_paths, &checkers)?;
     let found_violations = FoundViolations {
         absolute_paths,
+        supplied_paths: files
+            .iter()
+            .map(|f| configuration.absolute_root.join(f))
+            .collect(),
         violations,
     };
     debug!("Building check-all result (diffing against package_todo.yml)");
     let result = CheckAllBuilder::new(configuration, &found_violations).build();
     debug!("Finished building check-all result");
     result
+}
+
+/// Intersects each path argument with the included files on its own, so an
+/// argument that matches none of them can be reported instead of silently
+/// checking nothing. The union is what `intersect_files` returns for all of
+/// them at once.
+///
+/// The warning goes to stderr and leaves the exit code alone: `-o json` and
+/// `-o csv` stay parseable, and editor plugins, which check one file on every
+/// open and save, don't treat it as a failure.
+fn files_to_check(
+    configuration: &Configuration,
+    files: &[String],
+) -> HashSet<PathBuf> {
+    if files.is_empty() {
+        return configuration.intersect_files(vec![]);
+    }
+
+    let mut absolute_paths = HashSet::new();
+    for file in files {
+        let matched = configuration.intersect_files(vec![file.clone()]);
+        if matched.is_empty() {
+            warn_about_unmatched_path(configuration, file);
+        }
+        absolute_paths.extend(matched);
+    }
+    absolute_paths
+}
+
+/// Stays silent for an existing file that simply isn't included (a README,
+/// `package.yml`, the Gemfile), so a hook passing every staged file doesn't
+/// warn on each of them.
+fn warn_about_unmatched_path(configuration: &Configuration, file: &str) {
+    let path = configuration.absolute_root.join(file);
+    if !path.exists() {
+        eprintln!("Warning: `{}` does not exist.", file);
+    } else if let Some(relative) = included_spelling(configuration, &path) {
+        eprintln!(
+            "Warning: `{}` was not checked. Pass it as `{}` instead.",
+            file,
+            relative.display()
+        );
+    } else if !path.is_file() {
+        eprintln!(
+            "Warning: no included file matches `{}`, so it was not checked. Check the path and the include and exclude globs in the config file.",
+            file
+        );
+    }
+}
+
+/// The root-relative path to pass instead of `path`, when `path` is an
+/// included file or a directory holding one, spelled in a way that matches
+/// nothing. Included files are listed under the canonical root with no `..`,
+/// and only relative directories are expanded, so a `..`, symlinked or
+/// absolute spelling misses them.
+fn included_spelling(
+    configuration: &Configuration,
+    path: &Path,
+) -> Option<PathBuf> {
+    let canonical = fs::canonicalize(path).ok()?;
+    let included = &configuration.included_files;
+    let holds_included = if path.is_file() {
+        included.contains(&canonical)
+    } else {
+        included.iter().any(|f| f.starts_with(&canonical))
+    };
+    if !holds_included {
+        return None;
+    }
+    let relative = canonical.strip_prefix(&configuration.absolute_root).ok()?;
+    if relative.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(relative.to_path_buf())
+    }
 }
 
 fn validate(configuration: &Configuration) -> Vec<String> {
@@ -306,22 +424,35 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         &checkers,
     )?;
 
-    let strict_violations = &violations
+    let recorded_violations = &configuration.pack_set.all_violations;
+
+    // Only *unlisted* strict violations make `check` fail, so only those are
+    // worth reporting here. Reporting recorded ones too claimed `check` would
+    // fail when it succeeds. Same filter as `build_strict_mode_violations`, and
+    // as packwerk's `unlisted_strict_mode_violations`.
+    let unlisted_strict_violations = &violations
         .iter()
-        .filter(|v| v.identifier.strict)
+        .filter(|v| v.strict)
+        .filter(|v| !recorded_violations.contains(&v.identifier))
         .collect::<Vec<&Violation>>();
-    if !strict_violations.is_empty() {
-        for violation in strict_violations {
+    if !unlisted_strict_violations.is_empty() {
+        for violation in unlisted_strict_violations {
             let strict_message =
                 build_strict_violation_message(&violation.identifier);
             println!("{}", strict_message);
         }
         println!(
             "{} strict mode violation(s) detected. These violations must be fixed for `check` to succeed.",
-            strict_violations.len()
+            unlisted_strict_violations.len()
         );
+        // TODO: packwerk's `update-todo` exits non-zero here; `update` returns
+        // Ok and prints a success line. Pre-existing, separate breaking change.
     }
-    package_todo::write_violations_to_disk(configuration, violations);
+    package_todo::write_violations_to_disk(
+        configuration,
+        violations,
+        recorded_violations,
+    );
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())

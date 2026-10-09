@@ -46,12 +46,12 @@ pub mod tests {
         Violation {
             identifier: ViolationIdentifier {
                 violation_type,
-                strict,
                 file: String::from("packs/foo/app/services/foo.rb"),
                 constant_name: String::from("::Bar"),
                 referencing_pack_name: String::from("packs/foo"),
                 defining_pack_name: String::from("packs/bar"),
             },
+            strict,
             source_location: SourceLocation { line: 3, column: 1 },
             referencing_pack_relative_yml: String::from(
                 "packs/foo/package.yml",
@@ -69,12 +69,12 @@ pub mod tests {
         Violation {
             identifier: ViolationIdentifier {
                 violation_type,
-                strict,
                 file: String::from("packs/foo/app/services/foo.rb"),
                 constant_name,
                 referencing_pack_name: String::from("packs/foo"),
                 defining_pack_name: String::from("packs/bar"),
             },
+            strict,
             source_location: SourceLocation { line: 3, column: 1 },
             referencing_pack_relative_yml: String::from(
                 "packs/foo/package.yml",
