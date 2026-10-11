@@ -46,6 +46,7 @@ Usage: pks [OPTIONS] <COMMAND>
 Commands:
   greet                           Just saying hi
   create                          Create a new pack
+  rm                              Delete a pack and remove references to it from other packs
   check                           Look for violations in the codebase
   check-contents                  Check file contents piped to stdin
   update                          Update package_todo.yml files with the current violations

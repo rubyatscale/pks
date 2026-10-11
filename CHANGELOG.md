@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+### Features
+
+#### `pks rm` removes a pack
+
+`pks rm packs/foo` deletes the pack's directory, after removing every mention of
+it from other packs: their `dependencies`, `ignored_dependencies` and
+`visible_to` lists, and the violations their `package_todo.yml` files record on
+it. A todo file with nothing left in it is deleted. Like `add-dependency`, it
+rewrites each `package.yml` it changes, which drops the file's comments and puts
+its keys in pks's order.
+
+By default it won't remove a pack that other packs may still use. It first
+looks for references from other packs to the pack's constants and lists any it
+finds, because once the pack is gone `pks check` can no longer see them. It also
+won't remove a pack with Ruby files under `lib/` that are outside the autoload
+roots, since pks can't see references to the constants those files define. The
+experimental parser reads definitions from every file, so with
+`--experimental-parser` that check is skipped. `--force` removes the pack anyway
+and leaves any remaining references for you to fix.
+
+The root pack can't be removed. Neither can a pack with other packs inside it,
+until those are removed.
 
 ### Fixes
 
@@ -82,6 +105,22 @@ A `package_todo.yml` entry recorded for an association pks now skips is no
 longer found, so `pks check` reports it as stale until you run `pks update`. For
 the same reason, `check-unused-dependencies` may now report a dependency that
 only such an association used. packwerk still reports these references.
+
+### Performance
+
+#### A warm `pks check` skips reading files that haven't changed
+
+The cache now records each file's modification time and size along with its
+digest, and serves a file whose time and size both still match without reading
+it. On a 51,000-file application this made a warm `pks check` 1.43 times as
+fast. When either has changed, pks reads the file and compares digests as
+before. On a filesystem that records times only to the second, where a
+same-size edit within a second can keep both, it never takes the shortcut.
+
+A tool that restores file times, such as `rsync -t`, `tar -p` or `cp -p`, can
+put back different contents with the same size and time, and pks then serves
+the old cached result. `touch` the file, or run with `--no-cache`, to check it
+again.
 
 ## 0.5.0
 
