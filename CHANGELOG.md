@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 ### Features
 
@@ -105,6 +105,22 @@ A `package_todo.yml` entry recorded for an association pks now skips is no
 longer found, so `pks check` reports it as stale until you run `pks update`. For
 the same reason, `check-unused-dependencies` may now report a dependency that
 only such an association used. packwerk still reports these references.
+
+### Performance
+
+#### A warm `pks check` skips reading files that haven't changed
+
+The cache now records each file's modification time and size along with its
+digest, and serves a file whose time and size both still match without reading
+it. On a 51,000-file application this made a warm `pks check` 1.43 times as
+fast. When either has changed, pks reads the file and compares digests as
+before. On a filesystem that records times only to the second, where a
+same-size edit within a second can keep both, it never takes the shortcut.
+
+A tool that restores file times, such as `rsync -t`, `tar -p` or `cp -p`, can
+put back different contents with the same size and time, and pks then serves
+the old cached result. `touch` the file, or run with `--no-cache`, to check it
+again.
 
 ## 0.5.0
 
