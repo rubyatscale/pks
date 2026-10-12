@@ -2,19 +2,22 @@ use crate::packs::file_utils::file_read_contents;
 use crate::packs::{
     parsing::{
         ruby::parse_utils::{
-            fetch_const_const_name, fetch_const_name, fetch_node_location,
+            constant_name, fetch_const_name, fetch_const_path_name,
             first_syntax_error, get_constant_assignment_definition,
             get_definition_from, get_reference_from_active_record_association,
-            loc_to_range,
+            is_plain_call, loc_to_range, visit_constant_assignments,
+            ParseError,
         },
         ParsedDefinition, UnresolvedReference,
     },
     Configuration, ProcessedFile,
 };
-use lib_ruby_parser::{
-    nodes, traverse::visitor::Visitor, Node, Parser, ParserOptions,
-};
 use line_col::LineColLookup;
+use ruby_prism::{
+    CallAndWriteNode, CallNode, CallOperatorWriteNode, CallOrWriteNode,
+    CallTargetNode, ClassNode, ConstantPathNode, ConstantReadNode, DefNode,
+    Location, ModuleNode, Visit,
+};
 use std::path::Path;
 
 struct ReferenceCollector<'a> {
@@ -26,10 +29,58 @@ struct ReferenceCollector<'a> {
     pub custom_associations: Vec<String>,
 }
 
-impl Visitor for ReferenceCollector<'_> {
-    fn on_class(&mut self, node: &nodes::Class) {
-        // We're not collecting definitions, so no need to visit the class definitioname);
-        let namespace_result = fetch_const_name(&node.name);
+impl ReferenceCollector<'_> {
+    fn define_constant(
+        &mut self,
+        name: Result<String, ParseError>,
+        location: &Location,
+    ) {
+        let definition = get_constant_assignment_definition(
+            name,
+            location,
+            self.current_namespaces.to_owned(),
+            &self.line_col_lookup,
+        );
+
+        if let Some(definition) = definition {
+            self.definitions.push(definition);
+        }
+    }
+
+    fn reference_constant(
+        &mut self,
+        name: Result<String, ParseError>,
+        location: &Location,
+    ) {
+        let Ok(name) = name else {
+            return;
+        };
+
+        let namespace_path = self
+            .current_namespaces
+            .clone()
+            .into_iter()
+            .filter(|namespace| namespace != &name)
+            .collect::<Vec<String>>();
+
+        self.references.push(UnresolvedReference {
+            name,
+            namespace_path,
+            location: loc_to_range(location, &self.line_col_lookup),
+        })
+    }
+
+    /// `a.b ||= c` and the targets of `a.b, c.d = e` call `a.b=` too
+    fn on_call_assignment(&mut self, safe_navigation: bool) {
+        if !safe_navigation {
+            self.behavioral_change_in_namespace = true;
+        }
+    }
+}
+
+impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
+    fn visit_class_node(&mut self, node: &ClassNode<'pr>) {
+        let namespace_result = fetch_const_name(&node.constant_path());
         // For now, we simply exit and stop traversing if we encounter an error when fetching the constant name of a class
         // We can iterate on this if this is different than the packwerk implementation
         if namespace_result.is_err() {
@@ -38,11 +89,13 @@ impl Visitor for ReferenceCollector<'_> {
 
         let namespace = namespace_result.unwrap();
 
-        if let Some(inner) = node.superclass.as_ref() {
-            self.visit(inner);
+        if let Some(inner) = node.superclass() {
+            self.visit(&inner);
         }
-        let definition_loc = fetch_node_location(&node.name).unwrap();
-        let location = loc_to_range(definition_loc, &self.line_col_lookup);
+        let location = loc_to_range(
+            &node.constant_path().location(),
+            &self.line_col_lookup,
+        );
 
         let definition = get_definition_from(
             &namespace,
@@ -50,7 +103,7 @@ impl Visitor for ReferenceCollector<'_> {
             &location,
         );
 
-        // Note – is there a way to use lifetime specifiers to get rid of this and
+        // Note – is there a way to use lifetime specifiers to get rid of this and
         // just keep current namespaces as a vector of string references or something else
         // more efficient?
         self.current_namespaces.push(namespace);
@@ -59,8 +112,8 @@ impl Visitor for ReferenceCollector<'_> {
         let previous_behavioral_change = self.behavioral_change_in_namespace;
         self.behavioral_change_in_namespace = false;
 
-        if let Some(inner) = &node.body {
-            self.visit(inner);
+        if let Some(inner) = node.body() {
+            self.visit(&inner);
         }
 
         if self.behavioral_change_in_namespace {
@@ -74,10 +127,10 @@ impl Visitor for ReferenceCollector<'_> {
         self.current_namespaces.pop();
     }
 
-    fn on_send(&mut self, node: &nodes::Send) {
-        if node.method_name == "private_constant" {
-            // `private_constant` is not considered to be a behavioral change
-        } else {
+    fn visit_call_node(&mut self, node: &CallNode<'pr>) {
+        // `private_constant` is not considered to be a behavioral change
+        if is_plain_call(node) && node.name().as_slice() != b"private_constant"
+        {
             self.behavioral_change_in_namespace = true;
 
             let association_reference =
@@ -92,33 +145,41 @@ impl Visitor for ReferenceCollector<'_> {
                 self.references.push(association_reference);
             }
         }
-        lib_ruby_parser::traverse::visitor::visit_send(self, node);
+        ruby_prism::visit_call_node(self, node);
     }
 
-    fn on_casgn(&mut self, node: &nodes::Casgn) {
-        let definition = get_constant_assignment_definition(
-            node,
-            self.current_namespaces.to_owned(),
+    fn visit_call_or_write_node(&mut self, node: &CallOrWriteNode<'pr>) {
+        self.on_call_assignment(node.is_safe_navigation());
+        ruby_prism::visit_call_or_write_node(self, node);
+    }
+
+    fn visit_call_and_write_node(&mut self, node: &CallAndWriteNode<'pr>) {
+        self.on_call_assignment(node.is_safe_navigation());
+        ruby_prism::visit_call_and_write_node(self, node);
+    }
+
+    fn visit_call_operator_write_node(
+        &mut self,
+        node: &CallOperatorWriteNode<'pr>,
+    ) {
+        self.on_call_assignment(node.is_safe_navigation());
+        ruby_prism::visit_call_operator_write_node(self, node);
+    }
+
+    fn visit_call_target_node(&mut self, node: &CallTargetNode<'pr>) {
+        self.on_call_assignment(node.is_safe_navigation());
+        ruby_prism::visit_call_target_node(self, node);
+    }
+
+    visit_constant_assignments!();
+
+    fn visit_module_node(&mut self, node: &ModuleNode<'pr>) {
+        let namespace =
+            fetch_const_name(&node.constant_path()).unwrap_or("".to_owned());
+        let location = loc_to_range(
+            &node.constant_path().location(),
             &self.line_col_lookup,
         );
-
-        if let Some(definition) = definition {
-            self.definitions.push(definition);
-        }
-
-        if let Some(v) = node.value.to_owned() {
-            self.visit(&v);
-        } else {
-            // We don't handle constant assignments as part of a multi-assignment yet,
-            // e.g. A, B = 1, 2
-            // See the documentation for nodes::Casgn#value for more info.
-        }
-    }
-
-    fn on_module(&mut self, node: &nodes::Module) {
-        let namespace = fetch_const_name(&node.name).unwrap_or("".to_owned());
-        let definition_loc = fetch_node_location(&node.name).unwrap();
-        let location = loc_to_range(definition_loc, &self.line_col_lookup);
 
         let definition = get_definition_from(
             &namespace,
@@ -126,7 +187,7 @@ impl Visitor for ReferenceCollector<'_> {
             &location,
         );
 
-        // Note – is there a way to use lifetime specifiers to get rid of this and
+        // Note – is there a way to use lifetime specifiers to get rid of this and
         // just keep current namespaces as a vector of string references or something else
         // more efficient?
         self.current_namespaces.push(namespace);
@@ -135,8 +196,8 @@ impl Visitor for ReferenceCollector<'_> {
         let previous_behavioral_change = self.behavioral_change_in_namespace;
         self.behavioral_change_in_namespace = false;
 
-        if let Some(inner) = &node.body {
-            self.visit(inner);
+        if let Some(inner) = node.body() {
+            self.visit(&inner);
         }
 
         if self.behavioral_change_in_namespace {
@@ -150,33 +211,26 @@ impl Visitor for ReferenceCollector<'_> {
         self.current_namespaces.pop();
     }
 
-    fn on_const(&mut self, node: &nodes::Const) {
-        let Ok(name) = fetch_const_const_name(node) else {
-            return;
-        };
-
-        let namespace_path = self
-            .current_namespaces
-            .clone()
-            .into_iter()
-            .filter(|namespace| namespace != &name)
-            .collect::<Vec<String>>();
-
-        self.references.push(UnresolvedReference {
-            name,
-            namespace_path,
-            location: loc_to_range(&node.expression_l, &self.line_col_lookup),
-        })
+    fn visit_constant_read_node(&mut self, node: &ConstantReadNode<'pr>) {
+        self.reference_constant(
+            Ok(constant_name(&node.name())),
+            &node.location(),
+        );
     }
 
-    fn on_def(&mut self, node: &nodes::Def) {
-        self.behavioral_change_in_namespace = true;
-        lib_ruby_parser::traverse::visitor::visit_def(self, node);
+    // Not visiting the parent: `Foo::Bar` is one reference, and in
+    // `foo(Bar)::Baz`, neither constant is one
+    fn visit_constant_path_node(&mut self, node: &ConstantPathNode<'pr>) {
+        self.reference_constant(
+            fetch_const_path_name(node.parent(), node.name()),
+            &node.location(),
+        );
     }
 
-    fn on_defs(&mut self, node: &nodes::Defs) {
+    // A `def` with a receiver, as `def self.foo`, too
+    fn visit_def_node(&mut self, node: &DefNode<'pr>) {
         self.behavioral_change_in_namespace = true;
-        lib_ruby_parser::traverse::visitor::visit_defs(self, node);
+        ruby_prism::visit_def_node(self, node);
     }
 }
 
@@ -193,29 +247,28 @@ pub(crate) fn process_from_contents(
     path: &Path,
     configuration: &Configuration,
 ) -> ProcessedFile {
-    let options = ParserOptions {
-        buffer_name: "".to_string(),
-        ..Default::default()
-    };
+    process(contents, path, configuration, false)
+}
 
+/// For the Ruby that pks makes from an ERB template
+pub(crate) fn process_from_template_contents(
+    contents: String,
+    path: &Path,
+    configuration: &Configuration,
+) -> ProcessedFile {
+    process(contents, path, configuration, true)
+}
+
+fn process(
+    contents: String,
+    path: &Path,
+    configuration: &Configuration,
+    template: bool,
+) -> ProcessedFile {
     let lookup = LineColLookup::new(&contents);
-    let parser = Parser::new(contents.clone(), options);
-    let parse_result = parser.do_parse();
-    let syntax_error = first_syntax_error(&parse_result.diagnostics, &lookup);
-
-    let ast_option: Option<Box<Node>> = parse_result.ast;
-
-    let ast = match ast_option {
-        Some(some_ast) => some_ast,
-        None => {
-            return ProcessedFile {
-                absolute_path: path.to_owned(),
-                unresolved_references: vec![],
-                definitions: vec![],
-                syntax_error,
-            }
-        }
-    };
+    let parse_result = ruby_prism::parse(contents.as_bytes());
+    let syntax_error =
+        first_syntax_error(parse_result.errors(), &lookup, template);
 
     let mut collector = ReferenceCollector {
         references: vec![],
@@ -226,7 +279,7 @@ pub(crate) fn process_from_contents(
         custom_associations: configuration.custom_associations.clone(),
     };
 
-    collector.visit(&ast);
+    collector.visit(&parse_result.node());
 
     let unresolved_references = collector.references;
 

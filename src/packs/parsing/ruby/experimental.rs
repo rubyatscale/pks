@@ -349,6 +349,43 @@ end
         assert_eq!(expected, actual);
     }
 
+    fn definition_names(contents: &str) -> Vec<String> {
+        process_from_contents(
+            contents.to_owned(),
+            &PathBuf::from("path/to/file.rb"),
+            &Configuration::default(),
+        )
+        .definitions
+        .into_iter()
+        .map(|definition| definition.fully_qualified_name)
+        .collect()
+    }
+
+    #[test]
+    fn class_definition_with_calls_that_count() {
+        // Each changes the class's behavior
+        for body in [
+            "@a.b",
+            "BAR.[](1)",
+            "self.a ||= 1",
+            "self.a &&= 1",
+            "self.a += 1",
+            "self.a, self.b = 1, 2",
+            "/(?<a>.)/ =~ BAR",
+        ] {
+            let contents = format!("class Foo\n  {}\nend\n", body);
+            assert_eq!(definition_names(&contents), vec!["::Foo"], "{}", body);
+        }
+    }
+
+    #[test]
+    fn class_definition_with_calls_that_dont_count() {
+        for body in ["BAR[1]", "BAR[1] = 2", "@a&.b", "@a&.b ||= 1"] {
+            let contents = format!("class Foo\n  {}\nend\n", body);
+            assert!(definition_names(&contents).is_empty(), "{}", body);
+        }
+    }
+
     #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(

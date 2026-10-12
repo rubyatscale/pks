@@ -408,6 +408,38 @@ fn test_list_references_lists_each_use_of_a_constant_in_a_file(
 }
 
 #[test]
+fn test_list_references_in_anonymous_argument_forwarding(
+) -> Result<(), Box<dyn Error>> {
+    // Ruby 3.2's `*` and `**` forwarding
+    let file = "packs/foo/app/services/forwarder.rb";
+    for args in [&[][..], &["--experimental-parser"]] {
+        let fixture = common::Fixture::new("simple_app");
+        fs::write(
+            fixture.path(file),
+            "class Forwarder\n  def a(*) = Bar.b(*)\n  def c(**) = Bar.d(**)\n\
+             end\n",
+        )?;
+
+        assert_eq!(
+            list_references(
+                &fixture,
+                &[args, &["list-references", "--defining-pack", "packs/bar"]]
+                    .concat()
+            ),
+            json!({
+                "references": [
+                    bar_from_foo(),
+                    to_bar_pack(file, Some((2, 13)), "::Bar"),
+                    to_bar_pack(file, Some((3, 14)), "::Bar"),
+                ]
+            })
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_at_the_start_of_a_file() -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
     // Line 1 and column 0 are positions, unlike ERB's line 0

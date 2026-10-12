@@ -48,7 +48,8 @@ fn test_expose_monkey_patches_warns_only_about_the_apps_syntax_errors(
     .success()
     .stderr(
         "Warning: `app/services/broken.rb` has a syntax error at line 3 \
-         (unexpected kEND), so pks may have missed references in it.\n",
+         (unexpected 'end'; expected a `)` to close the parameters), so pks \
+         may have missed references in it.\n",
     );
 
     Ok(())
