@@ -30,6 +30,6 @@ To pin a version, replace `latest/download` with `download/v0.5.0` (or whichever
 
 - Install Rust: https://www.rust-lang.org/tools/install
 - Have a C compiler and libclang. pks's Ruby parser, [Prism](https://github.com/ruby/prism), is written in C, and its Rust bindings are generated when it builds. Xcode's command line tools provide both on macOS. On Debian and Ubuntu, `build-essential` provides the C compiler, which Rust needs there too, and `libclang-dev` provides libclang. On Windows, install LLVM (`winget install LLVM.LLVM`), and set `LIBCLANG_PATH` to its `bin` directory if it isn't in `C:\Program Files\LLVM`. For other systems, see bindgen's [requirements](https://rust-lang.github.io/rust-bindgen/requirements.html).
-- `cargo install --git https://github.com/rubyatscale/pks`
+- `cargo install --locked --git https://github.com/rubyatscale/pks`, which builds with the versions of pks's dependencies that its `Cargo.lock` records
 
 Note that `cargo install pks` installs the crates.io `pks` crate, which is the original [alexevanczuk/packs](https://github.com/alexevanczuk/packs) at 0.2.40, not this repository.

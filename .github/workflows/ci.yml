@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Run cargo check
-        run: cargo check
+        run: cargo check --locked
   test:
     name: Test Suite
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Run cargo test with backtrace
-        run: cargo test -- --nocapture
+        run: cargo test --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
   lints:
@@ -60,7 +60,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --locked --all-targets --all-features
   build:
     # dist builds releases on these runners, the ones its plan picks for the
     # targets in dist-workspace.toml, but only when releasing. Prism is C, so
@@ -102,7 +102,7 @@ jobs:
         run: |
           rustup toolchain install
           rustup target add "$TARGET"
-          cargo build --profile dist --target "$TARGET"
+          cargo build --locked --profile dist --target "$TARGET"
 
       # Only Test Suite runs Prism otherwise, and only on x86_64 Linux
       - name: Run pks on a fixture
