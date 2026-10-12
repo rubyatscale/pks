@@ -20,6 +20,11 @@ since Prism recovers more of the file.
 
 Building pks from source now needs a C compiler and libclang.
 
+#### No Intel macOS binary
+
+Releases no longer include a binary for Intel Macs (`x86_64-apple-darwin`),
+and the Apple Silicon binary is built on macOS 26.
+
 ## 0.7.0
 
 ### Features
