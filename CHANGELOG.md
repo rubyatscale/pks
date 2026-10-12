@@ -24,6 +24,18 @@ pks keeps no source positions in ERB, so a reference in an ERB file has a null
 
 ### Fixes
 
+#### pks warns about files it can't parse
+
+A file that pks couldn't parse gave it some or none of its references, and
+nothing said so, so `pks check` could pass with violations in that file. pks
+now warns on stderr, naming the file and its first syntax error, with the line
+in a Ruby file. A file with a syntax error isn't cached, so the warning comes
+back on every run until the file is fixed.
+
+pks's parser can't read some newer Ruby syntax, such as Ruby 3.2's anonymous
+argument forwarding (`def foo(*) = bar(*)`), so files that use it get this
+warning too.
+
 #### References after a `<%==` tag are no longer missed
 
 pks read Rails' `<%== %>` tag, which outputs without escaping, as Ruby that

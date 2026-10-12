@@ -1,6 +1,7 @@
 use crate::packs::file_utils::file_read_contents;
 use crate::packs::{
-    file_utils::convert_erb_to_ruby_without_sourcemaps, parsing::Range,
+    file_utils::convert_erb_to_ruby_without_sourcemaps,
+    parsing::{Range, SyntaxError},
     Configuration, ProcessedFile, UnresolvedReference,
 };
 use std::path::Path;
@@ -40,5 +41,9 @@ pub(crate) fn process_from_contents(
         absolute_path: path.to_path_buf(),
         unresolved_references: references_without_range,
         definitions: vec![],
+        syntax_error: processed_file.syntax_error.map(|error| SyntaxError {
+            line: None,
+            ..error
+        }),
     }
 }

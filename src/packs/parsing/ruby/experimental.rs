@@ -79,6 +79,7 @@ mod tests {
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -108,6 +109,7 @@ mod tests {
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -138,6 +140,7 @@ mod tests {
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -168,6 +171,7 @@ mod tests {
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -194,6 +198,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -230,6 +235,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -266,6 +272,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -301,6 +308,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -336,6 +344,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -375,6 +384,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
         assert_eq!(expected, actual);
     }
@@ -415,6 +425,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
 
         assert_eq!(expected, actual);
@@ -456,6 +467,7 @@ end
             absolute_path,
             unresolved_references,
             definitions,
+            syntax_error: None,
         };
 
         assert_eq!(expected, actual);

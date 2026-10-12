@@ -53,6 +53,7 @@ pub fn process_file(
             absolute_path: path.to_path_buf(),
             unresolved_references: vec![],
             definitions: vec![], // TODO
+            syntax_error: None,
         })
     };
 
@@ -61,6 +62,50 @@ pub fn process_file(
     }
 
     result
+}
+
+/// The file's syntax error, if it is one of the app's own. The Ruby and gem
+/// sources that `expose-monkey-patches` also reads would warn about syntax that
+/// pks can't parse, which isn't the app's to fix.
+fn syntax_error_to_warn_about<'a>(
+    processed_file: &'a ProcessedFile,
+    configuration: &Configuration,
+) -> Option<&'a SyntaxError> {
+    processed_file.syntax_error.as_ref().filter(|_| {
+        configuration
+            .included_files
+            .contains(&processed_file.absolute_path)
+    })
+}
+
+fn warn_about_syntax_error(
+    path: &Path,
+    error: &SyntaxError,
+    configuration: &Configuration,
+) {
+    let file = path
+        .strip_prefix(&configuration.absolute_root)
+        .unwrap_or(path);
+    let line = error
+        .line
+        .map(|line| format!(" at line {}", line))
+        .unwrap_or_default();
+    eprintln!(
+        "Warning: `{}` has a syntax error{} ({}), so pks may have missed \
+         references in it.",
+        file.display(),
+        line,
+        error.message
+    );
+}
+
+/// The first error lib-ruby-parser reports in a file. What it can't parse, pks
+/// can't find references in.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SyntaxError {
+    /// None in ERB, whose lines are those of the Ruby that pks makes from it
+    pub line: Option<usize>,
+    pub message: String,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
@@ -92,21 +137,34 @@ pub fn process_files_with_cache(
     paths
         .par_iter()
         .map(|absolute_path| -> anyhow::Result<ProcessedFile> {
-            if is_stdin_file(absolute_path, configuration) {
-                process_file(absolute_path, configuration)
+            let processed_file = if is_stdin_file(absolute_path, configuration)
+            {
+                process_file(absolute_path, configuration)?
             } else {
                 match cache.get(absolute_path)? {
-                    CacheResult::Processed(processed_file) => {
-                        Ok(processed_file)
-                    }
+                    CacheResult::Processed(processed_file) => processed_file,
                     CacheResult::Miss(empty_cache_entry) => {
                         let processed_file =
                             process_file(absolute_path, configuration)?;
-                        cache.write(&empty_cache_entry, &processed_file)?;
-                        Ok(processed_file)
+                        // So the warning comes back until the file is fixed
+                        if syntax_error_to_warn_about(
+                            &processed_file,
+                            configuration,
+                        )
+                        .is_none()
+                        {
+                            cache.write(&empty_cache_entry, &processed_file)?;
+                        }
+                        processed_file
                     }
                 }
+            };
+            if let Some(error) =
+                syntax_error_to_warn_about(&processed_file, configuration)
+            {
+                warn_about_syntax_error(absolute_path, error, configuration);
             }
+            Ok(processed_file)
         })
         .collect()
 }

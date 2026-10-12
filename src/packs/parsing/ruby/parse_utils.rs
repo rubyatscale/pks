@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
-use lib_ruby_parser::{nodes, Loc, Node};
+use lib_ruby_parser::{nodes, Diagnostic, Loc, Node};
 use line_col::LineColLookup;
 
-use crate::packs::parsing::{ParsedDefinition, Range, UnresolvedReference};
+use crate::packs::parsing::{
+    ParsedDefinition, Range, SyntaxError, UnresolvedReference,
+};
 
 use super::inflector_shim::to_class_case;
 
@@ -46,6 +48,19 @@ pub fn get_definition_from(
         fully_qualified_name,
         location: location.to_owned(),
     }
+}
+
+pub fn first_syntax_error(
+    diagnostics: &[Diagnostic],
+    lookup: &LineColLookup,
+) -> Option<SyntaxError> {
+    diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.is_error())
+        .map(|diagnostic| SyntaxError {
+            line: Some(lookup.get(diagnostic.loc.begin).0),
+            message: diagnostic.render_message(),
+        })
 }
 
 pub fn loc_to_range(loc: &Loc, lookup: &LineColLookup) -> Range {
