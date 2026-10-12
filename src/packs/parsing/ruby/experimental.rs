@@ -387,6 +387,36 @@ end
     }
 
     #[test]
+    fn constant_assignments() {
+        // Each defines its targets, and only the value assigned is a reference,
+        // not a target or its scope
+        for (contents, definitions) in [
+            ("A = Bar", &["::A"][..]),
+            ("A::B = Bar", &["::A::B"]),
+            ("A ||= Bar", &["::A"]),
+            ("A &&= Bar", &["::A"]),
+            ("A += Bar", &["::A"]),
+            ("A::B ||= Bar", &["::A::B"]),
+            ("A::B &&= Bar", &["::A::B"]),
+            ("A::B += Bar", &["::A::B"]),
+            ("A, B::C = Bar", &["::A", "::B::C"]),
+            ("begin\nrescue Bar => A\nend", &["::A"]),
+        ] {
+            let references: Vec<String> = process_from_contents(
+                contents.to_owned(),
+                &PathBuf::from("path/to/file.rb"),
+                &Configuration::default(),
+            )
+            .unresolved_references
+            .into_iter()
+            .map(|reference| reference.name)
+            .collect();
+            assert_eq!(references, vec!["Bar"], "{}", contents);
+            assert_eq!(definition_names(contents), definitions, "{}", contents);
+        }
+    }
+
+    #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(
             "\

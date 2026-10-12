@@ -40,6 +40,11 @@ fn test_check_warns_about_a_ruby_file_with_a_syntax_error(
 
         assert_eq!(check_stderr(&fixture, args)?, warning);
         assert_eq!(check_stderr(&fixture, args)?, warning);
+
+        // The method before the error still parses, and its `Bar` is found
+        common::pks(&fixture, &[args, &["check"]].concat()).stdout(
+            predicates::str::contains("packs/foo/app/services/broken.rb:3:4\n"),
+        );
     }
 
     Ok(())
@@ -64,7 +69,8 @@ fn test_check_allows_yield_in_erb() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_check_warns_about_an_erb_file_with_a_syntax_error(
 ) -> Result<(), Box<dyn Error>> {
-    // pks keeps no ERB positions, so the warning gives no line
+    // pks keeps no ERB positions, so the warning gives no line. The `yield` is
+    // no error, but what follows it is.
     let warning = "Warning: `packs/foo/app/views/broken.erb` has a syntax \
                    error (unexpected end-of-input; expected a `)` to close the \
                    arguments), so pks may have missed references in it.\n";
@@ -72,7 +78,7 @@ fn test_check_warns_about_an_erb_file_with_a_syntax_error(
         let fixture = fixture_app()?;
         fs::write(
             fixture.path("packs/foo/app/views/broken.erb"),
-            "<%= Bar.bar( %>\n",
+            "<%= yield %>\n<%= Bar.bar( %>\n",
         )?;
 
         assert_eq!(check_stderr(&fixture, args)?, warning);
