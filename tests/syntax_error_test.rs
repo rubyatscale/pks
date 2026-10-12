@@ -1,4 +1,3 @@
-use assert_cmd::cargo::cargo_bin_cmd;
 use std::{error::Error, fs};
 
 mod common;
@@ -20,13 +19,8 @@ fn check_stderr(
     fixture: &common::Fixture,
     args: &[&str],
 ) -> Result<String, Box<dyn Error>> {
-    let output = cargo_bin_cmd!("pks")
-        .env_remove("RUST_LOG")
-        .arg("--project-root")
-        .arg(fixture.root())
-        .args(args)
-        .arg("check")
-        .output()?;
+    let args = [args, &["check"]].concat();
+    let output = common::pks(fixture, &args).get_output().clone();
     Ok(String::from_utf8(output.stderr)?)
 }
 

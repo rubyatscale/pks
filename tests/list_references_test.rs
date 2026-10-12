@@ -1,21 +1,10 @@
-use assert_cmd::{assert::Assert, cargo::cargo_bin_cmd};
-use jsonschema::Validator;
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use std::{error::Error, fs};
 
 mod common;
 
-fn pks(fixture: &common::Fixture, args: &[&str]) -> Assert {
-    cargo_bin_cmd!("pks")
-        // `RUST_LOG` makes pks log to stderr, which `list_references` expects
-        // to be empty
-        .env_remove("RUST_LOG")
-        .arg("--project-root")
-        .arg(fixture.root())
-        .args(args)
-        .assert()
-}
+use common::pks;
 
 /// Runs pks with `args`, which include `list-references`, and returns its
 /// output after checking it against the schema.
@@ -27,26 +16,8 @@ fn list_references(fixture: &common::Fixture, args: &[&str]) -> Value {
         .stdout
         .clone();
     let output = serde_json::from_slice(&stdout).expect("output is not JSON");
-    validate_schema(&output);
+    common::validate_schema("schema/list-references-output.json", &output);
     output
-}
-
-fn validate_schema(output: &Value) {
-    let schema = fs::read_to_string("schema/list-references-output.json")
-        .expect("Failed to read schema file");
-    let schema: Value =
-        serde_json::from_str(&schema).expect("Schema should be valid JSON");
-    let validator =
-        Validator::new(&schema).expect("Schema should be valid JSON Schema");
-    let errors: Vec<String> = validator
-        .iter_errors(output)
-        .map(|e| format!("  - {}", e))
-        .collect();
-    assert!(
-        errors.is_empty(),
-        "JSON output does not match schema:\n{}",
-        errors.join("\n")
-    );
 }
 
 // In simple_app, `packs/foo` references `::Bar`, which is private to

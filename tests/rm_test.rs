@@ -1,9 +1,10 @@
-use assert_cmd::{assert::Assert, cargo::cargo_bin_cmd};
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
 use std::{collections::BTreeMap, error::Error, fs, path::Path};
 
 mod common;
+
+use common::pks;
 
 // In the fixture, `packs/old` is about to be removed and every other pack
 // still names it: the root and `packs/foo` depend on it, `packs/bar` and
@@ -11,14 +12,6 @@ mod common;
 // and the todo files of `packs/foo` and `packs/bar` record violations on it.
 // No code references `Old` any more, so those todo entries are stale, as they
 // are once the last use of a pack is deleted.
-
-fn pks(fixture: &common::Fixture, args: &[&str]) -> Assert {
-    cargo_bin_cmd!("pks")
-        .arg("--project-root")
-        .arg(fixture.root())
-        .args(args)
-        .assert()
-}
 
 fn read(fixture: &common::Fixture, path: &str) -> String {
     fs::read_to_string(fixture.path(path))

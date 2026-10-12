@@ -1,24 +1,11 @@
 use assert_cmd::cargo::cargo_bin_cmd;
-use jsonschema::Validator;
 use predicates::prelude::*;
 use std::{error::Error, fs};
 
 mod common;
 
 fn validate_check_output_schema(json_value: &serde_json::Value) {
-    let schema_str = fs::read_to_string("schema/check-output.json")
-        .expect("Failed to read schema file");
-    let schema: serde_json::Value =
-        serde_json::from_str(&schema_str).expect("Schema should be valid JSON");
-    let validator =
-        Validator::new(&schema).expect("Schema should be valid JSON Schema");
-    if !validator.is_valid(json_value) {
-        let errors: Vec<String> = validator
-            .iter_errors(json_value)
-            .map(|e| format!("  - {}", e))
-            .collect();
-        panic!("JSON output does not match schema:\n{}", errors.join("\n"));
-    }
+    common::validate_schema("schema/check-output.json", json_value);
 }
 
 pub fn stripped_output(output: Vec<u8>) -> String {
@@ -70,6 +57,8 @@ fn test_check_with_privacy_dependency_error_template_overrides(
 #[test]
 fn test_check_with_private_constants() -> Result<(), Box<dyn Error>> {
     let output = cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which this test expects empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg("tests/fixtures/privacy_violations_with_private_constants")
         .arg("check")
@@ -735,6 +724,8 @@ fn test_check_contents_does_not_warn_about_existing_file_that_is_not_included(
 ) -> Result<(), Box<dyn Error>> {
     // package.yml exists but is not in the include globs.
     cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which this test expects empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check-contents")
@@ -753,6 +744,8 @@ fn test_check_does_not_warn_about_existing_files_that_are_not_included(
 ) -> Result<(), Box<dyn Error>> {
     // What a hook passing every staged file sends alongside the Ruby files.
     cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which this test expects empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
@@ -789,6 +782,8 @@ fn test_check_warns_about_other_spelling_of_included_file(
 fn test_check_does_not_warn_when_every_path_matches_an_included_file(
 ) -> Result<(), Box<dyn Error>> {
     cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which this test expects empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg("tests/fixtures/uses_strict_mode")
         .arg("check")
@@ -983,6 +978,8 @@ fn test_check_ignores_polymorphic_association() -> Result<(), Box<dyn Error>> {
     // `:event` matches the private `::Event` in packs/baz, but a polymorphic
     // association names no class. An empty stderr means the path matched.
     cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which this test expects empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg("tests/fixtures/app_with_rails_relationships")
         .arg("check")
