@@ -24,6 +24,13 @@ pks keeps no source positions in ERB, so a reference in an ERB file has a null
 
 ### Fixes
 
+#### References after a `<%==` tag are no longer missed
+
+pks read Rails' `<%== %>` tag, which outputs without escaping, as Ruby that
+starts with `=`. That doesn't parse, so in an ERB file with one, the tag's
+references and every reference after it were missed. `<%==` is now read like
+`<%=`, so `pks check` can report violations it missed before.
+
 #### `--print-files` no longer breaks JSON output
 
 `-p` printed its "Started processing" and "Finished processing" lines to
