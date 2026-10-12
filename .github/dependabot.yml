@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # Cargo.lock isn't tracked, so raise the minimum versions in Cargo.toml
+    # even when they already allow the new release
+    versioning-strategy: "increase"
+    groups:
+      cargo:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    # dist generates release.yml and pins its actions in dist-workspace.toml
+    exclude-paths:
+      - ".github/workflows/release.yml"
+    schedule:
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
