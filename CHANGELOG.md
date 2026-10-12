@@ -14,9 +14,15 @@ bar(*)`), no longer fail to parse, so pks finds their references and no longer
 warns about them.
 
 On files that lib-ruby-parser could parse, the references and definitions pks
-finds are the same. The syntax errors it warns about read as Prism words them,
-and a reference in a file with an error can be found where it wasn't before,
-since Prism recovers more of the file.
+finds are the same, except where newer Rubies read code differently, since
+Prism reads Ruby as its newest version does. In a block that names no
+parameters, `it` is the block's parameter, not a method call, so with
+`--experimental-parser` it no longer makes a class count as defined. pks also
+warns about syntax that newer Rubies reject, such as `a[k: 1] = v`.
+
+The syntax errors it warns about read as Prism words them, and a reference in
+a file with an error can be found where it wasn't before, since Prism recovers
+more of the file.
 
 Building pks from source now needs a C compiler and libclang.
 
