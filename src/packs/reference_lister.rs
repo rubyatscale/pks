@@ -6,15 +6,16 @@
 use std::{
     collections::HashSet,
     io::{BufWriter, Write},
+    path::PathBuf,
 };
 
-use rayon::prelude::{ParallelIterator, ParallelSlice, ParallelSliceMut};
+use rayon::prelude::{ParallelIterator, ParallelSlice};
 use serde::Serialize;
 
 use super::{
-    checker::{get_checkers, reference::Reference},
+    checker::get_checkers,
     checker_configuration::CheckerType,
-    reference_extractor::get_all_references,
+    reference_extractor::{between_packs, get_all_references, identity},
     Configuration,
 };
 
@@ -49,24 +50,17 @@ pub(crate) fn list(
     let defining_packs = pack_names(configuration, defining_packs)?;
     let referencing_packs = pack_names(configuration, referencing_packs)?;
 
-    let all_references =
-        get_all_references(configuration, &configuration.included_files)?;
-    let mut references: Vec<&Reference> = all_references
-        .iter()
-        .filter(|reference| {
-            let Some(defining) = reference.defining_pack_name.as_deref() else {
-                return false; // A constant no pack defines, such as a gem's
-            };
-            let referencing = reference.referencing_pack_name.as_str();
-            defining != referencing
-                && selected(&defining_packs, defining)
-                && selected(&referencing_packs, referencing)
-        })
-        .collect();
-    // The order the schema promises. It also puts the copies of a reference
-    // next to each other, and as they give the same output in any order, an
-    // unstable sort will do.
-    references.par_sort_unstable_by(|a, b| identity(a).cmp(&identity(b)));
+    // Only the referencing packs' own files can reference from them
+    let owned_files;
+    let files = if referencing_packs.is_empty() {
+        &configuration.included_files
+    } else {
+        owned_files = files_of(configuration, &referencing_packs)?;
+        &owned_files
+    };
+    let all_references = get_all_references(configuration, files)?;
+    let references =
+        between_packs(&all_references, &defining_packs, &referencing_packs);
 
     let checkers = get_checkers(configuration);
     let recorded_violations = &configuration.pack_set.all_violations;
@@ -130,20 +124,17 @@ fn pack_names<'a>(
         .collect()
 }
 
-/// No packs given means every pack.
-fn selected(packs: &HashSet<&str>, pack: &str) -> bool {
-    packs.is_empty() || packs.contains(pack)
-}
-
-/// What sets a reference apart from the others. The copies of a reference made
-/// for each file that defines its constant share it. So do all of an ERB file's
-/// references to one constant, since they are all at line 0.
-fn identity(reference: &Reference) -> (&str, usize, usize, &str, Option<&str>) {
-    (
-        &reference.relative_referencing_file,
-        reference.source_location.line,
-        reference.source_location.column,
-        &reference.constant_name,
-        reference.defining_pack_name.as_deref(),
-    )
+/// The included files that the packs own
+fn files_of(
+    configuration: &Configuration,
+    packs: &HashSet<&str>,
+) -> anyhow::Result<HashSet<PathBuf>> {
+    let mut files = HashSet::new();
+    for file in &configuration.included_files {
+        let owner = configuration.pack_set.for_file(file)?;
+        if owner.is_some_and(|pack| packs.contains(pack.name.as_str())) {
+            files.insert(file.clone());
+        }
+    }
+    Ok(files)
 }

@@ -5,7 +5,8 @@ use crate::packs::{
             namespace_calculator::possible_fully_qualified_constants,
             parse_utils::{
                 fetch_const_const_name, fetch_const_name, fetch_node_location,
-                get_constant_assignment_definition, get_definition_from,
+                first_syntax_error, get_constant_assignment_definition,
+                get_definition_from,
                 get_reference_from_active_record_association, loc_to_range,
             },
         },
@@ -221,6 +222,7 @@ pub(crate) fn process_from_contents(
     let lookup = LineColLookup::new(&contents);
     let parser = Parser::new(contents.clone(), options);
     let parse_result = parser.do_parse();
+    let syntax_error = first_syntax_error(&parse_result.diagnostics, &lookup);
 
     let ast_option: Option<Box<Node>> = parse_result.ast;
 
@@ -231,6 +233,7 @@ pub(crate) fn process_from_contents(
                 absolute_path: path.to_owned(),
                 unresolved_references: vec![],
                 definitions: vec![],
+                syntax_error,
             }
         }
     };
@@ -311,5 +314,6 @@ pub(crate) fn process_from_contents(
         absolute_path,
         unresolved_references,
         definitions,
+        syntax_error,
     }
 }

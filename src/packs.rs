@@ -42,6 +42,7 @@ pub(crate) use self::parsing::process_files_with_cache;
 pub(crate) use self::parsing::ruby::experimental::get_experimental_constant_resolver;
 pub(crate) use self::parsing::ruby::zeitwerk::get_zeitwerk_constant_resolver;
 pub(crate) use self::parsing::ParsedDefinition;
+pub(crate) use self::parsing::SyntaxError;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
 use cli::ColorChoice;
@@ -276,6 +277,9 @@ pub struct ProcessedFile {
     pub absolute_path: PathBuf,
     pub unresolved_references: Vec<UnresolvedReference>,
     pub definitions: Vec<ParsedDefinition>,
+    /// Never cached, since a file with a syntax error isn't
+    #[serde(skip)]
+    pub syntax_error: Option<SyntaxError>,
 }
 
 #[derive(

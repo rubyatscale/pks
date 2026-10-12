@@ -328,6 +328,39 @@ mod tests {
     }
 
     #[test]
+    fn raw_output_tag_is_ruby() {
+        // Read as `= Bar`, the tag hid its own references and every one after
+        let contents: String =
+            String::from("<%= Foo %>\n<%== Bar %>\n<%= Baz %>\n");
+        let configuration = Configuration::default();
+        assert_eq!(
+            vec![
+                UnresolvedReference {
+                    name: String::from("Foo"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                },
+                UnresolvedReference {
+                    name: String::from("Bar"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                },
+                UnresolvedReference {
+                    name: String::from("Baz"),
+                    namespace_path: vec![],
+                    location: Range::default()
+                }
+            ],
+            process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &configuration
+            )
+            .unresolved_references
+        );
+    }
+
+    #[test]
     fn literal_tag_is_text_not_ruby() {
         let contents: String = String::from(
             "/

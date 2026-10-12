@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 ### Features
 
@@ -16,11 +16,39 @@ files alone can't. Unlike `check`, it exits 0 when references have violations.
 
 `--defining-pack` and `--referencing-pack` limit the list to references to or
 from the packs they name, and each can be given more than once. Given both, a
-reference must match both.
+reference must match both. With `--referencing-pack`, pks reads only those
+packs' files, so it takes less time and memory in a large app.
 
 pks keeps no source positions in ERB, so a reference in an ERB file has a null
 `line` and `column`, and the file's references to one constant are listed once.
 `schema/list-references-output.json` describes the output.
+
+### Fixes
+
+#### pks warns about files it can't parse
+
+A file that pks couldn't parse gave it some or none of its references, and
+nothing said so, so `pks check` could pass with violations in that file. pks
+now warns on stderr, naming the file and its first syntax error, with the line
+in a Ruby file. A file with a syntax error isn't cached, so the warning comes
+back on every run until the file is fixed.
+
+pks's parser can't read some newer Ruby syntax, such as Ruby 3.2's anonymous
+argument forwarding (`def foo(*) = bar(*)`), so files that use it get this
+warning too.
+
+#### References after a `<%==` tag are no longer missed
+
+pks read Rails' `<%== %>` tag, which outputs without escaping, as Ruby that
+starts with `=`. That doesn't parse, so in an ERB file with one, the tag's
+references and every reference after it were missed. `<%==` is now read like
+`<%=`, so `pks check` can report violations it missed before.
+
+#### `--print-files` no longer breaks JSON output
+
+`-p` printed its "Started processing" and "Finished processing" lines to
+stdout, ahead of the JSON from `check -o json` and `list-references`, so the
+output didn't parse. They now go to stderr.
 
 ## 0.6.0
 

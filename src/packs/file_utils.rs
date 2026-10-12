@@ -104,7 +104,8 @@ pub fn user_inputted_paths_to_absolute_filepaths(
 pub(crate) fn convert_erb_to_ruby_without_sourcemaps(
     contents: String,
 ) -> String {
-    let regex_pattern = r"(?s)<%=?-?\s*(.*?)\s*-?%>";
+    // `<%==` is Rails' tag for output that isn't escaped
+    let regex_pattern = r"(?s)<%(?:==?)?-?\s*(.*?)\s*-?%>";
     let regex = Regex::new(regex_pattern).unwrap();
 
     let extracted_contents: Vec<&str> = regex

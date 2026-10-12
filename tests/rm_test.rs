@@ -1,9 +1,10 @@
-use assert_cmd::{assert::Assert, cargo::cargo_bin_cmd};
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
 use std::{collections::BTreeMap, error::Error, fs, path::Path};
 
 mod common;
+
+use common::pks;
 
 // In the fixture, `packs/old` is about to be removed and every other pack
 // still names it: the root and `packs/foo` depend on it, `packs/bar` and
@@ -11,14 +12,6 @@ mod common;
 // and the todo files of `packs/foo` and `packs/bar` record violations on it.
 // No code references `Old` any more, so those todo entries are stale, as they
 // are once the last use of a pack is deleted.
-
-fn pks(fixture: &common::Fixture, args: &[&str]) -> Assert {
-    cargo_bin_cmd!("pks")
-        .arg("--project-root")
-        .arg(fixture.root())
-        .args(args)
-        .assert()
-}
 
 fn read(fixture: &common::Fixture, path: &str) -> String {
     fs::read_to_string(fixture.path(path))
@@ -142,6 +135,26 @@ fn test_rm_refuses_a_pack_other_packs_reference() -> Result<(), Box<dyn Error>>
         );
 
     assert_eq!(snapshot(&fixture), before);
+
+    Ok(())
+}
+
+#[test]
+fn test_rm_lists_a_reference_once_when_several_files_define_its_constant(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_obsolete_pack");
+    reference_old_from_baz(&fixture);
+    // The experimental parser resolves `::Old` to each file that defines it
+    fs::create_dir_all(fixture.path("packs/old/app/models"))?;
+    fs::write(
+        fixture.path("packs/old/app/models/old.rb"),
+        "module Old\n  def self.other; end\nend\n",
+    )?;
+
+    pks(&fixture, &["--experimental-parser", "rm", "packs/old"])
+        .code(2)
+        .stdout("packs/baz/app/services/baz.rb:3:4 references ::Old\n")
+        .stderr(predicate::str::contains("Found 1 reference"));
 
     Ok(())
 }
