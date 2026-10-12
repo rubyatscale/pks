@@ -140,6 +140,26 @@ fn test_rm_refuses_a_pack_other_packs_reference() -> Result<(), Box<dyn Error>>
 }
 
 #[test]
+fn test_rm_lists_a_reference_once_when_several_files_define_its_constant(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_obsolete_pack");
+    reference_old_from_baz(&fixture);
+    // The experimental parser resolves `::Old` to each file that defines it
+    fs::create_dir_all(fixture.path("packs/old/app/models"))?;
+    fs::write(
+        fixture.path("packs/old/app/models/old.rb"),
+        "module Old\n  def self.other; end\nend\n",
+    )?;
+
+    pks(&fixture, &["--experimental-parser", "rm", "packs/old"])
+        .code(2)
+        .stdout("packs/baz/app/services/baz.rb:3:4 references ::Old\n")
+        .stderr(predicate::str::contains("Found 1 reference"));
+
+    Ok(())
+}
+
+#[test]
 fn test_rm_force_removes_a_pack_other_packs_reference(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("app_with_obsolete_pack");

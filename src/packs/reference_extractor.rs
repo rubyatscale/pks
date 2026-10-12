@@ -1,6 +1,8 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{
+    IntoParallelRefIterator, ParallelIterator, ParallelSliceMut,
+};
 use tracing::debug;
 
 use crate::packs::{
@@ -86,4 +88,50 @@ pub(crate) fn get_all_references(
     debug!("Finished turning unresolved references into fully qualified references");
 
     references
+}
+
+/// The references from one pack to a constant that another pack defines,
+/// limited to the given packs and sorted by `identity`, which puts the copies
+/// of a reference, one for each file that defines its constant, next to each
+/// other.
+pub(crate) fn between_packs<'a>(
+    references: &'a [Reference],
+    defining_packs: &HashSet<&str>,
+    referencing_packs: &HashSet<&str>,
+) -> Vec<&'a Reference> {
+    let mut references: Vec<&Reference> = references
+        .iter()
+        .filter(|reference| {
+            let Some(defining) = reference.defining_pack_name.as_deref() else {
+                return false; // A constant no pack defines, such as a gem's
+            };
+            let referencing = reference.referencing_pack_name.as_str();
+            defining != referencing
+                && selected(defining_packs, defining)
+                && selected(referencing_packs, referencing)
+        })
+        .collect();
+    // The copies give the same output in any order, so an unstable sort will do
+    references.par_sort_unstable_by(|a, b| identity(a).cmp(&identity(b)));
+    references
+}
+
+/// No packs given means every pack.
+fn selected(packs: &HashSet<&str>, pack: &str) -> bool {
+    packs.is_empty() || packs.contains(pack)
+}
+
+/// What sets a reference apart from the others. The copies of a reference made
+/// for each file that defines its constant share it. So do all of an ERB file's
+/// references to one constant, since they are all at line 0.
+pub(crate) fn identity(
+    reference: &Reference,
+) -> (&str, usize, usize, &str, Option<&str>) {
+    (
+        &reference.relative_referencing_file,
+        reference.source_location.line,
+        reference.source_location.column,
+        &reference.constant_name,
+        reference.defining_pack_name.as_deref(),
+    )
 }

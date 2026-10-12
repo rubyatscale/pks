@@ -7,7 +7,7 @@ use super::{
     get_zeitwerk_constant_resolver,
     pack::{write_pack_to_disk, Pack},
     package_todo,
-    reference_extractor::get_all_references,
+    reference_extractor::{between_packs, get_all_references, identity},
     Configuration,
 };
 
@@ -65,7 +65,9 @@ fn refuse_if_in_use(
     configuration: &Configuration,
     pack: &Pack,
 ) -> anyhow::Result<()> {
-    let references = references_from_other_packs(configuration, pack)?;
+    let all_references =
+        get_all_references(configuration, &configuration.included_files)?;
+    let references = references_from_other_packs(&all_references, pack);
     for reference in &references {
         println!(
             "{}:{}:{} references {}",
@@ -171,34 +173,16 @@ fn nested_packs(configuration: &Configuration, pack: &Pack) -> Vec<String> {
     nested
 }
 
-fn references_from_other_packs(
-    configuration: &Configuration,
+fn references_from_other_packs<'a>(
+    references: &'a [Reference],
     pack: &Pack,
-) -> anyhow::Result<Vec<Reference>> {
-    let mut references: Vec<Reference> =
-        get_all_references(configuration, &configuration.included_files)?
-            .into_iter()
-            .filter(|reference| {
-                reference.referencing_pack_name != pack.name
-                    && reference.defining_pack_name.as_deref()
-                        == Some(pack.name.as_str())
-            })
-            .collect();
-
-    references.sort_by(|a, b| location(a).cmp(&location(b)));
-    // A constant defined in several of the pack's files yields one per file.
-    references.dedup_by(|a, b| location(a) == location(b));
-
-    Ok(references)
-}
-
-fn location(reference: &Reference) -> (&str, usize, usize, &str) {
-    (
-        &reference.relative_referencing_file,
-        reference.source_location.line,
-        reference.source_location.column,
-        &reference.constant_name,
-    )
+) -> Vec<&'a Reference> {
+    let defining_packs = HashSet::from([pack.name.as_str()]);
+    between_packs(references, &defining_packs, &HashSet::new())
+        // A constant defined in several of the pack's files yields one per file
+        .chunk_by(|a, b| identity(a) == identity(b))
+        .map(|copies| copies[0])
+        .collect()
 }
 
 /// Serializes the whole pack, as `add-dependency` does, so the file loses its
