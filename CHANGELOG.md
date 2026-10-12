@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+#### pks parses Ruby with Prism
+
+pks now parses Ruby with [Prism](https://github.com/ruby/prism), the parser
+Ruby itself has used since 3.4, in place of lib-ruby-parser, which supports
+Ruby syntax only up to 3.1 and is no longer maintained. Files that use newer
+syntax, such as Ruby 3.2's anonymous argument forwarding (`def foo(*) =
+bar(*)`), no longer fail to parse, so pks finds their references and no longer
+warns about them.
+
+On files that lib-ruby-parser could parse, the references and definitions pks
+finds are the same, except where newer Rubies read code differently, since
+Prism reads Ruby as its newest version does. In a block that names no
+parameters, `it` is the block's parameter, not a method call, so with
+`--experimental-parser` it no longer makes a class count as defined. pks also
+warns about syntax that newer Rubies reject, such as `a[k: 1] = v`.
+
+The syntax errors it warns about read as Prism words them, and a reference in
+a file with an error can be found where it wasn't before, since Prism recovers
+more of the file.
+
+Building pks from source now needs a C compiler and libclang.
+
+#### No Intel macOS binary
+
+Releases no longer include a binary for Intel Macs (`x86_64-apple-darwin`),
+and the Apple Silicon binary is built on macOS 26.
+
 ## 0.7.0
 
 ### Features

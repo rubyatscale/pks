@@ -868,6 +868,90 @@ FOO = BAR
     }
 
     #[test]
+    fn constant_assignments_define_local_constants() {
+        // Only the value assigned is a reference, not a target or its scope,
+        // nor a later use of a target, which is defined here
+        for contents in [
+            "A = Bar\nA",
+            "A::B = Bar\nA::B",
+            "A ||= Bar\nA",
+            "A &&= Bar\nA",
+            "A += Bar\nA",
+            "A::B ||= Bar\nA::B",
+            "A::B &&= Bar\nA::B",
+            "A::B += Bar\nA::B",
+            "A, B::C = Bar\nA\nB::C",
+            "begin\nrescue Bar => A\nend\nA",
+        ] {
+            let references: Vec<String> = process_from_contents(
+                contents.to_owned(),
+                &PathBuf::from("path/to/file.rb"),
+                &Configuration::default(),
+            )
+            .unresolved_references
+            .into_iter()
+            .map(|reference| reference.name)
+            .collect();
+            assert_eq!(references, vec!["Bar"], "{}", contents);
+        }
+    }
+
+    #[test]
+    fn class_or_module_named_by_an_expression() {
+        // pks skips the class or module, but not what follows it
+        for keyword in ["class", "module"] {
+            let contents = format!(
+                "module Outer\n  {} self::Foo\n    Bar\n  end\n  Baz\nend\n",
+                keyword
+            );
+            let references: Vec<(String, Vec<String>)> = process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &Configuration::default(),
+            )
+            .unresolved_references
+            .into_iter()
+            .map(|reference| (reference.name, reference.namespace_path))
+            .collect();
+            assert_eq!(
+                references,
+                vec![
+                    (String::from("::Outer"), vec![]),
+                    (String::from("Baz"), vec![String::from("Outer")]),
+                ],
+                "{}",
+                keyword
+            );
+        }
+    }
+
+    #[test]
+    fn association_calls() {
+        // Where each finds `Bar`. pks has never read a `&.` call as an
+        // association, and a block doesn't move where one starts.
+        for (body, bar) in [
+            ("self.has_many :bars", Some((2, 2))),
+            ("self&.has_many :bars", None),
+            ("has_many :bars do\n    Baz\n  end", Some((2, 2))),
+        ] {
+            let contents = format!("class Foo\n  {}\nend\n", body);
+            let references = process_from_contents(
+                contents,
+                &PathBuf::from("path/to/file.rb"),
+                &Configuration::default(),
+            )
+            .unresolved_references;
+            let found = references
+                .iter()
+                .find(|reference| reference.name == "Bar")
+                .map(|reference| {
+                    (reference.location.start_row, reference.location.start_col)
+                });
+            assert_eq!(found, bar, "{}", body);
+        }
+    }
+
+    #[test]
     fn has_one_association() {
         let contents: String = String::from(
             "\

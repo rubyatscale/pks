@@ -99,7 +99,7 @@ fn warn_about_syntax_error(
     );
 }
 
-/// The first error lib-ruby-parser reports in a file. What it can't parse, pks
+/// The first error Prism reports in a file. What it can't parse, pks
 /// can't find references in.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SyntaxError {

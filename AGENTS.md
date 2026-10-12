@@ -43,9 +43,9 @@ Rustfmt is configured with `max_width=80` (`.rustfmt.toml`). CI runs clippy with
 - `src/packs/configuration.rs` — `Configuration` struct (the central data object passed everywhere). Built from `packwerk.yml` via `raw_configuration.rs` + `walk_directory.rs`.
 - `src/packs/checker.rs` — Core violation-checking engine. Defines `CheckerInterface` and `ValidatorInterface` traits, `Violation`/`ViolationIdentifier` types, and `check_all()`/`update()`/`validate_all()`.
 - `src/packs/checker/` — Individual checkers: `dependency`, `privacy`, `visibility`, `layer`, `folder_privacy`. Each implements `CheckerInterface`.
-- `src/packs/parsing/` — File parsing. Two modes:
+- `src/packs/parsing/` — File parsing, with [Prism](https://github.com/ruby/prism) through the `ruby-prism` crate. Two modes, which resolve constants differently:
   - **Packwerk mode** (default): Zeitwerk-based constant resolution from file paths (`parsing/ruby/zeitwerk/`)
-  - **Experimental mode** (`--experimental-parser`): AST-based using `lib-ruby-parser` (`parsing/ruby/experimental/`)
+  - **Experimental mode** (`--experimental-parser`): resolution from the definitions parsed out of every file (`parsing/ruby/experimental/`)
   - Both Ruby (`.rb`, `.rake`, `Gemfile`, `.gemspec`) and ERB (`.erb`) are supported.
 - `src/packs/pack.rs` / `pack_set.rs` — `Pack` struct (represents one `package.yml`) and `PackSet` (the collection).
 - `src/packs/package_todo.rs` — Read/write `package_todo.yml` files that record allowed violations.
