@@ -51,13 +51,23 @@ fn test_check_warns_about_a_ruby_file_with_a_syntax_error(
 }
 
 #[test]
-fn test_check_allows_yield_in_erb() -> Result<(), Box<dyn Error>> {
+fn test_check_allows_yield_in_templates() -> Result<(), Box<dyn Error>> {
     // Rails runs a template as the body of a method, so `yield` is no error
     for args in [&[][..], &["--experimental-parser"]] {
         let fixture = fixture_app()?;
+        let packwerk_yml = fixture.path("packwerk.yml");
+        let contents = fs::read_to_string(&packwerk_yml)?;
+        fs::write(
+            &packwerk_yml,
+            format!("{}include:\n- \"**/*.{{rb,erb,builder}}\"\n", contents),
+        )?;
         fs::write(
             fixture.path("packs/foo/app/views/layout.erb"),
             "<p><%= yield %></p>\n<%= yield(:footer) %>\n",
+        )?;
+        fs::write(
+            fixture.path("packs/foo/app/views/feed.xml.builder"),
+            "xml.feed do\n  yield\nend\n",
         )?;
 
         assert_eq!(check_stderr(&fixture, args)?, "");

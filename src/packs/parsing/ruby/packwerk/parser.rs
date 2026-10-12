@@ -245,7 +245,9 @@ pub(crate) fn process_from_contents(
     path: &Path,
     configuration: &Configuration,
 ) -> ProcessedFile {
-    process(contents, path, configuration, false)
+    // Rails runs a Builder template, as it does an ERB one, as a method body
+    let template = path.extension().is_some_and(|ext| ext == "builder");
+    process(contents, path, configuration, template)
 }
 
 /// For the Ruby that pks makes from an ERB template
