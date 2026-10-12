@@ -22,6 +22,14 @@ pks keeps no source positions in ERB, so a reference in an ERB file has a null
 `line` and `column`, and the file's references to one constant are listed once.
 `schema/list-references-output.json` describes the output.
 
+### Fixes
+
+#### `--print-files` no longer breaks JSON output
+
+`-p` printed its "Started processing" and "Finished processing" lines to
+stdout, ahead of the JSON from `check -o json` and `list-references`, so the
+output didn't parse. They now go to stderr.
+
 ## 0.6.0
 
 ### Features

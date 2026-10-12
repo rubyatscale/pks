@@ -231,6 +231,25 @@ fn test_list_references_from_given_packs() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_references_prints_files_to_stderr() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+
+    let output = pks(&fixture, &["--print-files", "list-references"])
+        .success()
+        .get_output()
+        .clone();
+    let references: Value =
+        serde_json::from_slice(&output.stdout).expect("output is not JSON");
+    assert_eq!(
+        references,
+        json!({ "references": [bar_from_foo(), baz_from_foo()] })
+    );
+    assert!(String::from_utf8(output.stderr)?.contains("Started processing"));
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_rejects_an_unknown_pack() -> Result<(), Box<dyn Error>>
 {
     let fixture = common::Fixture::new("simple_app");

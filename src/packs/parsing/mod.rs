@@ -25,7 +25,7 @@ pub fn process_file(
     configuration: &Configuration,
 ) -> anyhow::Result<ProcessedFile> {
     if configuration.print_files {
-        println!("Started processing {}", path.display());
+        eprintln!("Started processing {}", path.display());
     }
     let file_type_option = get_file_type(path);
 
@@ -57,7 +57,7 @@ pub fn process_file(
     };
 
     if configuration.print_files {
-        println!("Finished processing {}", path.display());
+        eprintln!("Finished processing {}", path.display());
     }
 
     result
