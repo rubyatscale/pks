@@ -51,6 +51,32 @@ fn test_check_warns_about_a_ruby_file_with_a_syntax_error(
 }
 
 #[test]
+fn test_check_warns_about_an_error_whose_message_isnt_utf_8(
+) -> Result<(), Box<dyn Error>> {
+    // Read as Windows-31J, the heredoc's name ends mid-character in Prism's
+    // message. The panic pks recovers from prints before the warning.
+    let warning = "Warning: `packs/foo/app/services/sjis.rb` has a syntax \
+                   error at line 2 (its message isn't UTF-8), so pks may have \
+                   missed references in it.\n";
+    for args in [&[][..], &["--experimental-parser"]] {
+        let fixture = fixture_app()?;
+        fs::write(
+            fixture.path("packs/foo/app/services/sjis.rb"),
+            "# encoding: windows-31j\nx = <<~あ\n",
+        )?;
+
+        // 1 for simple_app's violations, not 101 for a panic
+        let output = common::pks(&fixture, &[args, &["check"]].concat())
+            .code(1)
+            .get_output()
+            .clone();
+        assert!(String::from_utf8(output.stderr)?.ends_with(warning));
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_check_allows_yield_in_templates() -> Result<(), Box<dyn Error>> {
     // Rails runs a template as the body of a method, so `yield` is no error
     for args in [&[][..], &["--experimental-parser"]] {

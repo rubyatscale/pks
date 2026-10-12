@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use line_col::LineColLookup;
 use ruby_prism::{
-    CallNode, ConstantId, Diagnostics, KeywordHashNode, Location, Node,
+    CallNode, ConstantId, Diagnostic, Diagnostics, KeywordHashNode, Location,
+    Node,
 };
 
 use crate::packs::parsing::{
@@ -48,12 +49,21 @@ pub fn first_syntax_error(
     lookup: &LineColLookup,
     template: bool,
 ) -> Option<SyntaxError> {
-    let error =
-        errors.find(|error| !(template && error.message() == "Invalid yield"));
+    let error = errors.find(|error| {
+        !(template && error_message(error).as_deref() == Some("Invalid yield"))
+    });
     error.map(|error| SyntaxError {
         line: Some(lookup.get(error.location().start_offset()).0),
-        message: error.message().to_owned(),
+        message: error_message(&error)
+            .unwrap_or_else(|| String::from("its message isn't UTF-8")),
     })
+}
+
+/// Some of Prism's messages quote the file, and `Diagnostic::message` panics on
+/// a quote that ends mid-character, as one can when a magic comment names an
+/// encoding other than UTF-8. The crate gives no other way to read a message.
+fn error_message(error: &Diagnostic) -> Option<String> {
+    std::panic::catch_unwind(|| error.message().to_owned()).ok()
 }
 
 pub fn loc_to_range(loc: &Location, lookup: &LineColLookup) -> Range {
