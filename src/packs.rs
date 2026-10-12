@@ -18,6 +18,7 @@ pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod reference_lister;
 pub(crate) mod remover;
 pub(crate) mod template;
 pub(crate) mod text;
@@ -82,6 +83,14 @@ pub fn remove(
     force: bool,
 ) -> anyhow::Result<()> {
     remover::remove(configuration, &name, force)
+}
+
+pub fn list_references(
+    configuration: &Configuration,
+    defining_packs: &[String],
+    referencing_packs: &[String],
+) -> anyhow::Result<()> {
+    reference_lister::list(configuration, defining_packs, referencing_packs)
 }
 
 /// Determine whether to use colors based on the color choice

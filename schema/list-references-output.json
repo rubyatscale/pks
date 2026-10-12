@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pks list-references JSON output",
+  "type": "object",
+  "required": ["references"],
+  "additionalProperties": false,
+  "properties": {
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Reference" }
+    }
+  },
+  "$defs": {
+    "ViolationType": {
+      "type": "string",
+      "enum": ["dependency", "privacy", "visibility", "layer", "folder_privacy"]
+    },
+    "Reference": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "column",
+        "constant_name",
+        "referencing_pack_name",
+        "defining_pack_name",
+        "violations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "line": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "null in ERB, where pks keeps no source positions, and a file's references to one constant are listed once"
+        },
+        "column": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Counted from 0, as in packwerk; null in ERB"
+        },
+        "constant_name": { "type": "string" },
+        "referencing_pack_name": { "type": "string" },
+        "defining_pack_name": { "type": "string" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Violation" },
+          "description": "The violations `pks check` finds in this reference, which are none when the reference is allowed"
+        }
+      }
+    },
+    "Violation": {
+      "type": "object",
+      "required": ["violation_type", "strict", "recorded"],
+      "additionalProperties": false,
+      "properties": {
+        "violation_type": { "$ref": "#/$defs/ViolationType" },
+        "strict": { "type": "boolean" },
+        "recorded": {
+          "type": "boolean",
+          "description": "Whether a package_todo.yml records this violation"
+        }
+      }
+    }
+  }
+}

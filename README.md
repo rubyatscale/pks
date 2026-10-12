@@ -59,6 +59,7 @@ Commands:
   list-packs                      List packs based on configuration in packwerk.yml (for debugging purposes)
   list-included-files             List analyzed files based on configuration in packwerk.yml (for debugging purposes)
   list-definitions                List the constants that packs sees and where it sees them (for debugging purposes)
+  list-references                 List references between packs as JSON, with any violations they make
   help                            Print this message or the help of the given subcommand(s)
 
 Options:

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+#### `pks list-references` lists the references between packs
+
+`pks list-references` prints, as JSON, every reference from one pack to a
+constant that another pack defines, with any violations `pks check` finds in
+it. Each violation says whether a `package_todo.yml` records it and whether the
+pack enforcing it is strict. A reference that the packs' rules allow, such as
+one covered by a declared dependency, is listed with no violations. So this
+shows how other packs use a pack, which `package_todo.yml` files alone can't.
+Unlike `check`, it exits 0 when references have violations.
+
+`--defining-pack` and `--referencing-pack` limit the list to references to or
+from the packs they name, and each can be given more than once.
+
+pks keeps no source positions in ERB, so a reference in an ERB file has a null
+`line` and `column`, and the file's references to one constant are listed once.
+`schema/list-references-output.json` describes the output.
+
 ## 0.6.0
 
 ### Features

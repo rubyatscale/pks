@@ -185,6 +185,19 @@ enum Command {
         about = "List the constants that packs sees and where it sees them (for debugging purposes)"
     )]
     ListDefinitions(ListDefinitionsArgs),
+
+    #[clap(
+        about = "List references between packs as JSON, with any violations they make"
+    )]
+    ListReferences {
+        /// List only references to this pack's constants (can be repeated)
+        #[arg(long, value_name = "PACK")]
+        defining_pack: Vec<String>,
+
+        /// List only references from this pack's files (can be repeated)
+        #[arg(long, value_name = "PACK")]
+        referencing_pack: Vec<String>,
+    },
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -337,6 +350,14 @@ pub fn run() -> anyhow::Result<()> {
             let ambiguous = args.ambiguous;
             packs::list_definitions(&configuration, ambiguous)
         }
+        Command::ListReferences {
+            defining_pack,
+            referencing_pack,
+        } => packs::list_references(
+            &configuration,
+            &defining_pack,
+            &referencing_pack,
+        ),
         Command::ExposeMonkeyPatches(args) => packs::expose_monkey_patches(
             &configuration,
             &args.rubydir,
