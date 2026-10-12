@@ -61,3 +61,43 @@ jobs:
 
       - name: Run cargo clippy
         run: cargo clippy --all-targets --all-features
+  build:
+    # dist builds releases on these runners, the ones its plan picks for the
+    # targets in dist-workspace.toml, but only when releasing. Prism is C, so
+    # each needs a C compiler and the libclang that bindgen uses.
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-22.04
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # As dist does for this target
+      - name: Install musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Run cargo build
+        shell: bash
+        run: |
+          rustup target add "$TARGET"
+          cargo build --release --target "$TARGET"
