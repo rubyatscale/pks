@@ -80,9 +80,12 @@ jobs:
             runner: ubuntu-22.04
           - target: x86_64-pc-windows-msvc
             runner: windows-2022
+            # dist links the C runtime statically, so cc builds Prism with /MT
+            rustflags: -Ctarget-feature=+crt-static
     runs-on: ${{ matrix.runner }}
     env:
       TARGET: ${{ matrix.target }}
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,5 +100,13 @@ jobs:
       - name: Run cargo build
         shell: bash
         run: |
+          rustup toolchain install
           rustup target add "$TARGET"
-          cargo build --release --target "$TARGET"
+          cargo build --profile dist --target "$TARGET"
+
+      # Only Test Suite runs Prism otherwise, and only on x86_64 Linux
+      - name: Run pks on a fixture
+        shell: bash
+        run: |
+          "target/$TARGET/dist/pks" --project-root tests/fixtures/simple_app \
+            --no-cache list-references | grep -F '"constant_name":"::Bar"'
