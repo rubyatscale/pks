@@ -110,3 +110,16 @@ jobs:
         run: |
           "target/$TARGET/dist/pks" --project-root tests/fixtures/simple_app \
             --no-cache list-references | grep -F '"constant_name":"::Bar"'
+  build-all:
+    # The one check for the ruleset to require, since the matrix's names change
+    # with its targets. A skipped required check counts as passing, so this runs
+    # even when a build fails, and fails then.
+    name: Build
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that every target built
+        env:
+          RESULT: ${{ needs.build.result }}
+        run: test "$RESULT" = success
