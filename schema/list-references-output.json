@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pks list-references JSON output",
+  "type": "object",
+  "required": ["references"],
+  "additionalProperties": false,
+  "properties": {
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Reference" },
+      "description": "Sorted by file, line, column, constant_name and defining_pack_name. A constant that several packs define gives a reference to each of them at the same place."
+    }
+  },
+  "$defs": {
+    "ViolationType": {
+      "type": "string",
+      "enum": ["dependency", "privacy", "visibility", "layer", "folder_privacy"]
+    },
+    "Reference": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "column",
+        "constant_name",
+        "referencing_pack_name",
+        "defining_pack_name",
+        "violations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Relative to the project root"
+        },
+        "line": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Counted from 1. null in ERB, where pks keeps no source positions, so an ERB file's references to one constant are listed once. `pks check -o json` gives 0 there."
+        },
+        "column": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Counted in bytes from 0. null when line is null."
+        },
+        "constant_name": { "type": "string" },
+        "referencing_pack_name": { "type": "string" },
+        "defining_pack_name": { "type": "string" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Violation" },
+          "description": "The violations `pks check --ignore-recorded-violations` finds in this reference, in the order dependency, privacy, visibility, layer, folder_privacy. Empty when the reference breaks no rule that is enforced, as when a dependency is declared or enforce_dependencies is false."
+        }
+      },
+      "if": { "properties": { "line": { "type": "null" } } },
+      "then": { "properties": { "column": { "type": "null" } } },
+      "else": { "properties": { "column": { "type": "integer" } } }
+    },
+    "Violation": {
+      "type": "object",
+      "required": ["violation_type", "strict", "recorded"],
+      "additionalProperties": false,
+      "properties": {
+        "violation_type": { "$ref": "#/$defs/ViolationType" },
+        "strict": {
+          "type": "boolean",
+          "description": "Whether the pack that enforces the rule is strict about it: the referencing pack for dependency and layer, and the defining pack for privacy, visibility and folder_privacy"
+        },
+        "recorded": {
+          "type": "boolean",
+          "description": "Whether a package_todo.yml records this violation. `pks check` reports only the violations that are not recorded."
+        }
+      }
+    }
+  }
+}

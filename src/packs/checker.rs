@@ -569,7 +569,7 @@ fn get_all_violations(
     violations
 }
 
-fn get_checkers(
+pub(crate) fn get_checkers(
     configuration: &Configuration,
 ) -> Vec<Box<dyn CheckerInterface + Send + Sync>> {
     vec![
