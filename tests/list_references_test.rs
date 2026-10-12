@@ -8,6 +8,9 @@ mod common;
 
 fn pks(fixture: &common::Fixture, args: &[&str]) -> Assert {
     cargo_bin_cmd!("pks")
+        // `RUST_LOG` makes pks log to stderr, which `list_references` expects
+        // to be empty
+        .env_remove("RUST_LOG")
         .arg("--project-root")
         .arg(fixture.root())
         .args(args)
@@ -309,12 +312,29 @@ fn test_list_references_in_erb() -> Result<(), Box<dyn Error>> {
 fn test_list_references_to_a_constant_defined_in_several_files(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
-    // The experimental parser resolves `::Bar` to each file that defines it,
-    // and only the one under app/services is private.
+    // The experimental parser resolves `::Bar` to each file that defines it.
+    // The one under app/public makes only a dependency violation, since it is
+    // public, and the one under app/services makes only a privacy violation,
+    // since `packs/foo` ignores dependencies on that folder. Neither copy of
+    // the reference makes both violations, whichever comes first.
     fs::create_dir_all(fixture.path("packs/bar/app/public"))?;
     fs::write(
         fixture.path("packs/bar/app/public/bar.rb"),
         "module Bar\n  def self.public_method; end\nend\n",
+    )?;
+    fs::write(
+        fixture.path("packs/foo/package.yml"),
+        "\
+enforce_dependencies: true
+enforce_privacy: true
+dependencies:
+- packs/baz
+enforcement_globs_ignore:
+- enforcements:
+  - dependency
+  ignores:
+  - packs/bar/app/services/**
+",
     )?;
 
     // As in `check`, the reference is listed once, with the violations it makes
@@ -326,6 +346,286 @@ fn test_list_references_to_a_constant_defined_in_several_files(
             &["--experimental-parser", "list-references"]
         ),
         json!({ "references": [bar_from_foo()] })
+    );
+
+    Ok(())
+}
+
+/// A reference from `packs/foo` to a constant that `packs/bar` keeps private,
+/// which breaks the same two rules as `bar_from_foo`. `None` is a position in
+/// ERB.
+fn to_bar_pack(
+    file: &str,
+    position: Option<(u64, u64)>,
+    constant_name: &str,
+) -> Value {
+    let mut reference = bar_from_foo();
+    reference["file"] = json!(file);
+    reference["line"] = json!(position.map(|(line, _)| line));
+    reference["column"] = json!(position.map(|(_, column)| column));
+    reference["constant_name"] = json!(constant_name);
+    reference
+}
+
+#[test]
+fn test_list_references_lists_each_use_of_a_constant_in_a_file(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // `::Bar` twice on one line, then at the same column on the next two
+    let file = "packs/foo/app/services/foo_multi.rb";
+    fs::write(
+        fixture.path(file),
+        "module FooMulti\n  def bar\n    Bar.call(Bar.new)\n    Bar\n    \
+         Bar\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((3, 4)), "::Bar"),
+                to_bar_pack(file, Some((3, 13)), "::Bar"),
+                to_bar_pack(file, Some((4, 4)), "::Bar"),
+                to_bar_pack(file, Some((5, 4)), "::Bar"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_at_the_start_of_a_file() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // Line 1 and column 0 are positions, unlike ERB's line 0
+    let file = "packs/foo/app/services/foo_first_line.rb";
+    fs::write(fixture.path(file), "Bar.bar\n")?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((1, 0)), "::Bar"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_lists_files_in_order() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // pks reads files in no particular order, so with this many, the order it
+    // read them in would almost never be sorted
+    let names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    for name in names.iter().rev() {
+        fs::write(
+            fixture.path(&format!("packs/foo/app/services/ref_{name}.rb")),
+            format!(
+                "module Ref{}\n  def bar\n    Bar\n  end\nend\n",
+                name.to_uppercase()
+            ),
+        )?;
+    }
+
+    let mut expected = vec![bar_from_foo(), baz_from_foo()];
+    for name in names {
+        expected.push(to_bar_pack(
+            &format!("packs/foo/app/services/ref_{name}.rb"),
+            Some((3, 4)),
+            "::Bar",
+        ));
+    }
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({ "references": expected })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_in_erb_lists_each_file_and_constant(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // Both constants are `packs/bar`'s
+    fs::write(
+        fixture.path("packs/foo/app/views/foo.erb"),
+        "<%= Bar.bar %>\n<%= SomeConcern %>\n",
+    )?;
+    fs::write(
+        fixture.path("packs/foo/app/views/other.erb"),
+        "<%= Bar.bar %>\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["list-references", "--defining-pack", "packs/bar"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack("packs/foo/app/views/foo.erb", None, "::Bar"),
+                to_bar_pack(
+                    "packs/foo/app/views/foo.erb",
+                    None,
+                    "::SomeConcern"
+                ),
+                to_bar_pack("packs/foo/app/views/other.erb", None, "::Bar"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_a_constant_defined_in_several_packs(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // Under the experimental parser `::Bar` is now `packs/baz`'s as well, and
+    // `packs/foo` depends on `packs/baz`, which doesn't keep it private
+    fs::create_dir_all(fixture.path("packs/baz/app/models"))?;
+    fs::write(
+        fixture.path("packs/baz/app/models/bar.rb"),
+        "module Bar\n  def self.other; end\nend\n",
+    )?;
+
+    let mut bar_in_baz = bar_from_foo();
+    bar_in_baz["defining_pack_name"] = json!("packs/baz");
+    bar_in_baz["violations"] = json!([]);
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({ "references": [bar_from_foo(), bar_in_baz] })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_says_when_a_violation_is_recorded_but_not_strict(
+) -> Result<(), Box<dyn Error>> {
+    // `packs/foo` doesn't depend on `packs/bar`, and its package_todo.yml
+    // records the dependency violation in both files that use `::Bar`
+    let fixture = common::Fixture::new("contains_package_todo");
+
+    let reference = |file: &str| {
+        json!({
+            "file": file,
+            "line": 3,
+            "column": 4,
+            "constant_name": "::Bar",
+            "referencing_pack_name": "packs/foo",
+            "defining_pack_name": "packs/bar",
+            "violations": [
+                {
+                    "violation_type": "dependency",
+                    "strict": false,
+                    "recorded": true
+                }
+            ]
+        })
+    };
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                reference("packs/foo/app/services/foo.rb"),
+                reference("packs/foo/app/services/other_foo.rb"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+/// One reference from `packs/baz`, and one from `packs/foos/too`, which the
+/// rule allows, to `::Foo` in `packs/foos/foo`
+fn from_baz_and_foos_too(violation_type: &str) -> Value {
+    let reference = |file: &str, referencing_pack_name: &str| {
+        json!({
+            "file": file,
+            "line": 3,
+            "column": 4,
+            "constant_name": "::Foo",
+            "referencing_pack_name": referencing_pack_name,
+            "defining_pack_name": "packs/foos/foo",
+            "violations": []
+        })
+    };
+    let mut from_baz = reference("packs/baz/app/services/baz.rb", "packs/baz");
+    from_baz["violations"] = json!([
+        { "violation_type": violation_type, "strict": false, "recorded": false }
+    ]);
+    json!({
+        "references": [
+            from_baz,
+            reference(
+                "packs/foos/too/app/services/ref_foo.rb",
+                "packs/foos/too"
+            ),
+        ]
+    })
+}
+
+#[test]
+fn test_list_references_with_a_visibility_violation(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("visibility_violations");
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        from_baz_and_foos_too("visibility")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_with_a_folder_privacy_violation(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("folder_privacy_violations");
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        from_baz_and_foos_too("folder_privacy")
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_with_a_layer_violation() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("layer_violations");
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [{
+                "file": "packs/feature_flags/app/services/feature_flags.rb",
+                "line": 2,
+                "column": 0,
+                "constant_name": "::Payments",
+                "referencing_pack_name": "packs/feature_flags",
+                "defining_pack_name": "packs/payments",
+                "violations": [
+                    {
+                        "violation_type": "layer",
+                        "strict": false,
+                        "recorded": false
+                    }
+                ]
+            }]
+        })
     );
 
     Ok(())

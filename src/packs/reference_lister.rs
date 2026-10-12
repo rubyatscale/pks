@@ -8,6 +8,7 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use rayon::prelude::{ParallelIterator, ParallelSlice, ParallelSliceMut};
 use serde::Serialize;
 
 use super::{
@@ -62,7 +63,10 @@ pub(crate) fn list(
                 && selected(&referencing_packs, referencing)
         })
         .collect();
-    references.sort_by(|a, b| identity(a).cmp(&identity(b)));
+    // The order the schema promises. It also puts the copies of a reference
+    // next to each other, and as they give the same output in any order, an
+    // unstable sort will do.
+    references.par_sort_unstable_by(|a, b| identity(a).cmp(&identity(b)));
 
     let checkers = get_checkers(configuration);
     let recorded_violations = &configuration.pack_set.all_violations;
@@ -71,7 +75,7 @@ pub(crate) fn list(
         // reference for each file, and their violations can differ, as when
         // only one of the files is public. Like `check`, list each violation
         // that any copy makes.
-        .chunk_by(|a, b| identity(a) == identity(b))
+        .par_chunk_by(|a, b| identity(a) == identity(b))
         .map(|copies| {
             let mut violations = Vec::new();
             for checker in &checkers {
