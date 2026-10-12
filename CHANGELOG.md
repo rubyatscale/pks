@@ -16,7 +16,8 @@ files alone can't. Unlike `check`, it exits 0 when references have violations.
 
 `--defining-pack` and `--referencing-pack` limit the list to references to or
 from the packs they name, and each can be given more than once. Given both, a
-reference must match both.
+reference must match both. With `--referencing-pack`, pks reads only those
+packs' files, so it takes less time and memory in a large app.
 
 pks keeps no source positions in ERB, so a reference in an ERB file has a null
 `line` and `column`, and the file's references to one constant are listed once.

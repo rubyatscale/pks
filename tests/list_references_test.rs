@@ -250,6 +250,27 @@ fn test_list_references_prints_files_to_stderr() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_references_from_given_packs_reads_only_their_files(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // pks warns about a file that doesn't parse, but only if it reads it
+    fs::write(fixture.path("packs/bar/app/services/broken.rb"), "def a(\n")?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["list-references", "--referencing-pack", "packs/foo"]
+        ),
+        json!({ "references": [bar_from_foo(), baz_from_foo()] })
+    );
+    pks(&fixture, &["list-references"])
+        .success()
+        .stderr(predicates::str::contains("broken.rb"));
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_rejects_an_unknown_pack() -> Result<(), Box<dyn Error>>
 {
     let fixture = common::Fixture::new("simple_app");

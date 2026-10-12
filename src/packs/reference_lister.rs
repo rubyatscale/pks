@@ -6,6 +6,7 @@
 use std::{
     collections::HashSet,
     io::{BufWriter, Write},
+    path::PathBuf,
 };
 
 use rayon::prelude::{ParallelIterator, ParallelSlice, ParallelSliceMut};
@@ -49,8 +50,15 @@ pub(crate) fn list(
     let defining_packs = pack_names(configuration, defining_packs)?;
     let referencing_packs = pack_names(configuration, referencing_packs)?;
 
-    let all_references =
-        get_all_references(configuration, &configuration.included_files)?;
+    // Only the referencing packs' own files can reference from them
+    let owned_files;
+    let files = if referencing_packs.is_empty() {
+        &configuration.included_files
+    } else {
+        owned_files = files_of(configuration, &referencing_packs)?;
+        &owned_files
+    };
+    let all_references = get_all_references(configuration, files)?;
     let mut references: Vec<&Reference> = all_references
         .iter()
         .filter(|reference| {
@@ -128,6 +136,21 @@ fn pack_names<'a>(
         .iter()
         .map(|name| Ok(configuration.pack_set.for_pack(name)?.name.as_str()))
         .collect()
+}
+
+/// The included files that the packs own
+fn files_of(
+    configuration: &Configuration,
+    packs: &HashSet<&str>,
+) -> anyhow::Result<HashSet<PathBuf>> {
+    let mut files = HashSet::new();
+    for file in &configuration.included_files {
+        let owner = configuration.pack_set.for_file(file)?;
+        if owner.is_some_and(|pack| packs.contains(pack.name.as_str())) {
+            files.insert(file.clone());
+        }
+    }
+    Ok(files)
 }
 
 /// No packs given means every pack.
