@@ -54,7 +54,7 @@ fn test_check_warns_about_a_ruby_file_with_a_syntax_error(
 fn test_check_warns_about_an_error_whose_message_isnt_utf_8(
 ) -> Result<(), Box<dyn Error>> {
     // Read as Windows-31J, the heredoc's name ends mid-character in Prism's
-    // message. The panic pks recovers from prints before the warning.
+    // message
     let warning = "Warning: `packs/foo/app/services/sjis.rb` has a syntax \
                    error at line 2 (its message isn't UTF-8), so pks may have \
                    missed references in it.\n";
@@ -70,7 +70,7 @@ fn test_check_warns_about_an_error_whose_message_isnt_utf_8(
             .code(1)
             .get_output()
             .clone();
-        assert!(String::from_utf8(output.stderr)?.ends_with(warning));
+        assert_eq!(String::from_utf8(output.stderr)?, warning);
     }
 
     Ok(())

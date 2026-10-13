@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cell::Cell, collections::HashSet, sync::Once};
 
 use line_col::LineColLookup;
 use ruby_prism::{
@@ -63,7 +63,25 @@ pub fn first_syntax_error(
 /// a quote that ends mid-character, as one can when a magic comment names an
 /// encoding other than UTF-8. The crate gives no other way to read a message.
 fn error_message(error: &Diagnostic) -> Option<String> {
-    std::panic::catch_unwind(|| error.message().to_owned()).ok()
+    // The default hook would print that panic, which pks recovers from
+    static QUIET_HOOK: Once = Once::new();
+    QUIET_HOOK.call_once(|| {
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !READING_MESSAGE.get() {
+                hook(info);
+            }
+        }));
+    });
+
+    READING_MESSAGE.set(true);
+    let message = std::panic::catch_unwind(|| error.message().to_owned()).ok();
+    READING_MESSAGE.set(false);
+    message
+}
+
+thread_local! {
+    static READING_MESSAGE: Cell<bool> = const { Cell::new(false) };
 }
 
 pub fn loc_to_range(loc: &Location, lookup: &LineColLookup) -> Range {
