@@ -204,8 +204,9 @@ pub(crate) fn walk_directory(
     );
 
     // dua-core's workers stop while a few batches wait for this loop, as they
-    // do each time it parses a package.yml, so this thread drains them. Not
-    // needed once dua-core has https://github.com/Byron/dua-cli/pull/413
+    // do each time it parses a package.yml, so this thread drains them. Once a
+    // release has `Options::queued_batches_per_worker`, set that instead
+    // (https://github.com/Byron/dua-cli/pull/413).
     let (sender, walk) = std::sync::mpsc::channel();
     let receiving = std::thread::spawn(move || {
         for entry in dua_walk {
