@@ -66,6 +66,45 @@ Without `--experimental-parser`, pks still looks up a constant written inside
 `class ::Foo` as packwerk does, so `Bar` written there is never `::Foo::Bar`.
 It's missed, or taken for a top-level `::Bar`.
 
+#### `--experimental-parser` looks up an association from its model's name
+
+With `--experimental-parser`, pks looked up the class of an association, as
+`has_many :tacos`, as Ruby looks up a constant written where it's declared.
+Rails looks it up from the model's name: in `class Outer::Foo`, as
+`Outer::Foo::Taco`, `Outer::Taco`, then `Taco`, and in `class ::Foo` inside
+`module Outer`, as `Foo::Taco`, then `Taco`. pks now does too, so in
+`class Outer::Foo` it finds `Outer::Taco` where it found `Taco`, and in
+`class ::Foo` it no longer takes `Outer::Taco` for the class.
+
+#### `--experimental-parser` names a constant written through `Object`
+
+The constants of `Object` are the top level's, so `class Object::Bar` inside
+`module CoreExt` defines `::Bar`, as does `class Bar` inside a `class Object`
+at the top level of a file. With `--experimental-parser`, pks named these
+`::CoreExt::Object::Bar` and `::Object::Bar`. It now names them `::Bar`,
+taking it that no namespace defines an `Object` of its own. A reference
+written `::Object::Bar`, or `Object::Bar` where no namespace around it defines
+an `Object`, now resolves to `::Bar` too. A `class Object` inside a namespace
+is still the namespace's own, as in Ruby.
+
+#### pks finds what packwerk finds around a name written from the top level
+
+Without `--experimental-parser`, pks differed from packwerk in two cases, and
+now matches it:
+
+- packwerk names `class ::Burrito` inside `module Outer` `::Outer::::Burrito`,
+  and finds no constant for it. pks took it for a reference to `Outer`, in the
+  pack that defines `Outer`. And where packwerk takes `::Aa::Bb::::Cee`, in
+  `module Aa; module Bb; class ::Cee`, for a reference to `Aa`, pks took it for
+  one to `Aa::Bb`.
+- After `class ::Taco` or `::Taco = 1` at the top level of a file, packwerk
+  counts a `Taco` or `::Taco` written later in the file as a reference, since
+  it names the definition `::::Taco`. pks took it for the file's own.
+
+So `pks check` may report a violation it didn't, or no longer report one, and a
+`package_todo.yml` entry for one it no longer reports is stale until you run
+`pks update`.
+
 ## 0.7.0
 
 ### Features
