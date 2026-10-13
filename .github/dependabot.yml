@@ -4,9 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    # Update Cargo.lock, and raise a requirement in Cargo.toml only for a
-    # release it doesn't allow
-    versioning-strategy: "increase-if-necessary"
+    # No versioning-strategy: for cargo, Dependabot accepts only auto and
+    # lockfile-only, and auto updates Cargo.lock, raising a requirement in
+    # Cargo.toml only for a release it doesn't allow
     groups:
       cargo:
         patterns:
