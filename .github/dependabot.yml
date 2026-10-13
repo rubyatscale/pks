@@ -4,9 +4,9 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    # Cargo.lock isn't tracked, so raise the minimum versions in Cargo.toml
-    # even when they already allow the new release
-    versioning-strategy: "increase"
+    # Update Cargo.lock, and raise a requirement in Cargo.toml only for a
+    # release it doesn't allow
+    versioning-strategy: "increase-if-necessary"
     groups:
       cargo:
         patterns:
