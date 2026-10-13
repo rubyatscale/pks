@@ -50,6 +50,9 @@ pub fn combine_namespace_with_constant_name(
 /// doesn't nest in the namespaces around it. packwerk nests it anyway, naming
 /// `class ::Foo` `::::Foo`, or `::Outer::::Foo` inside `module Outer`, and so
 /// do the packwerk parser and the Zeitwerk resolver, which match it.
+///
+/// The constants of `Object` are the top level's, so `::Object::Foo` is
+/// `::Foo`, as is `Foo` inside a `class Object` at the top level.
 pub fn nest_constant_name(namespace_path: &[&str], const_name: &str) -> String {
     let mut name = String::new();
     for part in namespace_path.iter().copied().chain([const_name]) {
@@ -59,6 +62,9 @@ pub fn nest_constant_name(namespace_path: &[&str], const_name: &str) -> String {
             name.push_str("::");
         }
         name.push_str(part);
+    }
+    while name.starts_with("::Object::") {
+        name.replace_range(.."::Object".len(), "");
     }
     name
 }

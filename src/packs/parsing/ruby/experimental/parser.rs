@@ -39,7 +39,7 @@ impl ReferenceCollector<'_> {
     ) {
         if let Ok(name) = name {
             let location = loc_to_range(location, &self.line_col_lookup);
-            let definition = self.definition(&name, location);
+            let definition = self.definition(&defined_name(name), location);
             self.definitions.push(definition);
         }
     }
@@ -110,7 +110,7 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
             return;
         }
 
-        let namespace = namespace_result.unwrap();
+        let namespace = defined_name(namespace_result.unwrap());
 
         if let Some(inner) = node.superclass() {
             self.visit(&inner);
@@ -194,8 +194,9 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
     visit_constant_assignments!();
 
     fn visit_module_node(&mut self, node: &ModuleNode<'pr>) {
-        let namespace =
-            fetch_const_name(&node.constant_path()).unwrap_or("".to_owned());
+        let namespace = defined_name(
+            fetch_const_name(&node.constant_path()).unwrap_or("".to_owned()),
+        );
         let location = loc_to_range(
             &node.constant_path().location(),
             &self.line_col_lookup,
@@ -247,6 +248,17 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
     fn visit_def_node(&mut self, node: &DefNode<'pr>) {
         self.behavioral_change_in_namespace = true;
         ruby_prism::visit_def_node(self, node);
+    }
+}
+
+/// The name of a class, module or constant as defined, with `Object::Foo` taken
+/// for `::Foo`. Ruby looks `Object` up as it does any constant, so a namespace
+/// could define an `Object` of its own, but pks can't look it up here, and takes
+/// it that none does.
+fn defined_name(name: String) -> String {
+    match name.strip_prefix("Object::") {
+        Some(name) => format!("::{}", name),
+        None => name,
     }
 }
 

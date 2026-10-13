@@ -451,6 +451,32 @@ end
     }
 
     #[test]
+    fn definitions_in_object() {
+        for (contents, definitions) in [
+            (
+                "module CoreExt; class Object::Bar; def a; end; end; end",
+                &["::Bar"][..],
+            ),
+            ("class Object; class Bar; def a; end; end; end", &["::Bar"]),
+            (
+                "module CoreExt; Object::BAR = 1; ::Object::BAZ = 1; end",
+                &["::BAR", "::BAZ"],
+            ),
+            (
+                "module CoreExt; class ::Object; BAR = 1; end; end",
+                &["::BAR"],
+            ),
+            // A class written `Object` in a namespace is the namespace's own
+            (
+                "module CoreExt; class Object; BAR = 1; end; end",
+                &["::CoreExt::Object::BAR"],
+            ),
+        ] {
+            assert_eq!(definition_names(contents), definitions, "{}", contents);
+        }
+    }
+
+    #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(
             "\
