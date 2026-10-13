@@ -452,6 +452,46 @@ fn test_list_references_after_a_class_defined_from_the_top_level(
     Ok(())
 }
 
+#[test]
+fn test_list_references_from_associations_by_the_models_name(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n\
+         module Outer\n  class Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    // Rails looks `:tacos` up from the model's name, as `Outer::Foo::Taco`,
+    // `Outer::Taco`, then `Taco` from `Outer::Foo`, and as `Foo::Taco`, then
+    // `Taco` from `Foo`, which `class ::Foo` names whatever surrounds it
+    let compact = "packs/foo/app/services/foo_compact.rb";
+    fs::write(
+        fixture.path(compact),
+        "class Outer::Foo\n  has_many :tacos\nend\n",
+    )?;
+    let top_level = "packs/foo/app/services/foo_top_level.rb";
+    fs::write(
+        fixture.path(top_level),
+        "module Outer\n  class ::Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(compact, Some((2, 2)), "::Outer::Taco"),
+                to_bar_pack(top_level, Some((3, 4)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
 /// A reference from `packs/foo` to a constant that `packs/bar` keeps private,
 /// which breaks the same two rules as `bar_from_foo`. `None` is a position in
 /// ERB.

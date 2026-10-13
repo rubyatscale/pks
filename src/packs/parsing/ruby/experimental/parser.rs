@@ -53,6 +53,23 @@ impl ReferenceCollector<'_> {
         }
     }
 
+    /// Rails looks up an association's class from its model's name, so these
+    /// are that name's: `["Foo"]` in `module Outer; class ::Foo`, and
+    /// `["Outer", "Foo"]` in `class Outer::Foo`.
+    fn model_namespaces(&self) -> Vec<String> {
+        let Some((model, namespaces)) = self.current_namespaces.split_last()
+        else {
+            return vec![];
+        };
+        let namespaces: Vec<&str> =
+            namespaces.iter().map(String::as_str).collect();
+        nest_constant_name(&namespaces, model)
+            .split("::")
+            .skip(1)
+            .map(str::to_owned)
+            .collect()
+    }
+
     fn reference_constant(
         &mut self,
         name: Result<String, ParseError>,
@@ -143,7 +160,8 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
                     &self.custom_associations,
                 );
 
-            if let Some(association_reference) = association_reference {
+            if let Some(mut association_reference) = association_reference {
+                association_reference.namespace_path = self.model_namespaces();
                 self.references.push(association_reference);
             }
         }
