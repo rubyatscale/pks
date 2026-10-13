@@ -13,7 +13,7 @@ use rayon::prelude::{ParallelIterator, ParallelSlice};
 use serde::Serialize;
 
 use super::{
-    checker::get_checkers,
+    checker::{get_checkers, reference::Reference, CheckerInterface},
     checker_configuration::CheckerType,
     reference_extractor::{between_packs, get_all_references, identity},
     Configuration,
@@ -63,31 +63,11 @@ pub(crate) fn list(
         between_packs(&all_references, &defining_packs, &referencing_packs);
 
     let checkers = get_checkers(configuration);
-    let recorded_violations = &configuration.pack_set.all_violations;
     let references = references
-        // A constant that a pack defines in several files yields a copy of the
-        // reference for each file, and their violations can differ, as when
-        // only one of the files is public. Like `check`, list each violation
-        // that any copy makes.
+        // With the experimental parser, a constant that a pack defines in
+        // several files yields a copy of the reference for each file
         .par_chunk_by(|a, b| identity(a) == identity(b))
         .map(|copies| {
-            let mut violations = Vec::new();
-            for checker in &checkers {
-                for reference in copies {
-                    if let Some(violation) =
-                        checker.check(reference, configuration)?
-                    {
-                        violations.push(JsonViolation {
-                            strict: violation.strict,
-                            recorded: recorded_violations
-                                .contains(&violation.identifier),
-                            violation_type: violation.identifier.violation_type,
-                        });
-                        break; // One of each type, as `check` lists them
-                    }
-                }
-            }
-
             let reference = copies[0];
             // pks keeps no source positions in ERB, and reports line 0 there
             let location = (reference.source_location.line > 0)
@@ -101,8 +81,8 @@ pub(crate) fn list(
                 defining_pack_name: reference
                     .defining_pack_name
                     .as_deref()
-                    .expect("references that no pack defines are filtered out"),
-                violations,
+                    .expect("between_packs drops constants no pack defines"),
+                violations: violations_of(copies, &checkers, configuration)?,
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -111,6 +91,32 @@ pub(crate) fn list(
     serde_json::to_writer(&mut stdout, &JsonOutput { references })?;
     stdout.flush()?;
     Ok(())
+}
+
+/// The violations that any copy of a reference makes, one of each type, as
+/// `check` lists them. The copies' violations can differ, as when only one of
+/// the files that define the constant is public.
+fn violations_of(
+    copies: &[&Reference],
+    checkers: &[Box<dyn CheckerInterface + Send + Sync>],
+    configuration: &Configuration,
+) -> anyhow::Result<Vec<JsonViolation>> {
+    let recorded_violations = &configuration.pack_set.all_violations;
+    let mut violations = Vec::new();
+    for checker in checkers {
+        for reference in copies {
+            if let Some(violation) = checker.check(reference, configuration)? {
+                violations.push(JsonViolation {
+                    strict: violation.strict,
+                    recorded: recorded_violations
+                        .contains(&violation.identifier),
+                    violation_type: violation.identifier.violation_type,
+                });
+                break;
+            }
+        }
+    }
+    Ok(violations)
 }
 
 /// The packs given on the command line, which must exist.

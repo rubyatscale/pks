@@ -493,6 +493,40 @@ fn test_list_references_at_the_start_of_a_file() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_list_references_from_associations() -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_rails_relationships");
+    // carrier.rb doesn't write `Census` or `Taco`, only `has_many :censuses`
+    // and `has_many :tacos`, so each reference is at the start of its call.
+    // notification.rb's polymorphic `belongs_to :event` infers none.
+    let reference = |line: u64, constant_name: &str| {
+        json!({
+            "file": "packs/bar/app/models/carrier.rb",
+            "line": line,
+            "column": 2,
+            "constant_name": constant_name,
+            "referencing_pack_name": "packs/bar",
+            "defining_pack_name": "packs/baz",
+            "violations": [
+                {
+                    "violation_type": "privacy",
+                    "strict": false,
+                    "recorded": false
+                }
+            ]
+        })
+    };
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [reference(2, "::Census"), reference(3, "::Taco")]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_lists_files_in_order() -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
     // pks reads files in no particular order, so with this many, the order it
