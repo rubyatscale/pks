@@ -417,6 +417,40 @@ end
     }
 
     #[test]
+    fn definitions_from_the_top_level() {
+        for (contents, definitions) in [
+            ("class ::Foo; def a; end; end", &["::Foo"][..]),
+            (
+                "module Outer; class ::Foo; def a; end; end; end",
+                &["::Foo"],
+            ),
+            (
+                "module Outer; class ::Foo::Bar; def a; end; end; end",
+                &["::Foo::Bar"],
+            ),
+            (
+                "module Outer; module ::Foo; BAR = 1; end; end",
+                &["::Foo::BAR"],
+            ),
+            ("module Outer; ::BAR = 1; end", &["::BAR"]),
+            (
+                "module Outer; module ::Foo; def a; end; end; end",
+                &["::Foo"],
+            ),
+            (
+                "module A; class ::B; module C; BAR = 1; end; end; end",
+                &["::B::C::BAR"],
+            ),
+            (
+                "module A; module ::B; module ::C; BAR = 1; end; end; end",
+                &["::C::BAR"],
+            ),
+        ] {
+            assert_eq!(definition_names(contents), definitions, "{}", contents);
+        }
+    }
+
+    #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(
             "\

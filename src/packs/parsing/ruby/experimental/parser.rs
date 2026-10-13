@@ -1,14 +1,16 @@
 use crate::packs::file_utils::file_read_contents;
 use crate::packs::{
     parsing::{
-        ruby::parse_utils::{
-            constant_name, fetch_const_name, fetch_const_path_name,
-            first_syntax_error, get_constant_assignment_definition,
-            get_definition_from, get_reference_from_active_record_association,
-            is_plain_call, loc_to_range, visit_constant_assignments,
-            ParseError,
+        ruby::{
+            namespace_calculator::nest_constant_name,
+            parse_utils::{
+                constant_name, fetch_const_name, fetch_const_path_name,
+                first_syntax_error,
+                get_reference_from_active_record_association, is_plain_call,
+                loc_to_range, visit_constant_assignments, ParseError,
+            },
         },
-        ParsedDefinition, UnresolvedReference,
+        ParsedDefinition, Range, UnresolvedReference,
     },
     Configuration, ProcessedFile,
 };
@@ -35,15 +37,19 @@ impl ReferenceCollector<'_> {
         name: Result<String, ParseError>,
         location: &Location,
     ) {
-        let definition = get_constant_assignment_definition(
-            name,
-            location,
-            self.current_namespaces.to_owned(),
-            &self.line_col_lookup,
-        );
-
-        if let Some(definition) = definition {
+        if let Ok(name) = name {
+            let location = loc_to_range(location, &self.line_col_lookup);
+            let definition = self.definition(&name, location);
             self.definitions.push(definition);
+        }
+    }
+
+    fn definition(&self, name: &str, location: Range) -> ParsedDefinition {
+        let namespaces: Vec<&str> =
+            self.current_namespaces.iter().map(String::as_str).collect();
+        ParsedDefinition {
+            fully_qualified_name: nest_constant_name(&namespaces, name),
+            location,
         }
     }
 
@@ -97,11 +103,7 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
             &self.line_col_lookup,
         );
 
-        let definition = get_definition_from(
-            &namespace,
-            &self.current_namespaces,
-            &location,
-        );
+        let definition = self.definition(&namespace, location);
 
         // Note – is there a way to use lifetime specifiers to get rid of this and
         // just keep current namespaces as a vector of string references or something else
@@ -181,11 +183,7 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
             &self.line_col_lookup,
         );
 
-        let definition = get_definition_from(
-            &namespace,
-            &self.current_namespaces,
-            &location,
-        );
+        let definition = self.definition(&namespace, location);
 
         // Note – is there a way to use lifetime specifiers to get rid of this and
         // just keep current namespaces as a vector of string references or something else

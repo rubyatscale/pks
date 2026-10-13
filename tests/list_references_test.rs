@@ -362,6 +362,65 @@ enforcement_globs_ignore:
     Ok(())
 }
 
+#[test]
+fn test_list_references_to_a_class_defined_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // The experimental parser names this `::Taco`, not `::Outer::::Taco`
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "module Outer\n  class ::Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    fs::write(fixture.path(file), "Taco.make\n")?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(file, Some((1, 0)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_inside_a_class_defined_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "module Taco\n  class Shell\n    def self.fold; end\n  end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in Ruby, `Shell` here is looked up in `::Taco`, not `::Outer::::Taco`
+    fs::write(
+        fixture.path(file),
+        "module Outer\n  class ::Taco\n    Shell.fold\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(file, Some((3, 4)), "::Taco::Shell"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
 /// A reference from `packs/foo` to a constant that `packs/bar` keeps private,
 /// which breaks the same two rules as `bar_from_foo`. `None` is a position in
 /// ERB.
