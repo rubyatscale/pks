@@ -254,6 +254,13 @@ pub fn run() -> anyhow::Result<()> {
 
     install_logger(args.debug);
 
+    // Prism and the walk of its tree recurse, so a few thousand levels of
+    // nesting overflow a thread's default 2 MiB stack, which aborts pks. 16 MiB
+    // holds the 10,000 levels after which Prism stops nesting.
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(16 * 1024 * 1024)
+        .build_global()?;
+
     let mut configuration = packs::configuration::get(&absolute_root)?;
 
     if args.print_files {
