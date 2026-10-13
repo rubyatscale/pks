@@ -3,7 +3,7 @@ use crate::packs;
 use crate::packs::file_utils::get_absolute_path;
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_derive::Args;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use super::logger::install_logger;
@@ -246,6 +246,12 @@ impl Args {
     }
 }
 
+/// Prism and the walk of its tree recurse, so a few thousand levels of nesting
+/// overflow a thread's default 2 MiB stack, which aborts pks. In a release
+/// build, 16 MiB holds the 10,000 levels after which Prism stops nesting most
+/// constructs.
+const STACK_SIZE: usize = 16 * 1024 * 1024;
+
 pub fn run() -> anyhow::Result<()> {
     let args = Args::parse();
     let absolute_root = args.absolute_project_root().map_err(|e| {
@@ -254,7 +260,21 @@ pub fn run() -> anyhow::Result<()> {
 
     install_logger(args.debug);
 
-    let mut configuration = packs::configuration::get(&absolute_root)?;
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(STACK_SIZE)
+        .build_global()?;
+
+    // rayon parses a lone file, as `check-contents` has, on the thread that
+    // asks rather than the pool's, so the command gets as much stack too
+    std::thread::Builder::new()
+        .stack_size(STACK_SIZE)
+        .spawn(move || run_command(args, &absolute_root))?
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+}
+
+fn run_command(args: Args, absolute_root: &Path) -> anyhow::Result<()> {
+    let mut configuration = packs::configuration::get(absolute_root)?;
 
     if args.print_files {
         configuration.print_files = true;

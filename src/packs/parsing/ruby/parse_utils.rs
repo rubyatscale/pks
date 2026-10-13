@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cell::Cell, collections::HashSet, sync::Once};
 
 use line_col::LineColLookup;
 use ruby_prism::{
@@ -63,7 +63,25 @@ pub fn first_syntax_error(
 /// a quote that ends mid-character, as one can when a magic comment names an
 /// encoding other than UTF-8. The crate gives no other way to read a message.
 fn error_message(error: &Diagnostic) -> Option<String> {
-    std::panic::catch_unwind(|| error.message().to_owned()).ok()
+    // The default hook would print that panic, which pks recovers from
+    static QUIET_HOOK: Once = Once::new();
+    QUIET_HOOK.call_once(|| {
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !READING_MESSAGE.get() {
+                hook(info);
+            }
+        }));
+    });
+
+    READING_MESSAGE.set(true);
+    let message = std::panic::catch_unwind(|| error.message().to_owned()).ok();
+    READING_MESSAGE.set(false);
+    message
+}
+
+thread_local! {
+    static READING_MESSAGE: Cell<bool> = const { Cell::new(false) };
 }
 
 pub fn loc_to_range(loc: &Location, lookup: &LineColLookup) -> Range {
@@ -414,3 +432,40 @@ macro_rules! visit_constant_assignments {
     };
 }
 pub(crate) use visit_constant_assignments;
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    use super::error_message;
+
+    const CHILD: &str = "PKS_TEST_PANIC_HOOK_CHILD";
+
+    // The panic hook is the process's, so the test runs in a child of the
+    // test binary
+    #[test]
+    fn test_a_panic_after_a_recovered_one_is_still_printed() {
+        if std::env::var_os(CHILD).is_some() {
+            // Read as Windows-31J, the heredoc's name ends mid-character
+            let parsed = ruby_prism::parse(
+                "# encoding: windows-31j\nx = <<~あ\n".as_bytes(),
+            );
+            let error = parsed.errors().next().expect("a syntax error");
+            assert_eq!(error_message(&error), None);
+            panic!("an unrelated panic");
+        }
+
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "test_a_panic_after_a_recovered_one_is_still_printed",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        assert!(stderr.contains("an unrelated panic"), "{stderr}");
+        assert!(!stderr.contains("allows only UTF-8"), "{stderr}");
+    }
+}

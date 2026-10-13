@@ -1664,3 +1664,28 @@ fn test_check_with_color_never() -> Result<(), Box<dyn Error>> {
     common::teardown();
     Ok(())
 }
+
+#[test]
+fn test_check_a_deeply_nested_file() -> Result<(), Box<dyn Error>> {
+    // pks parses a lone file on the thread that runs the command, rather than
+    // the pool's. In a debug build, a thread's default 8 MiB on macOS and
+    // Linux overflows at about 700 levels.
+    let file = "packs/foo/app/services/nested.rb";
+    let depth = 1000;
+    for args in [&[][..], &["--experimental-parser"]] {
+        let fixture = common::Fixture::new("simple_app");
+        fs::write(
+            fixture.path(file),
+            format!("x = {}Bar{}\n", "[".repeat(depth), "]".repeat(depth)),
+        )?;
+
+        common::pks(&fixture, &[args, &["check", file]].concat())
+            .code(1)
+            .stdout(predicate::str::contains(format!(
+                "{file}:1:{}\nPrivacy violation",
+                4 + depth
+            )));
+    }
+
+    Ok(())
+}

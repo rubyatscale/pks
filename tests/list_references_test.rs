@@ -440,6 +440,38 @@ fn test_list_references_in_anonymous_argument_forwarding(
 }
 
 #[test]
+fn test_list_references_in_a_deeply_nested_file() -> Result<(), Box<dyn Error>>
+{
+    // Prism and the walk of its tree recurse, and in a debug build this nesting
+    // overflows a thread's default 2 MiB stack
+    let file = "packs/foo/app/services/nested.rb";
+    let depth = 500;
+    for args in [&[][..], &["--experimental-parser"]] {
+        let fixture = common::Fixture::new("simple_app");
+        fs::write(
+            fixture.path(file),
+            format!("x = {}Bar{}\n", "[".repeat(depth), "]".repeat(depth)),
+        )?;
+
+        assert_eq!(
+            list_references(
+                &fixture,
+                &[args, &["list-references", "--defining-pack", "packs/bar"]]
+                    .concat()
+            ),
+            json!({
+                "references": [
+                    bar_from_foo(),
+                    to_bar_pack(file, Some((1, 4 + depth as u64)), "::Bar"),
+                ]
+            })
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_at_the_start_of_a_file() -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
     // Line 1 and column 0 are positions, unlike ERB's line 0
