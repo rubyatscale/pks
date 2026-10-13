@@ -19,8 +19,7 @@ pub struct WalkDirectoryResult {
     pub owning_package_yml_for_file: HashMap<PathBuf, PathBuf>,
 }
 
-/// A name that starts with a dot. pks skips these, as packwerk's globs don't
-/// match them.
+/// packwerk's globs don't match a name that starts with a dot
 fn is_hidden(file_name: &OsStr) -> bool {
     file_name.to_str().is_some_and(|name| name.starts_with('.'))
 }
@@ -191,7 +190,6 @@ pub(crate) fn walk_directory(
             }
         }
 
-        // Then check explicit exclusions
         !excluded_dirs_ref.is_match(relative_path)
     };
 
@@ -205,11 +203,9 @@ pub(crate) fn walk_directory(
         read_directory,
     );
 
-    // dua-core's workers stop once a few batches of entries are waiting for
-    // this loop, as they are while it parses a package.yml. This thread takes
-    // the entries as they come, so the workers keep walking. A dua-core
-    // release with https://github.com/Byron/dua-cli/pull/413 would make it
-    // unnecessary.
+    // dua-core's workers stop while a few batches wait for this loop, as they
+    // do each time it parses a package.yml, so this thread drains them. Not
+    // needed once dua-core has https://github.com/Byron/dua-cli/pull/413
     let (sender, walk) = std::sync::mpsc::channel();
     let receiving = std::thread::spawn(move || {
         for entry in dua_walk {
@@ -321,13 +317,10 @@ pub(crate) fn walk_directory(
         std::panic::resume_unwind(panic);
     }
 
-    // The package.yml that the files in each directory belong to. A
-    // directory is shallower than those in it, so its parent's is known first.
+    // By depth, so each directory's parent has its package.yml first
     directories.sort_unstable_by_key(|directory| directory.depth);
     let mut package_ymls: HashMap<DirectoryId, PathBuf> = HashMap::new();
     for directory in directories {
-        // Even if the parent has one, the existence of a new package.yml
-        // file should override it.
         let package_yml = match package_ymls_in_directories.get(&directory.id) {
             Some(package_yml) => package_yml.clone(),
             None => match directory.parent {
