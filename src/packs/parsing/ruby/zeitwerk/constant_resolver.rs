@@ -111,7 +111,13 @@ impl ZeitwerkConstantResolver {
                 // end
                 // Therefore, we take the given const_name, remove the last part of the fully qualified name, and try again.
                 // In this case, we'd try to resolve `::Foo::Bar` instead of `::Foo::Bar::Boo`
-                let split_const = const_name.split("::").collect::<Vec<&str>>();
+                let mut split_const =
+                    const_name.split("::").collect::<Vec<&str>>();
+                // As in packwerk, whose `String#split` drops the empty names
+                // at the end, so `Outer::::Foo`'s parent `Outer::` has none
+                while split_const.last() == Some(&"") {
+                    split_const.pop();
+                }
                 if split_const.len() <= 1 {
                     return None;
                 }
@@ -207,5 +213,38 @@ impl ZeitwerkConstantResolver {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn resolve_a_name_from_the_top_level_in_a_namespace() {
+        let resolver = ZeitwerkConstantResolver::create(
+            [
+                ("::Outer", "/app/outer.rb"),
+                ("::Aa", "/app/aa.rb"),
+                ("::Aa::Bb", "/app/aa/bb.rb"),
+            ]
+            .map(|(name, path)| ConstantDefinition {
+                fully_qualified_name: name.to_owned(),
+                absolute_path_of_definition: PathBuf::from(path),
+            })
+            .to_vec(),
+        );
+
+        // As in packwerk, `Outer::` has no parent, and `Aa::Bb::`'s is `Aa`
+        assert_eq!(resolver.resolve("::Outer::::Burrito", &[]), None);
+        assert_eq!(
+            resolver.resolve("::Aa::Bb::::Cee", &[]),
+            Some(vec![ConstantDefinition {
+                fully_qualified_name: "::Aa::Bb::::Cee".to_owned(),
+                absolute_path_of_definition: PathBuf::from("/app/aa.rb"),
+            }])
+        );
     }
 }
