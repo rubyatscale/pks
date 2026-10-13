@@ -44,7 +44,6 @@ impl ReferenceCollector<'_> {
         }
     }
 
-    /// `name`, as `Foo` or `::Foo::Bar`, defined in the current namespaces
     fn definition(&self, name: &str, location: Range) -> ParsedDefinition {
         let namespaces: Vec<&str> =
             self.current_namespaces.iter().map(String::as_str).collect();

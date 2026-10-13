@@ -418,8 +418,6 @@ end
 
     #[test]
     fn definitions_from_the_top_level() {
-        // A namespace or constant written from the top level doesn't nest in
-        // the ones around it
         for (contents, definitions) in [
             ("class ::Foo; def a; end; end", &["::Foo"][..]),
             (
