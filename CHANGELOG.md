@@ -31,6 +31,15 @@ Building pks from source now needs a C compiler and libclang.
 Releases no longer include a binary for Intel Macs (`x86_64-apple-darwin`),
 and the Apple Silicon binary is built on macOS 26.
 
+#### pks doesn't descend into a symlinked directory
+
+pks walks the app with [dua-core](https://crates.io/crates/dua-core) in place
+of jwalk, which is no longer maintained, and which followed symlinks. Like
+packwerk's globs, pks still reads a symlink to a file, but no longer descends
+into a symlinked directory, so it no longer finds the files or packs in one. A
+link to a directory that contains it, such as `loop -> ..`, made pks list the
+same files and packs over and over, and no longer does.
+
 ## 0.7.0
 
 ### Features
