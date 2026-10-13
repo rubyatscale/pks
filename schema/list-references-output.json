@@ -43,7 +43,10 @@
           "minimum": 0,
           "description": "Counted in bytes from 0. null when line is null."
         },
-        "constant_name": { "type": "string" },
+        "constant_name": {
+          "type": "string",
+          "description": "Fully qualified, as `::Foo::Bar`. A reference that pks infers from an association, as `has_many :tacos` gives `::Taco`, is at the association, so the constant's name isn't written at line and column."
+        },
         "referencing_pack_name": { "type": "string" },
         "defining_pack_name": { "type": "string" },
         "violations": {
