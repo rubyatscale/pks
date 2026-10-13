@@ -92,7 +92,7 @@ pub fn build_gitignore_matcher(
 
 // We use jwalk to walk directories in parallel and compare them to the `include` and `exclude` patterns
 // specified in the `RawConfiguration`
-// https://docs.rs/jwalk/0.8.1/jwalk/struct.WalkDirGeneric.html#method.process_read_dir
+// https://docs.rs/jwalk/0.9.0/jwalk/struct.WalkDirGeneric.html#method.process_read_dir
 // We only walk the directory once and pull all of the information we need from it,
 // which is faster than walking the directory multiple times.
 // Likely, we can organize this better by moving each piece of logic into its own function so this function
@@ -168,7 +168,7 @@ pub(crate) fn walk_directory(
     // explore it. For example, instead of asking every file in `vendor/bundle/**/` if it should be excluded,
     // we'll save a lot of time by just skipping the entire directory.
     //
-    // For more information, check out the docs: https://docs.rs/jwalk/0.8.1/jwalk/#extended-example
+    // For more information, check out the docs: https://docs.rs/jwalk/0.9.0/jwalk/#extended-example
     let current_package_yml = PathBuf::from("package.yml");
 
     let walk_dir = WalkDirGeneric::<ProcessReadDirState>::new(&absolute_root)
@@ -213,14 +213,14 @@ pub(crate) fn walk_directory(
                                     .matched(relative_path, true)
                                     .is_ignore()
                             {
-                                child_dir_entry.read_children_path = None;
+                                child_dir_entry.read_children = None;
                             }
                         }
 
                         // Then check explicit exclusions
                         if cloned_excluded_dirs.as_ref().is_match(relative_path)
                         {
-                            child_dir_entry.read_children_path = None;
+                            child_dir_entry.read_children = None;
                         }
                     }
                 });
