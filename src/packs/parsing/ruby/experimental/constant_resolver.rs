@@ -126,8 +126,12 @@ impl ExperimentalConstantResolver {
     // ::Foo::Boo
     // ::Boo
     //
+    // A namespace written from the top level starts the name again, so in
+    // `module Foo; class ::Bar`, the path is ['Foo', '::Bar'], and `Boo` could
+    // be ::Bar::Boo, ::Foo::Boo or ::Boo, the order of `Module.nesting`.
+    //
     // We need to check each of these possibilities in order, and return the first one that exists
-    // If none of them exist, return None
+    // If none of them exist, return no definitions
     fn resolve_traversing_namespace_path<'a>(
         &'a self,
         const_name: &'a str,

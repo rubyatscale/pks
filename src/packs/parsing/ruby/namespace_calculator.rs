@@ -45,21 +45,22 @@ pub fn combine_namespace_with_constant_name(
     format!("::{}", fully_qualified_name_vec.join("::"))
 }
 
-/// The fully qualified name of `const_name` in `namespace_path`, as Ruby gives
-/// it: a namespace written from the top level, as `class ::Foo`, doesn't nest
-/// in the ones around it. `combine_namespace_with_constant_name` nests it
-/// anyway, giving `::::Foo`, as packwerk does.
+/// The fully qualified name of `const_name` in `namespace_path`, as Ruby names
+/// it. A name written from the top level, as `class ::Foo` or `::BAR = 1`,
+/// doesn't nest in the namespaces around it. packwerk nests it anyway, naming
+/// `class ::Foo` `::::Foo`, or `::Outer::::Foo` inside `module Outer`, and so
+/// do the packwerk parser and the Zeitwerk resolver, which match it.
 pub fn nest_constant_name(namespace_path: &[&str], const_name: &str) -> String {
-    namespace_path.iter().copied().chain([const_name]).fold(
-        String::new(),
-        |name, part| {
-            if part.starts_with("::") {
-                part.to_owned()
-            } else {
-                format!("{}::{}", name, part)
-            }
-        },
-    )
+    let mut name = String::new();
+    for part in namespace_path.iter().copied().chain([const_name]) {
+        if part.starts_with("::") {
+            name.clear();
+        } else {
+            name.push_str("::");
+        }
+        name.push_str(part);
+    }
+    name
 }
 
 pub fn possible_fully_qualified_constants(

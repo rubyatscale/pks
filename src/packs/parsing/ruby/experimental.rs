@@ -433,6 +433,18 @@ end
                 &["::Foo::BAR"],
             ),
             ("module Outer; ::BAR = 1; end", &["::BAR"]),
+            (
+                "module Outer; module ::Foo; def a; end; end; end",
+                &["::Foo"],
+            ),
+            (
+                "module A; class ::B; module C; BAR = 1; end; end; end",
+                &["::B::C::BAR"],
+            ),
+            (
+                "module A; module ::B; module ::C; BAR = 1; end; end; end",
+                &["::C::BAR"],
+            ),
         ] {
             assert_eq!(definition_names(contents), definitions, "{}", contents);
         }
