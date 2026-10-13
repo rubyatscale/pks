@@ -421,6 +421,37 @@ fn test_list_references_inside_a_class_defined_from_the_top_level(
     Ok(())
 }
 
+#[test]
+fn test_list_references_after_a_class_defined_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in packwerk, which names this class `::::Taco`, the `Taco` and
+    // `::Taco` after it aren't the file's own
+    fs::write(
+        fixture.path(file),
+        "class ::Taco\n  def self.local; end\nend\nTaco.make\n::Taco.make\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((4, 0)), "::Taco"),
+                to_bar_pack(file, Some((5, 0)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
 /// A reference from `packs/foo` to a constant that `packs/bar` keeps private,
 /// which breaks the same two rules as `bar_from_foo`. `None` is a position in
 /// ERB.

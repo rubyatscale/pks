@@ -318,10 +318,8 @@ fn process(
             let possible_constants =
                 possible_fully_qualified_constants(&namespace_path, &r.name);
             for constant_name in possible_constants {
-                if let Some(location) = definition_to_location_map
-                    .get(&constant_name)
-                    .or(definition_to_location_map
-                        .get(&format!("::{}", constant_name)))
+                if let Some(location) =
+                    definition_to_location_map.get(&constant_name)
                 {
                     let reference_is_definition = location.start_row
                         == r.location.start_row
