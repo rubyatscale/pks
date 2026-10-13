@@ -44,18 +44,27 @@ same files and packs over and over, and no longer does.
 
 #### `--experimental-parser` names a class written from the top level
 
-With `--experimental-parser`, pks named a class or module written from the top
-level, as `class ::Foo`, `::::Foo`, or `::Outer::::Foo` inside `module Outer`,
-and gave the constants defined in it the same prefix. A reference to one was
-found only from inside another `class ::Foo` written the same way, and then
-under that name, as `::::Foo::BAR`. Others were missed, as was a reference
-written inside `class ::Foo` to a constant that `class Foo::Bar` defines. pks
-now names them as Ruby does, `::Foo` and `::Foo::BAR`, so it may find new
-references and violations. A violation that a `package_todo.yml` records under
-a `::::` name is reported again under the new name, and the old entry as stale,
-until you run `pks update`. Without `--experimental-parser`, pks still looks up
-a constant written inside `class ::Foo` as packwerk does, which misses the
-constants nested in `::Foo` too.
+With `--experimental-parser`, pks gave a class or module written from the top
+level, as `class ::Foo`, the name `::::Foo`, or `::Outer::::Foo` inside
+`module Outer`, and gave the constants defined in it the same prefix. A
+constant assigned from the top level, as `::BAR = 1` inside `module Outer`,
+was `::Outer::::BAR`. A reference to one was found only from inside another
+`class ::Foo` written the same way, and then under that name, as
+`::::Foo::BAR`. Others were missed, as was a reference written inside
+`class ::Foo` to a constant that `class Foo::Bar` defines. pks now names them
+as Ruby does, `::Foo` and `::Foo::BAR`, so it may find new references and
+violations. A violation that a `package_todo.yml` records under a `::::` name
+is reported again under the new name, and the old entry as stale, until you
+run `pks update`.
+
+A class reopened this way, as `class ::String` inside `module CoreExt`, now
+counts as defined in its pack, as a `class String` at the top level of a file
+does. So `expose-monkey-patches` lists it, and a reference to `String` from
+another pack is a reference to that pack.
+
+Without `--experimental-parser`, pks still looks up a constant written inside
+`class ::Foo` as packwerk does, so `Bar` written there is never `::Foo::Bar`.
+It's missed, or taken for a top-level `::Bar`.
 
 ## 0.7.0
 
