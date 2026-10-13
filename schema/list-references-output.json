@@ -45,7 +45,7 @@
         },
         "constant_name": {
           "type": "string",
-          "description": "Fully qualified, as `::Foo::Bar`. A reference that pks infers from an association, as `has_many :tacos` gives `::Taco`, is at the association, so the constant's name isn't written at line and column."
+          "description": "Fully qualified, as `::Foo::Bar`, though the source may write it relatively, as `Bar` inside `module Foo`. A reference that pks infers from an association, as `has_many :tacos` gives `::Taco`, is at the start of the call, where no constant is written. A `class_name:` option names the constant in a string."
         },
         "referencing_pack_name": { "type": "string" },
         "defining_pack_name": { "type": "string" },

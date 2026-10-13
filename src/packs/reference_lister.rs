@@ -64,8 +64,8 @@ pub(crate) fn list(
 
     let checkers = get_checkers(configuration);
     let references = references
-        // A constant that a pack defines in several files yields a copy of the
-        // reference for each file
+        // With the experimental parser, a constant that a pack defines in
+        // several files yields a copy of the reference for each file
         .par_chunk_by(|a, b| identity(a) == identity(b))
         .map(|copies| {
             let reference = copies[0];
@@ -82,7 +82,7 @@ pub(crate) fn list(
                     .defining_pack_name
                     .as_deref()
                     .expect("between_packs drops constants no pack defines"),
-                violations: violations(copies, &checkers, configuration)?,
+                violations: violations_of(copies, &checkers, configuration)?,
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -96,7 +96,7 @@ pub(crate) fn list(
 /// The violations that any copy of a reference makes, one of each type, as
 /// `check` lists them. The copies' violations can differ, as when only one of
 /// the files that define the constant is public.
-fn violations(
+fn violations_of(
     copies: &[&Reference],
     checkers: &[Box<dyn CheckerInterface + Send + Sync>],
     configuration: &Configuration,
