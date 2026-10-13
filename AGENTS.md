@@ -35,7 +35,7 @@ Rustfmt is configured with `max_width=80` (`.rustfmt.toml`). CI runs clippy with
 
 ### Entry points
 - `src/main.rs` — calls `cli::run()`, maps errors to exit codes (0 = ok, 1 = violations found, 2 = internal error)
-- `src/lib.rs` — exposes `pub mod packs::cli` for the `serde_magnus` Ruby FFI consumers
+- `src/lib.rs` — the `packs` library crate, which `src/main.rs` and the tests use
 - `src/packs.rs` — module declarations and top-level public functions (`check`, `update`, `validate`, `add_dependency`, etc.)
 
 ### Key modules
