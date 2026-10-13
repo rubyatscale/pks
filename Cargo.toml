@@ -49,7 +49,7 @@ anyhow = { version = "1.0.75", features = [] }                         # for err
 clap = { version = "4.2.1", features = ["derive"] }                    # cli
 clap_derive = "4.2.0"                                                  # cli
 csv = "1.3.0"                                                          # csv de/serialize
-dua-core = "4.1.0"                                                     # for walking the file tree
+dua-core = "4.2.0"                                                     # for walking the file tree
 itertools = "0.15.0"                                                   # tools for iterating over iterable things
 path-clean = "1.0.1"                                                   # Pathname#cleaname in Ruby
 rayon = "1.10.0"                                                       # for parallel iteration

@@ -215,27 +215,18 @@ pub(crate) fn walk_directory(
         !excluded_dirs_ref.is_match(relative_path)
     };
 
-    let dua_walk = dua_core::walk(
+    let walk = dua_core::walk(
         &absolute_root,
         // As many threads as rayon's, so RAYON_NUM_THREADS limits the walk too
         rayon::current_num_threads(),
         Order::Completion,
-        Options::default().skip_metadata(),
+        // With dua-core's default of 2, the workers stop each time this loop
+        // parses a package.yml (https://github.com/Byron/dua-cli/pull/413)
+        Options::default()
+            .skip_metadata()
+            .queued_batches_per_worker(128),
         read_directory,
     );
-
-    // dua-core's workers stop while a few batches wait for this loop, as they
-    // do each time it parses a package.yml, so this thread drains them. Once a
-    // release has `Options::queued_batches_per_worker`, set that instead
-    // (https://github.com/Byron/dua-cli/pull/413).
-    let (sender, walk) = std::sync::mpsc::channel();
-    let draining = std::thread::spawn(move || {
-        for entry in dua_walk {
-            if sender.send(entry).is_err() {
-                break;
-            }
-        }
-    });
 
     // A file can come before the directory it's in, and before the
     // package.yml there, so which package.yml each file belongs to is
@@ -335,10 +326,6 @@ pub(crate) fn walk_directory(
             //     &raw.include
             // )
         }
-    }
-
-    if let Err(panic) = draining.join() {
-        std::panic::resume_unwind(panic);
     }
 
     let package_ymls =
