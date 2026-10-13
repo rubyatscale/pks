@@ -25,7 +25,7 @@ jobs:
       # `cargo install`, which broke once cargo-audit's dependencies outran the
       # runner's toolchain. `fallback: none` keeps that compile path from
       # silently coming back if the download ever fails.
-      - uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-audit
           fallback: none
