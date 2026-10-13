@@ -454,6 +454,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dua-core"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0664627ab16c082ac5136a232dfef44ce0627a6cc43fca6f98e0284d3f9b1d79"
+dependencies = [
+ "crossbeam",
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1196,16 +1207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jwalk"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e610b2b1eaea9e0e062c47e319d20a2e0f929e7aabf24d58514354de967bfbd"
-dependencies = [
- "crossbeam",
- "rayon",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1511,13 +1512,13 @@ dependencies = [
  "clap",
  "clap_derive",
  "csv",
+ "dua-core",
  "fnmatch-regex2",
  "glob",
  "globset",
  "ignore",
  "itertools 0.15.0",
  "jsonschema",
- "jwalk",
  "line-col",
  "md5",
  "path-clean",
