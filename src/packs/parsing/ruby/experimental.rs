@@ -417,6 +417,30 @@ end
     }
 
     #[test]
+    fn definitions_from_the_top_level() {
+        // A namespace or constant written from the top level doesn't nest in
+        // the ones around it
+        for (contents, definitions) in [
+            ("class ::Foo; def a; end; end", &["::Foo"][..]),
+            (
+                "module Outer; class ::Foo; def a; end; end; end",
+                &["::Foo"],
+            ),
+            (
+                "module Outer; class ::Foo::Bar; def a; end; end; end",
+                &["::Foo::Bar"],
+            ),
+            (
+                "module Outer; module ::Foo; BAR = 1; end; end",
+                &["::Foo::BAR"],
+            ),
+            ("module Outer; ::BAR = 1; end", &["::BAR"]),
+        ] {
+            assert_eq!(definition_names(contents), definitions, "{}", contents);
+        }
+    }
+
+    #[test]
     fn class_definition_with_private_constant() {
         let contents: String = String::from(
             "\

@@ -40,6 +40,19 @@ into a symlinked directory, so it no longer finds the files or packs in one. A
 link to a directory that contains it, such as `loop -> ..`, made pks list the
 same files and packs over and over, and no longer does.
 
+### Fixes
+
+#### `--experimental-parser` names a class written from the top level
+
+With `--experimental-parser`, pks named a class or module written from the top
+level, as `class ::Foo`, `::::Foo`, or `::Outer::::Foo` inside `module Outer`,
+and gave the constants defined in it the same prefix. References to them were
+missed, and so were references written inside one to the constants nested in
+it. pks now names it `::Foo`, as Ruby does, so it may find new references and
+violations. Without `--experimental-parser`, pks still looks up a constant
+written inside `class ::Foo` as packwerk does, which misses the constants
+nested in `::Foo` too.
+
 ## 0.7.0
 
 ### Features

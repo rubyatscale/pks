@@ -7,7 +7,7 @@ use std::{
 
 use crate::packs::{
     constant_resolver::{ConstantDefinition, ConstantResolver},
-    parsing::ruby::namespace_calculator::combine_namespace_with_constant_name,
+    parsing::ruby::namespace_calculator::nest_constant_name,
 };
 
 #[derive(Default, Debug)]
@@ -133,10 +133,8 @@ impl ExperimentalConstantResolver {
         const_name: &'a str,
         current_namespace_path: &'a [&str],
     ) -> Vec<ConstantDefinition> {
-        let fully_qualified_name_guess = combine_namespace_with_constant_name(
-            current_namespace_path,
-            const_name,
-        );
+        let fully_qualified_name_guess =
+            nest_constant_name(current_namespace_path, const_name);
 
         let definitions =
             self.constant_for_fully_qualified_name(&fully_qualified_name_guess);
@@ -169,6 +167,37 @@ impl ExperimentalConstantResolver {
         match ret {
             Some(constant_definitions) => constant_definitions.to_owned(),
             None => vec![],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_in_a_namespace_from_the_top_level() {
+        let constants =
+            ["::Foo::Bar", "::Outer::Baz"].map(|name| ConstantDefinition {
+                fully_qualified_name: name.to_owned(),
+                absolute_path_of_definition: PathBuf::from("/app/foo.rb"),
+            });
+        let resolver = ExperimentalConstantResolver::create(
+            constants.to_vec(),
+            Path::new("/app"),
+            &HashMap::new(),
+        );
+
+        // In `module Outer; class ::Foo; end; end`, as Ruby looks them up
+        for (name, resolved) in [("Bar", "::Foo::Bar"), ("Baz", "::Outer::Baz")]
+        {
+            let definitions = resolver.resolve(name, &["Outer", "::Foo"]);
+            let names: Vec<String> = definitions
+                .unwrap_or_default()
+                .into_iter()
+                .map(|definition| definition.fully_qualified_name)
+                .collect();
+            assert_eq!(names, [resolved], "{}", name);
         }
     }
 }
