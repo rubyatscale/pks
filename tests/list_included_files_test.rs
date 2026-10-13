@@ -1,3 +1,4 @@
+use assert_cmd::cargo::cargo_bin_cmd;
 use std::{collections::BTreeSet, error::Error, fs};
 
 mod common;
@@ -79,13 +80,17 @@ fn test_list_included_files_doesnt_descend_into_a_symlinked_directory(
 ) -> Result<(), Box<dyn Error>> {
     use std::os::unix::fs::symlink;
 
-    // As packwerk's globs don't. Nor can a link back up the tree make pks
-    // list the same files over and over.
+    // As packwerk's globs don't, nor list one named like a Ruby file. Nor can
+    // a link back up the tree make pks list the same files over and over.
     let fixture = common::Fixture::new("simple_app");
     let outside = tempfile::tempdir()?;
     fs::create_dir_all(outside.path().join("app"))?;
     fs::write(outside.path().join("app/outside.rb"), "")?;
     symlink(outside.path(), fixture.path("packs/linked"))?;
+    symlink(
+        outside.path(),
+        fixture.path("packs/foo/app/services/directory.rb"),
+    )?;
     symlink("..", fixture.path("packs/foo/loop"))?;
 
     let files = included_files(&fixture)?;
@@ -96,10 +101,26 @@ fn test_list_included_files_doesnt_descend_into_a_symlinked_directory(
     );
     assert!(
         !files.iter().any(|file| file.starts_with("packs/linked/")
+            || file.starts_with("packs/foo/app/services/directory.rb")
             || file.starts_with("packs/foo/loop/")),
         "{:?}",
         files
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_included_files_with_a_file_for_the_project_root(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    cargo_bin_cmd!("pks")
+        .arg("--project-root")
+        .arg(fixture.path("packs/foo/app/services/foo.rb"))
+        .arg("list-included-files")
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("No root pack found"));
 
     Ok(())
 }

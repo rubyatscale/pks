@@ -3,7 +3,6 @@ use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -24,10 +23,34 @@ fn is_hidden(file_name: &OsStr) -> bool {
     file_name.to_str().is_some_and(|name| name.starts_with('.'))
 }
 
+/// A directory the walk found, by `DirectoryId::index`
 struct Directory {
-    id: DirectoryId,
-    parent: Option<DirectoryId>,
+    id: usize,
+    parent: Option<usize>,
     depth: usize,
+}
+
+/// The package.yml the files in each directory belong to: the directory's
+/// own, or else its parent's. The walk can yield a directory before its parent.
+fn package_ymls_of_directories(
+    mut directories: Vec<Directory>,
+    package_ymls_in_directories: &HashMap<usize, PathBuf>,
+) -> HashMap<usize, PathBuf> {
+    // By depth, so each directory's parent has its package.yml first
+    directories.sort_unstable_by_key(|directory| directory.depth);
+    let mut package_ymls: HashMap<usize, PathBuf> =
+        HashMap::with_capacity(directories.len());
+    for directory in directories {
+        let package_yml = match package_ymls_in_directories.get(&directory.id) {
+            Some(package_yml) => package_yml.clone(),
+            None => match directory.parent {
+                Some(parent) => package_ymls[&parent].clone(),
+                None => PathBuf::from("package.yml"),
+            },
+        };
+        package_ymls.insert(directory.id, package_yml);
+    }
+    package_ymls
 }
 
 /// Locates the global gitignore file from git config (`core.excludesFile`).
@@ -102,10 +125,8 @@ pub fn build_gitignore_matcher(
 //
 // Note: `ignore::WalkBuilder` (used by ripgrep) handles gitignore natively and supports
 // parallel traversal via `build_parallel()`. We use dua-core here because each entry it
-// yields names the directory it's in, so we can propagate `current_package_yml` from parent
-// to child directories without walking each file's ancestors. WalkBuilder's visitor pattern
-// has no equivalent, so implementing that tracking would require per-file ancestor walks,
-// an O(depth) regression for large repos.
+// yields names the directory it's in by id, so once the walk is done each file gets its
+// directory's package.yml without walking its ancestors.
 pub(crate) fn walk_directory(
     absolute_root: PathBuf,
     raw: &RawConfiguration,
@@ -114,8 +135,6 @@ pub(crate) fn walk_directory(
 
     let mut included_files: HashSet<PathBuf> = HashSet::new();
     let mut included_packs: HashSet<Pack> = HashSet::new();
-    let mut owning_package_yml_for_file: HashMap<PathBuf, PathBuf> =
-        HashMap::new();
 
     // Create this vector outside of the closure to avoid reallocating it
     let default_excluded_dirs = [
@@ -178,9 +197,12 @@ pub(crate) fn walk_directory(
         }
 
         let absolute_dirname = entry.path();
-        let relative_path = absolute_dirname
-            .strip_prefix(absolute_root_ref.as_ref())
-            .unwrap();
+        // dua-core's workers don't catch a panic, so one here would hang pks
+        let Ok(relative_path) =
+            absolute_dirname.strip_prefix(absolute_root_ref.as_ref())
+        else {
+            return false;
+        };
 
         // Check gitignore for directories (optimization: prune ignored directory trees early)
         // Files are checked separately in the main file processing loop below
@@ -193,11 +215,10 @@ pub(crate) fn walk_directory(
         !excluded_dirs_ref.is_match(relative_path)
     };
 
-    let threads =
-        std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
     let dua_walk = dua_core::walk(
         &absolute_root,
-        threads,
+        // As many threads as rayon's, so RAYON_NUM_THREADS limits the walk too
+        rayon::current_num_threads(),
         Order::Completion,
         Options::default().skip_metadata(),
         read_directory,
@@ -208,7 +229,7 @@ pub(crate) fn walk_directory(
     // release has `Options::queued_batches_per_worker`, set that instead
     // (https://github.com/Byron/dua-cli/pull/413).
     let (sender, walk) = std::sync::mpsc::channel();
-    let receiving = std::thread::spawn(move || {
+    let draining = std::thread::spawn(move || {
         for entry in dua_walk {
             if sender.send(entry).is_err() {
                 break;
@@ -220,10 +241,9 @@ pub(crate) fn walk_directory(
     // package.yml there, so which package.yml each file belongs to is
     // settled once the walk is done
     let mut directories: Vec<Directory> = Vec::new();
-    let mut package_ymls_in_directories: HashMap<DirectoryId, PathBuf> =
+    let mut package_ymls_in_directories: HashMap<usize, PathBuf> =
         HashMap::new();
-    let mut included_files_in_directories: Vec<(PathBuf, DirectoryId)> =
-        Vec::new();
+    let mut included_files_in_directories: Vec<(PathBuf, usize)> = Vec::new();
 
     for entry in walk {
         // I was using this to explore what directories were being walked to potentially
@@ -241,16 +261,19 @@ pub(crate) fn walk_directory(
             // Couldn't read a directory or entry. Being consistent with packwerk, which swallows this error and continues
             continue;
         };
-        if entry.depth > 0 && is_hidden(&entry.file_name) {
-            continue;
-        }
 
+        // Every directory, hidden or not, so that any file's directory has a
+        // package.yml to look up
+        let parent = entry.parent_directory_id.map(DirectoryId::index);
         if let Some(id) = entry.directory_id {
             directories.push(Directory {
-                id,
-                parent: entry.parent_directory_id,
+                id: id.index(),
+                parent,
                 depth: entry.depth,
             });
+            continue;
+        }
+        if is_hidden(&entry.file_name) {
             continue;
         }
 
@@ -263,9 +286,10 @@ pub(crate) fn walk_directory(
             continue;
         }
 
-        let directory = entry
-            .parent_directory_id
-            .expect("every entry but the root is in a directory");
+        // Only the root isn't in a directory, and only when it's a file
+        let Some(directory) = parent else {
+            continue;
+        };
         let is_package_yml = entry.file_name == "package.yml";
         if is_package_yml {
             package_ymls_in_directories
@@ -284,7 +308,6 @@ pub(crate) fn walk_directory(
             }
         }
 
-        // A package.yml is the one the files in its directory belong to
         if is_package_yml
             // Ideally, we don't need the second part of this conditional, but it's here
             // because there is a bug where the root pack doesn't match package_paths.
@@ -314,27 +337,18 @@ pub(crate) fn walk_directory(
         }
     }
 
-    if let Err(panic) = receiving.join() {
+    if let Err(panic) = draining.join() {
         std::panic::resume_unwind(panic);
     }
 
-    // By depth, so each directory's parent has its package.yml first
-    directories.sort_unstable_by_key(|directory| directory.depth);
-    let mut package_ymls: HashMap<DirectoryId, PathBuf> = HashMap::new();
-    for directory in directories {
-        let package_yml = match package_ymls_in_directories.get(&directory.id) {
-            Some(package_yml) => package_yml.clone(),
-            None => match directory.parent {
-                Some(parent) => package_ymls[&parent].clone(),
-                None => PathBuf::from("package.yml"),
-            },
-        };
-        package_ymls.insert(directory.id, package_yml);
-    }
-    for (absolute_path, directory) in included_files_in_directories {
-        owning_package_yml_for_file
-            .insert(absolute_path, package_ymls[&directory].clone());
-    }
+    let package_ymls =
+        package_ymls_of_directories(directories, &package_ymls_in_directories);
+    let owning_package_yml_for_file = included_files_in_directories
+        .into_iter()
+        .map(|(absolute_path, directory)| {
+            (absolute_path, package_ymls[&directory].clone())
+        })
+        .collect();
 
     debug!("Finished directory walk");
 
@@ -347,13 +361,53 @@ pub(crate) fn walk_directory(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashMap, path::PathBuf};
 
     use crate::packs::{
         raw_configuration::RawConfiguration, walk_directory::walk_directory,
     };
 
-    use super::{build_gitignore_matcher, get_global_gitignore};
+    use super::{
+        build_gitignore_matcher, get_global_gitignore,
+        package_ymls_of_directories, Directory,
+    };
+
+    #[test]
+    fn test_package_ymls_of_directories_yielded_before_their_parents() {
+        // packs/a and packs/a/b/c have a package.yml, but the root and
+        // packs/a/b don't
+        let directories = [(4, 3), (3, 2), (2, 1), (1, 0)]
+            .into_iter()
+            .map(|(id, parent)| Directory {
+                id,
+                parent: Some(parent),
+                depth: id,
+            })
+            .chain([Directory {
+                id: 0,
+                parent: None,
+                depth: 0,
+            }])
+            .collect();
+        let package_ymls_in_directories = HashMap::from([
+            (2, PathBuf::from("packs/a/package.yml")),
+            (4, PathBuf::from("packs/a/b/c/package.yml")),
+        ]);
+
+        assert_eq!(
+            package_ymls_of_directories(
+                directories,
+                &package_ymls_in_directories
+            ),
+            HashMap::from([
+                (0, PathBuf::from("package.yml")),
+                (1, PathBuf::from("package.yml")),
+                (2, PathBuf::from("packs/a/package.yml")),
+                (3, PathBuf::from("packs/a/package.yml")),
+                (4, PathBuf::from("packs/a/b/c/package.yml")),
+            ])
+        );
+    }
 
     #[test]
     fn test_walk_directory() -> anyhow::Result<()> {
