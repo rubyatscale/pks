@@ -46,12 +46,16 @@ same files and packs over and over, and no longer does.
 
 With `--experimental-parser`, pks named a class or module written from the top
 level, as `class ::Foo`, `::::Foo`, or `::Outer::::Foo` inside `module Outer`,
-and gave the constants defined in it the same prefix. References to them were
-missed, and so were references written inside one to the constants nested in
-it. pks now names it `::Foo`, as Ruby does, so it may find new references and
-violations. Without `--experimental-parser`, pks still looks up a constant
-written inside `class ::Foo` as packwerk does, which misses the constants
-nested in `::Foo` too.
+and gave the constants defined in it the same prefix. A reference to one was
+found only from inside another `class ::Foo` written the same way, and then
+under that name, as `::::Foo::BAR`. Others were missed, as was a reference
+written inside `class ::Foo` to a constant that `class Foo::Bar` defines. pks
+now names them as Ruby does, `::Foo` and `::Foo::BAR`, so it may find new
+references and violations. A violation that a `package_todo.yml` records under
+a `::::` name is reported again under the new name, and the old entry as stale,
+until you run `pks update`. Without `--experimental-parser`, pks still looks up
+a constant written inside `class ::Foo` as packwerk does, which misses the
+constants nested in `::Foo` too.
 
 ## 0.7.0
 
