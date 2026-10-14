@@ -461,9 +461,9 @@ fn test_list_references_from_associations_by_the_models_name(
         "class Taco\n  def self.make; end\nend\n\
          module Outer\n  class Taco\n    def self.make; end\n  end\nend\n",
     )?;
-    // Rails looks `:tacos` up from the model's name, as `Outer::Foo::Taco`,
-    // `Outer::Taco`, then `Taco` from `Outer::Foo`, and as `Foo::Taco`, then
-    // `Taco` from `Foo`, which `class ::Foo` names whatever surrounds it
+    // Rails looks `:tacos` up from the model's name: as `Outer::Foo::Taco`,
+    // `Outer::Taco`, then `Taco` in `Outer::Foo`, and as `Foo::Taco`, then
+    // `Taco` in `class ::Foo`, which names the model `Foo` inside any module
     let compact = "packs/foo/app/services/foo_compact.rb";
     fs::write(
         fixture.path(compact),
@@ -473,6 +473,14 @@ fn test_list_references_from_associations_by_the_models_name(
     fs::write(
         fixture.path(top_level),
         "module Outer\n  class ::Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+    // When the class has the model's own name, Rails tries `::Taco` first, so
+    // these don't find the model itself
+    let own_name = "packs/foo/app/services/foo_own_name.rb";
+    fs::write(
+        fixture.path(own_name),
+        "class Payroll::Taco\n  belongs_to :taco\nend\n\
+         module Billing\n  class Taco\n    belongs_to :taco\n  end\nend\n",
     )?;
 
     assert_eq!(
@@ -484,7 +492,49 @@ fn test_list_references_from_associations_by_the_models_name(
             "references": [
                 bar_from_foo(),
                 to_bar_pack(compact, Some((2, 2)), "::Outer::Taco"),
+                to_bar_pack(own_name, Some((2, 2)), "::Taco"),
+                to_bar_pack(own_name, Some((6, 4)), "::Taco"),
                 to_bar_pack(top_level, Some((3, 4)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_from_associations_in_namespaced_models(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n\
+         module Outer\n  class Taco\n    def self.make; end\n  end\nend\n\
+         module CoreExt\n  class Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    let nested = "packs/foo/app/services/foo_nested.rb";
+    fs::write(
+        fixture.path(nested),
+        "module Outer\n  class Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+    // `class Object::Foo` is `::Foo` wherever it's written, so Rails looks
+    // `:tacos` up as `Foo::Taco`, then `Taco`, not as `CoreExt::Taco`
+    let through_object = "packs/foo/app/services/foo_through_object.rb";
+    fs::write(
+        fixture.path(through_object),
+        "module CoreExt\n  class Object::Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(nested, Some((3, 4)), "::Outer::Taco"),
+                to_bar_pack(through_object, Some((3, 4)), "::Taco"),
             ]
         })
     );

@@ -76,6 +76,11 @@ Rails looks it up from the model's name: in `class Outer::Foo`, as
 `class Outer::Foo` it finds `Outer::Taco` where it found `Taco`, and in
 `class ::Foo` it no longer takes `Outer::Taco` for the class.
 
+When the class has the model's own name, as `has_many :tacos` in `class Taco`
+inside `module Outer`, Rails tries `::Taco` first, and pks now does too, where
+it found the model itself. A `package_todo.yml` entry for a violation that
+moves is stale until you run `pks update`.
+
 #### `--experimental-parser` names a constant written through `Object`
 
 The constants of `Object` are the top level's, so `class Object::Bar` inside

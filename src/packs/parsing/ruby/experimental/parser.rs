@@ -55,7 +55,8 @@ impl ReferenceCollector<'_> {
 
     /// Rails looks up an association's class from its model's name, so these
     /// are that name's: `["Foo"]` in `module Outer; class ::Foo`, and
-    /// `["Outer", "Foo"]` in `class Outer::Foo`.
+    /// `["Outer", "Foo"]` in `class Outer::Foo`. In a module, as a concern's
+    /// `included` block, pks can't know the model, and takes the module's name.
     fn model_namespaces(&self) -> Vec<String> {
         let Some((model, namespaces)) = self.current_namespaces.split_last()
         else {
@@ -161,7 +162,15 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
                 );
 
             if let Some(mut association_reference) = association_reference {
-                association_reference.namespace_path = self.model_namespaces();
+                let namespaces = self.model_namespaces();
+                // For a class with the model's own name, as `has_many :tacos`
+                // in `Outer::Taco`, Rails tries `::Taco` first (`_klass` in
+                // reflection.rb)
+                if namespaces.last() == Some(&association_reference.name) {
+                    association_reference.name =
+                        format!("::{}", association_reference.name);
+                }
+                association_reference.namespace_path = namespaces;
                 self.references.push(association_reference);
             }
         }
