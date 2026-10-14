@@ -212,6 +212,17 @@ pub fn get_reference_from_active_record_association(
     }
 }
 
+/// Whether an association names its class, as `class_name: "Taco"`
+pub fn names_its_class(node: &CallNode) -> bool {
+    node.arguments().is_some_and(|arguments| {
+        arguments.arguments().iter().any(|argument| {
+            argument.as_keyword_hash_node().is_some_and(|kwargs| {
+                extract_class_name_from_kwargs(&kwargs).is_some()
+            })
+        })
+    })
+}
+
 fn extract_class_name_from_kwargs(kwargs: &KeywordHashNode) -> Option<String> {
     for pair_node in kwargs.elements().iter() {
         if let Some(pair) = pair_node.as_assoc_node() {

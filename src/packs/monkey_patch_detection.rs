@@ -5,8 +5,7 @@ use tracing::debug;
 
 use crate::packs::{
     constant_resolver::ConstantDefinition, file_utils::glob_ruby_files_in_dirs,
-    get_experimental_constant_resolver, process_files_with_cache,
-    ProcessedFile,
+    process_files_experimental,
 };
 
 use super::Configuration;
@@ -28,17 +27,8 @@ pub fn expose_monkey_patches(
 
     included_files.extend(other_files_to_parse);
 
-    let processed_files: Vec<ProcessedFile> = process_files_with_cache(
-        &included_files,
-        configuration.get_cache(),
-        configuration,
-    )?;
-
-    let constant_resolver = get_experimental_constant_resolver(
-        &configuration.absolute_root,
-        &processed_files,
-        &configuration.ignored_definitions,
-    );
+    let (_, constant_resolver) =
+        process_files_experimental(&included_files, configuration)?;
 
     let constant_definition_map = constant_resolver
         .fully_qualified_constant_name_to_constant_definition_map();

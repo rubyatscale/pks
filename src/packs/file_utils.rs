@@ -3,6 +3,7 @@ use std::{
     fs, io,
     io::Read,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
 use crate::packs::Configuration;
@@ -138,10 +139,17 @@ pub fn file_read_contents(
     configuration: &Configuration,
 ) -> anyhow::Result<String> {
     if is_stdin_file(path, configuration) {
-        Ok(io::read_to_string(io::stdin()).context(format!(
+        // Kept, since stdin can be read only once, and a file can be read more
+        // than once
+        static STDIN_CONTENTS: OnceLock<String> = OnceLock::new();
+        if let Some(contents) = STDIN_CONTENTS.get() {
+            return Ok(contents.clone());
+        }
+        let contents = io::read_to_string(io::stdin()).context(format!(
             "Failed to read contents of {} from stdin",
             path.to_string_lossy()
-        ))?)
+        ))?;
+        Ok(STDIN_CONTENTS.get_or_init(|| contents).clone())
     } else {
         fs::read_to_string(path).context(format!(
             "Failed to read contents of {}",

@@ -36,7 +36,24 @@ impl ConstantResolver for ExperimentalConstantResolver {
                 (namespace_path, fully_or_partially_qualified_constant)
             };
 
-        Some(self.resolve_traversing_namespace_path(const_name, namespace_path))
+        let definitions =
+            self.resolve_traversing_namespace_path(const_name, namespace_path);
+        if !definitions.is_empty() {
+            return Some(definitions);
+        }
+        // Then, as the top level's constants are `Object`'s, those of its
+        // ancestors, as `BasicObject::Foo` for `Foo`, from anywhere
+        let top_level = nest_constant_name(&[], const_name);
+        for ancestor in ["::Kernel", "::BasicObject"] {
+            let definitions = self.constant_for_fully_qualified_name(&format!(
+                "{}{}",
+                ancestor, top_level
+            ));
+            if !definitions.is_empty() {
+                return Some(definitions);
+            }
+        }
+        Some(vec![])
     }
 
     fn fully_qualified_constant_name_to_constant_definition_map(

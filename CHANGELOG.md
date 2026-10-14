@@ -77,20 +77,43 @@ Rails looks it up from the model's name: in `class Outer::Foo`, as
 `class ::Foo` it no longer takes `Outer::Taco` for the class.
 
 When the class has the model's own name, as `has_many :tacos` in `class Taco`
-inside `module Outer`, Rails tries `::Taco` first, and pks now does too, where
-it found the model itself. A `package_todo.yml` entry for a violation that
-moves is stale until you run `pks update`.
+inside `module Outer`, Rails tries `::Taco` first, and where there's none, looks
+it up from the model's name, as `Outer::Taco::Taco`. pks now does too, where it
+found the model itself.
+
+In a module, as a concern's `included` block, Rails looks up the class from the
+name of each model that includes the module, directly or through other
+modules. pks now finds those models from the `include` and `prepend` calls in
+the app's classes and modules, and looks up the class from each one's name, so
+one association can reference a class for each model. Where no class in the
+app includes the module, pks looks it up from the module's name, as before. In
+a controller, inherited_resources looks up the class of `belongs_to :taco` from
+the controller's namespaces, and one given as `class_name:` from the top level,
+and pks now does too, where it looked in the controller itself first.
+
+A `package_todo.yml` entry for a violation that moves is stale until you run
+`pks update`.
 
 #### `--experimental-parser` names a constant written through `Object`
 
 The constants of `Object` are the top level's, so `class Object::Bar` inside
 `module CoreExt` defines `::Bar`, as does `class Bar` inside a `class Object`
 at the top level of a file. With `--experimental-parser`, pks named these
-`::CoreExt::Object::Bar` and `::Object::Bar`. It now names them `::Bar`,
-taking it that no namespace defines an `Object` of its own. A reference
-written `::Object::Bar`, or `Object::Bar` where no namespace around it defines
-an `Object`, now resolves to `::Bar` too. A `class Object` inside a namespace
-is still the namespace's own, as in Ruby.
+`::CoreExt::Object::Bar` and `::Object::Bar`. It now names them as Ruby does:
+`::Bar`, or, where the app defines an `Object` in a namespace around it, as
+`CoreExt::Object`, `::CoreExt::Object::Bar`. A reference written
+`::Object::Bar` now resolves to `::Bar` too, as does one written `Object::Bar`
+where no namespace around it defines an `Object`. A `class Object` inside a
+namespace is still the namespace's own, as in Ruby.
+
+#### `--experimental-parser` finds the constants of `Kernel` and `BasicObject`
+
+`Object` includes `Kernel` and inherits from `BasicObject`, so Ruby finds a
+constant that either defines, as `class BasicObject::Foo` or `FOO = 1` in
+`module Kernel`, from anywhere, as `Foo` or `::Foo`, after the top level's own.
+With `--experimental-parser`, pks now does too, except where Rails looks up the
+class of an association from its model's name, which takes only a class of the
+very name it looks for.
 
 #### pks finds what packwerk finds around a name written from the top level
 

@@ -45,5 +45,6 @@ pub(crate) fn process_from_contents(
             line: None,
             ..error
         }),
+        ..ProcessedFile::default()
     }
 }

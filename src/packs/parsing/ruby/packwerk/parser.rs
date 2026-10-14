@@ -345,5 +345,6 @@ fn process(
         unresolved_references,
         definitions,
         syntax_error,
+        ..ProcessedFile::default()
     }
 }
