@@ -117,8 +117,8 @@ very name it looks for.
 
 #### pks finds what packwerk finds around a name written from the top level
 
-Without `--experimental-parser`, pks differed from packwerk in two cases, and
-now matches it:
+Without `--experimental-parser`, pks differed from packwerk in three cases,
+and now matches it:
 
 - In `module Outer; class ::Burrito`, packwerk names the class
   `::Outer::::Burrito` and finds no constant for it. pks took it for a
@@ -130,6 +130,13 @@ now matches it:
   class too, as a reference, since it names the definition `::::Taco`. pks took
   it for the file's own, as it did a constant defined in the class, as
   `Taco::Shell` after `class ::Taco; class Shell`.
+- packwerk names a class or module defined in a `class_eval` block, or in a
+  `Class.new` or `Module.new` block assigned to a constant, inside the block's
+  receiver or the constant. It takes `class Cee` in
+  `module Aa; Bb.class_eval do` for a reference to `::Aa::Bb::Cee`, and
+  `class ::Cee` there for one to `::Aa::Bb::::Cee`, whose parent is `Aa`. pks
+  left out `Bb`. As in packwerk, a class defined in a block passed with `&.`
+  or to `super` is now no reference.
 
 So `pks check` may report a violation it didn't, or no longer report one, and a
 `package_todo.yml` entry for one it no longer reports is stale until you run

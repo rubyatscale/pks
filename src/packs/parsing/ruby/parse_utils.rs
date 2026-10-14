@@ -300,7 +300,8 @@ pub fn is_plain_call(node: &CallNode) -> bool {
 /// The `Visit` methods for the nodes that assign a constant, for an
 /// `impl<'pr> Visit<'pr>` whose type has a `define_constant(name, location)`
 /// method. They visit only the value assigned, so neither the constant nor its
-/// scope is a reference.
+/// scope is a reference. With `except_writes`, they leave out `Foo = 1` and
+/// `Foo::Bar = 1`, for a type that visits those itself.
 macro_rules! visit_constant_assignments {
     () => {
         fn visit_constant_write_node(
@@ -331,6 +332,11 @@ macro_rules! visit_constant_assignments {
             self.visit(&node.value());
         }
 
+        $crate::packs::parsing::ruby::parse_utils::visit_constant_assignments!(
+            except_writes
+        );
+    };
+    (except_writes) => {
         fn visit_constant_or_write_node(
             &mut self,
             node: &ruby_prism::ConstantOrWriteNode<'pr>,

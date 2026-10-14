@@ -466,6 +466,62 @@ fn test_list_references_to_a_class_defined_from_the_top_level_in_a_namespace(
 }
 
 #[test]
+fn test_list_references_to_a_class_defined_in_class_eval_or_class_new(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    for (path, contents) in [
+        ("aa.rb", "module Aa\nend\n"),
+        ("aa/bb.rb", "module Aa::Bb\nend\n"),
+    ] {
+        let path = fixture.path(&format!("packs/bar/app/services/{}", path));
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, contents)?;
+    }
+    // As in packwerk, a class defined in `Bb.class_eval do` or
+    // `Bb = Class.new do` is named as one in `Bb`, so the parent of
+    // `::Aa::Bb::::Cee` is `::Aa`, and that of `::Aa::Bb::Cc::::Dee` is
+    // `::Aa::Bb`
+    let class_eval = "packs/foo/app/services/foo_class_eval.rb";
+    fs::write(
+        fixture.path(class_eval),
+        "module Aa\n  Bb.class_eval do\n    class ::Cee\n    end\n    \
+         class Dee\n    end\n  end\nend\n",
+    )?;
+    let class_new = "packs/foo/app/services/foo_class_new.rb";
+    fs::write(
+        fixture.path(class_new),
+        "module Aa\n  Bb = Class.new do\n    class Cee\n    end\n  end\nend\n",
+    )?;
+    let nested = "packs/foo/app/services/foo_nested.rb";
+    fs::write(
+        fixture.path(nested),
+        "module Aa\n  module Bb\n    Cc.class_eval do\n      class ::Dee\n      \
+         end\n    end\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(class_eval, Some((1, 7)), "::Aa"),
+                to_bar_pack(class_eval, Some((2, 2)), "::Aa::Bb"),
+                to_bar_pack(class_eval, Some((3, 10)), "::Aa::Bb::::Cee"),
+                to_bar_pack(class_eval, Some((5, 10)), "::Aa::Bb::Dee"),
+                to_bar_pack(class_new, Some((1, 7)), "::Aa"),
+                to_bar_pack(class_new, Some((3, 10)), "::Aa::Bb::Cee"),
+                to_bar_pack(nested, Some((1, 7)), "::Aa"),
+                to_bar_pack(nested, Some((2, 9)), "::Aa::Bb"),
+                to_bar_pack(nested, Some((4, 12)), "::Aa::Bb::Cc::::Dee"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_list_references_after_a_class_defined_from_the_top_level(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
