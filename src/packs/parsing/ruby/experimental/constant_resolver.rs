@@ -36,7 +36,24 @@ impl ConstantResolver for ExperimentalConstantResolver {
                 (namespace_path, fully_or_partially_qualified_constant)
             };
 
-        Some(self.resolve_traversing_namespace_path(const_name, namespace_path))
+        let definitions =
+            self.resolve_traversing_namespace_path(const_name, namespace_path);
+        if !definitions.is_empty() {
+            return Some(definitions);
+        }
+        // Then, as the top level's constants are `Object`'s, those of its
+        // ancestors, as `BasicObject::Foo` for `Foo`, from anywhere
+        let top_level = nest_constant_name(&[], const_name);
+        for ancestor in ["::Kernel", "::BasicObject"] {
+            let definitions = self.constant_for_fully_qualified_name(&format!(
+                "{}{}",
+                ancestor, top_level
+            ));
+            if !definitions.is_empty() {
+                return Some(definitions);
+            }
+        }
+        Some(vec![])
     }
 
     fn fully_qualified_constant_name_to_constant_definition_map(
@@ -179,29 +196,78 @@ impl ExperimentalConstantResolver {
 mod tests {
     use super::*;
 
-    #[test]
-    fn resolve_in_a_namespace_from_the_top_level() {
-        let constants =
-            ["::Foo::Bar", "::Outer::Baz"].map(|name| ConstantDefinition {
-                fully_qualified_name: name.to_owned(),
+    fn resolved_names(
+        constants: &[&str],
+        name: &str,
+        namespace_path: &[&str],
+    ) -> Vec<String> {
+        let constants = constants
+            .iter()
+            .map(|constant| ConstantDefinition {
+                fully_qualified_name: (*constant).to_owned(),
                 absolute_path_of_definition: PathBuf::from("/app/foo.rb"),
-            });
-        let resolver = ExperimentalConstantResolver::create(
-            constants.to_vec(),
+            })
+            .collect();
+        ExperimentalConstantResolver::create(
+            constants,
             Path::new("/app"),
             &HashMap::new(),
-        );
+        )
+        .resolve(name, namespace_path)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|definition| definition.fully_qualified_name)
+        .collect()
+    }
 
+    #[test]
+    fn resolve_in_a_namespace_from_the_top_level() {
         // In `module Outer; class ::Foo; end; end`, as Ruby looks them up
         for (name, resolved) in [("Bar", "::Foo::Bar"), ("Baz", "::Outer::Baz")]
         {
-            let definitions = resolver.resolve(name, &["Outer", "::Foo"]);
-            let names: Vec<String> = definitions
-                .unwrap_or_default()
-                .into_iter()
-                .map(|definition| definition.fully_qualified_name)
-                .collect();
-            assert_eq!(names, [resolved], "{}", name);
+            assert_eq!(
+                resolved_names(
+                    &["::Foo::Bar", "::Outer::Baz"],
+                    name,
+                    &["Outer", "::Foo"]
+                ),
+                [resolved],
+                "{}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_through_object() {
+        for (constants, name, resolved) in [
+            (&["::Bar"][..], "Object::Bar", "::Bar"),
+            (&["::Bar"], "::Object::Bar", "::Bar"),
+            (&["::Bar"], "::Object::Object::Bar", "::Bar"),
+            (
+                &["::ObjectSpace::Bar"],
+                "::ObjectSpace::Bar",
+                "::ObjectSpace::Bar",
+            ),
+            // `Object` is looked up as Ruby looks up any constant
+            (
+                &["::Bar", "::CoreExt::Object::Bar"],
+                "Object::Bar",
+                "::CoreExt::Object::Bar",
+            ),
+            (
+                &["::Bar", "::CoreExt::Object::Bar"],
+                "::Object::Bar",
+                "::Bar",
+            ),
+        ] {
+            assert_eq!(
+                resolved_names(constants, name, &["CoreExt"]),
+                [resolved],
+                "{} among {:?}",
+                name,
+                constants
+            );
         }
     }
 }

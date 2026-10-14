@@ -1689,3 +1689,35 @@ fn test_check_a_deeply_nested_file() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_check_contents_of_a_file_read_twice_with_experimental_parser(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // `Payments` defines its own `Object`, so pks reads the file written
+    // through it again once it's read the others, and has to keep what it
+    // read from stdin
+    fs::write(
+        fixture.path("packs/baz/app/services/payments_object.rb"),
+        "module Payments\n  class Object\n  end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_charge.rb";
+    fs::write(fixture.path(file), "module Payments\nend\n")?;
+
+    cargo_bin_cmd!("pks")
+        .env_remove("RUST_LOG")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .args(["--experimental-parser", "check-contents", file])
+        .write_stdin(
+            "module Payments\n  class Object::Charge\n    def self.make\n      \
+             Bar\n    end\n  end\nend\n",
+        )
+        .assert()
+        .code(1)
+        .stdout(predicate::str::contains(format!(
+            "{}:4:6\nDependency violation: `::Bar`",
+            file
+        )));
+    Ok(())
+}

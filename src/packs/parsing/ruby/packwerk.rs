@@ -926,6 +926,133 @@ FOO = BAR
     }
 
     #[test]
+    fn class_defined_in_class_eval() {
+        // packwerk names the class as one in `Foo`, but looks up the constants
+        // in it, and names those defined around it, as if it were in `M`
+        let contents = "\
+module M
+  Foo.class_eval do
+    class Bar
+      Baz
+    end
+    QUX = 1
+    QUX
+  end
+end
+";
+        let references: Vec<(String, Vec<String>)> = process_from_contents(
+            contents.to_owned(),
+            &PathBuf::from("path/to/file.rb"),
+            &Configuration::default(),
+        )
+        .unresolved_references
+        .into_iter()
+        .map(|reference| (reference.name, reference.namespace_path))
+        .collect();
+        assert_eq!(
+            references,
+            vec![
+                (String::from("::M"), vec![]),
+                (String::from("Foo"), vec![String::from("M")]),
+                (String::from("::M::Foo::Bar"), vec![String::from("M")]),
+                (
+                    String::from("Baz"),
+                    vec![String::from("M"), String::from("Bar")]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn classes_defined_in_blocks_and_assignments() {
+        // The name packwerk gives `Bar`, from the `class_eval` blocks and
+        // `Class.new` or `Module.new` assignments around it. It names none in
+        // a block passed with `&.` or to `super`.
+        for (contents, bar) in [
+            ("Foo.class_eval do class Bar; end end", Some("::Foo::Bar")),
+            ("Foo.class_eval { module Bar; end }", Some("::Foo::Bar")),
+            (
+                "Foo.class_eval(1) do |x| class Bar; end end",
+                Some("::Foo::Bar"),
+            ),
+            ("A::B.class_eval do class Bar; end end", Some("::A::B::Bar")),
+            (
+                "::Foo.class_eval do class Bar; end end",
+                Some("::::Foo::Bar"),
+            ),
+            (
+                "module M; self::Foo.class_eval do class Bar; end end; end",
+                Some("::M::::Foo::Bar"),
+            ),
+            (
+                "module M; Foo.class_eval do class ::Bar; end end; end",
+                Some("::M::Foo::::Bar"),
+            ),
+            (
+                "A.class_eval do B.class_eval do class Bar; end end end",
+                Some("::A::B::Bar"),
+            ),
+            ("Foo.class_eval(class Bar; end) do end", Some("::Foo::Bar")),
+            ("Foo = Class.new do class Bar; end end", Some("::Foo::Bar")),
+            (
+                "A::B = Module.new do module Bar; end end",
+                Some("::A::B::Bar"),
+            ),
+            (
+                "Foo = Class.new(Base) { class Bar; end }",
+                Some("::Foo::Bar"),
+            ),
+            ("Foo = Class.new(class Bar; self; end)", Some("::Foo::Bar")),
+            (
+                "Foo = Class.new do A.class_eval do class Bar; end end end",
+                Some("::Foo::A::Bar"),
+            ),
+            (
+                "Foo.class_eval do end.then do class Bar; end end",
+                Some("::Bar"),
+            ),
+            ("Foo.module_eval do class Bar; end end", Some("::Bar")),
+            ("Foo.class_exec do class Bar; end end", Some("::Bar")),
+            ("foo.class_eval do class Bar; end end", Some("::Bar")),
+            ("self.class_eval do class Bar; end end", Some("::Bar")),
+            ("class_eval do class Bar; end end", Some("::Bar")),
+            ("Foo.class_eval { _1; class Bar; end }", Some("::Bar")),
+            ("Foo.class_eval { it; class Bar; end }", Some("::Bar")),
+            ("Foo&.class_eval { _1; class Bar; end }", Some("::Bar")),
+            ("Foo = Class.new { _1; class Bar; end }", Some("::Bar")),
+            ("Foo = Class&.new(class Bar; self; end)", Some("::Bar")),
+            ("Foo = ::Class.new do class Bar; end end", Some("::Bar")),
+            ("Foo = Struct.new(:a) do class Bar; end end", Some("::Bar")),
+            ("Foo = (Class.new do class Bar; end end)", Some("::Bar")),
+            ("Foo ||= Class.new do class Bar; end end", Some("::Bar")),
+            ("Foo, Baz = Class.new do class Bar; end end", Some("::Bar")),
+            ("Foo&.class_eval do class Bar; end end", None),
+            ("Foo&.then do class Bar; end end", None),
+            ("foo::Baz.class_eval do class Bar; end end", None),
+            ("Foo = Class&.new do class Bar; end end", None),
+            ("super do class Bar; end end", None),
+            ("super(1) do class Bar; end end", None),
+        ] {
+            let references: Vec<String> = process_from_contents(
+                contents.to_owned(),
+                &PathBuf::from("path/to/file.rb"),
+                &Configuration::default(),
+            )
+            .unresolved_references
+            .into_iter()
+            .map(|reference| reference.name)
+            .filter(|name| name.ends_with("Bar"))
+            .collect();
+            assert_eq!(
+                references,
+                bar.into_iter().collect::<Vec<_>>(),
+                "{}",
+                contents
+            );
+        }
+    }
+
+    #[test]
     fn association_calls() {
         // Where each finds `Bar`. pks has never read a `&.` call as an
         // association, and a block doesn't move where one starts.

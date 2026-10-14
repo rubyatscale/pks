@@ -421,6 +421,527 @@ fn test_list_references_inside_a_class_defined_from_the_top_level(
     Ok(())
 }
 
+#[test]
+fn test_list_references_to_a_class_defined_from_the_top_level_in_a_namespace(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    for (path, contents) in [
+        ("outer.rb", "module Outer\nend\n"),
+        ("aa.rb", "module Aa\nend\n"),
+        ("aa/bb.rb", "module Aa::Bb\nend\n"),
+    ] {
+        let path = fixture.path(&format!("packs/bar/app/services/{}", path));
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, contents)?;
+    }
+    // As in packwerk, `::Outer::::Burrito` has no parent, so it isn't a
+    // reference to `Outer`, and the parent of `::Aa::Bb::::Cee` is `::Aa`, not
+    // `::Aa::Bb`
+    let outer = "packs/foo/app/services/foo_outer.rb";
+    fs::write(
+        fixture.path(outer),
+        "module Outer\n  class ::Burrito\n  end\nend\n",
+    )?;
+    let aa = "packs/foo/app/services/foo_aa.rb";
+    fs::write(
+        fixture.path(aa),
+        "module Aa\n  module Bb\n    class ::Cee\n    end\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(aa, Some((1, 7)), "::Aa"),
+                to_bar_pack(aa, Some((2, 9)), "::Aa::Bb"),
+                to_bar_pack(aa, Some((3, 10)), "::Aa::Bb::::Cee"),
+                to_bar_pack(outer, Some((1, 7)), "::Outer"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_a_class_defined_in_class_eval_or_class_new(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    for (path, contents) in [
+        ("aa.rb", "module Aa\nend\n"),
+        ("aa/bb.rb", "module Aa::Bb\nend\n"),
+    ] {
+        let path = fixture.path(&format!("packs/bar/app/services/{}", path));
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, contents)?;
+    }
+    // As in packwerk, a class defined in `Bb.class_eval do` or
+    // `Bb = Class.new do` is named as one in `Bb`, so the parent of
+    // `::Aa::Bb::::Cee` is `::Aa`, and that of `::Aa::Bb::Cc::::Dee` is
+    // `::Aa::Bb`
+    let class_eval = "packs/foo/app/services/foo_class_eval.rb";
+    fs::write(
+        fixture.path(class_eval),
+        "module Aa\n  Bb.class_eval do\n    class ::Cee\n    end\n    \
+         class Dee\n    end\n  end\nend\n",
+    )?;
+    let class_new = "packs/foo/app/services/foo_class_new.rb";
+    fs::write(
+        fixture.path(class_new),
+        "module Aa\n  Bb = Class.new do\n    class Cee\n    end\n  end\nend\n",
+    )?;
+    let nested = "packs/foo/app/services/foo_nested.rb";
+    fs::write(
+        fixture.path(nested),
+        "module Aa\n  module Bb\n    Cc.class_eval do\n      class ::Dee\n      \
+         end\n    end\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(class_eval, Some((1, 7)), "::Aa"),
+                to_bar_pack(class_eval, Some((2, 2)), "::Aa::Bb"),
+                to_bar_pack(class_eval, Some((3, 10)), "::Aa::Bb::::Cee"),
+                to_bar_pack(class_eval, Some((5, 10)), "::Aa::Bb::Dee"),
+                to_bar_pack(class_new, Some((1, 7)), "::Aa"),
+                to_bar_pack(class_new, Some((3, 10)), "::Aa::Bb::Cee"),
+                to_bar_pack(nested, Some((1, 7)), "::Aa"),
+                to_bar_pack(nested, Some((2, 9)), "::Aa::Bb"),
+                to_bar_pack(nested, Some((4, 12)), "::Aa::Bb::Cc::::Dee"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_after_a_class_defined_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in packwerk, which names this class `::::Taco`, the `Taco` inside it
+    // and the `Taco` and `::Taco` after it aren't the file's own
+    fs::write(
+        fixture.path(file),
+        "class ::Taco\n  def self.local; end\n  Taco.make\nend\n\
+         Taco.make\n::Taco.make\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((3, 2)), "::Taco"),
+                to_bar_pack(file, Some((5, 0)), "::Taco"),
+                to_bar_pack(file, Some((6, 0)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_after_a_constant_assigned_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in packwerk, which names this constant `::::Taco`, the `Taco` and
+    // `::Taco` after it aren't the file's own
+    fs::write(fixture.path(file), "::Taco = 1\nTaco.make\n::Taco.make\n")?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((2, 0)), "::Taco"),
+                to_bar_pack(file, Some((3, 0)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_from_associations_by_the_models_name(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n\
+         module Outer\n  class Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    // Rails looks `:tacos` up from the model's name: as `Outer::Foo::Taco`,
+    // `Outer::Taco`, then `Taco` in `Outer::Foo`, and as `Foo::Taco`, then
+    // `Taco` in `class ::Foo`, which names the model `Foo` inside any module
+    let compact = "packs/foo/app/services/foo_compact.rb";
+    fs::write(
+        fixture.path(compact),
+        "class Outer::Foo\n  has_many :tacos\nend\n",
+    )?;
+    let top_level = "packs/foo/app/services/foo_top_level.rb";
+    fs::write(
+        fixture.path(top_level),
+        "module Outer\n  class ::Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+    // When the class has the model's own name, Rails tries `::Taco` first, so
+    // these don't find the model itself
+    let own_name = "packs/foo/app/services/foo_own_name.rb";
+    fs::write(
+        fixture.path(own_name),
+        "class Payroll::Taco\n  belongs_to :taco\nend\n\
+         module Billing\n  class Taco\n    belongs_to :taco\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(compact, Some((2, 2)), "::Outer::Taco"),
+                to_bar_pack(own_name, Some((2, 2)), "::Taco"),
+                to_bar_pack(own_name, Some((6, 4)), "::Taco"),
+                to_bar_pack(top_level, Some((3, 4)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_from_associations_in_namespaced_models(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n\
+         module Outer\n  class Taco\n    def self.make; end\n  end\nend\n\
+         module CoreExt\n  class Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    let nested = "packs/foo/app/services/foo_nested.rb";
+    fs::write(
+        fixture.path(nested),
+        "module Outer\n  class Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+    // `class Object::Foo` is `::Foo` wherever it's written, so Rails looks
+    // `:tacos` up as `Foo::Taco`, then `Taco`, not as `CoreExt::Taco`
+    let through_object = "packs/foo/app/services/foo_through_object.rb";
+    fs::write(
+        fixture.path(through_object),
+        "module CoreExt\n  class Object::Foo\n    has_many :tacos\n  end\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(nested, Some((3, 4)), "::Outer::Taco"),
+                to_bar_pack(through_object, Some((3, 4)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_constants_defined_through_object(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // The experimental parser names these `::Taco`, `::Salsa` and `::GUAC`,
+    // not `::CoreExt::Object::Taco` and so on
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "module CoreExt\n  class Object::Taco\n    def self.make; end\n  end\n\
+         \n  module Object::Salsa\n    def self.pour; end\n  end\n\
+         \n  Object::GUAC = 1\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    fs::write(
+        fixture.path(file),
+        "Taco.make\n::Object::Salsa.pour\nObject::GUAC\n",
+    )?;
+    let template = "packs/foo/app/views/foo_taco.erb";
+    fs::write(fixture.path(template), "<%= ::Object::Taco.make %>\n")?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(file, Some((1, 0)), "::Taco"),
+                to_bar_pack(file, Some((2, 0)), "::Salsa"),
+                to_bar_pack(file, Some((3, 0)), "::GUAC"),
+                to_bar_pack(template, None, "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_from_associations_in_concerns(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n\
+         module Outer\n  class Taco\n    def self.make; end\n  end\nend\n\
+         module Billing\n  class Taco\n    def self.make; end\n  end\nend\n",
+    )?;
+    // Rails looks `:tacos` up from the name of each model that includes the
+    // concern, `Plain` and `Billing::Invoice`, which includes `Trackable`
+    // through `Billing::Auditable`. With no model, the concern's name stands
+    // in for one.
+    let taggable = "packs/foo/app/services/foo_taggable.rb";
+    let trackable = "packs/foo/app/services/foo_trackable.rb";
+    let unused = "packs/foo/app/services/foo_unused.rb";
+    for (file, contents) in [
+        (
+            taggable,
+            "module Outer::Taggable\n  extend ActiveSupport::Concern\n\n  \
+             included do\n    has_many :tacos\n  end\nend\n",
+        ),
+        (
+            trackable,
+            "module Trackable\n  extend ActiveSupport::Concern\n\n  \
+             included do\n    belongs_to :taco\n  end\nend\n",
+        ),
+        (
+            unused,
+            "module Outer\n  module Unused\n    \
+             extend ActiveSupport::Concern\n\n    included do\n      \
+             has_many :tacos\n    end\n  end\nend\n",
+        ),
+        (
+            "packs/foo/app/services/foo_auditable.rb",
+            "module Billing\n  module Auditable\n    \
+             extend ActiveSupport::Concern\n    include Trackable\n  end\n\
+             end\n",
+        ),
+        (
+            "packs/foo/app/services/foo_invoice.rb",
+            "module Billing\n  class Invoice\n    include Outer::Taggable\n    \
+             include Auditable\n  end\nend\n",
+        ),
+        (
+            "packs/foo/app/services/foo_plain.rb",
+            "class Plain\n  include Outer::Taggable\nend\n",
+        ),
+    ] {
+        fs::write(fixture.path(file), contents)?;
+    }
+    // An association in a template too, which has no position
+    let template = "packs/foo/app/views/foo_tacos.erb";
+    fs::write(
+        fixture.path(template),
+        "<% class Plain; has_many :tacos; end %>\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(taggable, Some((5, 4)), "::Billing::Taco"),
+                to_bar_pack(taggable, Some((5, 4)), "::Taco"),
+                to_bar_pack(trackable, Some((5, 4)), "::Billing::Taco"),
+                to_bar_pack(unused, Some((6, 6)), "::Outer::Taco"),
+                to_bar_pack(template, None, "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_from_associations_named_for_their_model(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "module Outer\n  class Taco\n    class Taco\n      \
+         def self.make; end\n    end\n  end\nend\n\
+         module Billing\n  class Taco\n    def self.make; end\n  end\n  \
+         class Salsa\n    def self.pour; end\n  end\nend\n\
+         class Salsa\n  def self.pour; end\nend\n",
+    )?;
+    // With no `::Taco`, Rails goes on to look `:tacos` up from the model's
+    // name, and finds `Outer::Taco::Taco`
+    let own_name = "packs/foo/app/services/foo_own_name.rb";
+    fs::write(
+        fixture.path(own_name),
+        "class Outer::Taco\n  has_many :tacos\nend\n",
+    )?;
+    // inherited_resources looks up `belongs_to :taco` from the controller's
+    // namespace, and not in the controller, and takes a class it's given from
+    // the top level
+    let controller = "packs/foo/app/services/foo_controller.rb";
+    fs::write(
+        fixture.path(controller),
+        "class Billing::TacosController\n  class Taco\n    def self.local; end\n  \
+         end\n\n  belongs_to :taco\n  belongs_to :sauce, class_name: \"Salsa\"\n\
+         end\n",
+    )?;
+    // ActiveRecord's `has_many` in a model named `...Controller` is looked up
+    // from the model's name, so it finds the model's own `Taco`
+    fs::write(
+        fixture.path("packs/foo/app/services/foo_motor_controller.rb"),
+        "class Billing::TacoMotorController\n  class Taco\n    \
+         def self.local; end\n  end\n\n  has_many :tacos\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(controller, Some((6, 2)), "::Billing::Taco"),
+                to_bar_pack(controller, Some((7, 2)), "::Salsa"),
+                to_bar_pack(own_name, Some((2, 2)), "::Outer::Taco::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_constants_defined_through_a_namespaces_object(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // `Payments` defines an `Object` of its own, so `class Object::Charge` in
+    // `Payments`, in another file, is `Payments::Object::Charge`
+    fs::write(
+        fixture.path("packs/bar/app/services/payments_object.rb"),
+        "module Payments\n  class Object\n    def self.pay; end\n  end\nend\n",
+    )?;
+    fs::write(
+        fixture.path("packs/bar/app/services/payments_charge.rb"),
+        "module Payments\n  class Object::Charge\n    FEE = 1\n\n    \
+         def self.make; end\n  end\nend\n",
+    )?;
+    // As does an `Object` that defines nothing
+    fs::write(
+        fixture.path("packs/bar/app/services/kitchen_object.rb"),
+        "module Kitchen\n  class Object\n  end\nend\n\
+         module Kitchen\n  class Object::Dish\n    def self.make; end\n  end\n\
+         end\n",
+    )?;
+    let file = "packs/foo/app/services/foo_payments.rb";
+    fs::write(
+        fixture.path(file),
+        "Payments::Object::Charge.make\nPayments::Object::Charge::FEE\n\
+         ::Charge.make\nKitchen::Object::Dish.make\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(file, Some((1, 0)), "::Payments::Object::Charge"),
+                to_bar_pack(
+                    file,
+                    Some((2, 0)),
+                    "::Payments::Object::Charge::FEE"
+                ),
+                to_bar_pack(file, Some((4, 0)), "::Kitchen::Object::Dish"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_constants_of_objects_ancestors(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // The top level's constants are `Object`'s, so those of `Kernel` and
+    // `BasicObject` are found from anywhere
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class BasicObject::Taco\n  def self.make; end\nend\n\
+         module Kernel\n  SALSA = 1\n\n  class Pepper\n    def self.x; end\n  \
+         end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    fs::write(
+        fixture.path(file),
+        "module Outer\n  Taco.make\n  ::Taco.make\n  SALSA\nend\n",
+    )?;
+    // Rails looks up `:peppers` in `Outer::Pepper` as `::Pepper`, which finds
+    // `Kernel::Pepper`, but takes only a class of the very name it looks for
+    // from the model's name, so `Billing::Thing` has none
+    let associations = "packs/foo/app/services/foo_peppers.rb";
+    fs::write(
+        fixture.path(associations),
+        "class Outer::Pepper\n  has_many :peppers\nend\n\
+         class Billing::Thing\n  has_many :peppers\nend\n",
+    )?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(associations, Some((2, 2)), "::Kernel::Pepper"),
+                to_bar_pack(file, Some((2, 2)), "::BasicObject::Taco"),
+                to_bar_pack(file, Some((3, 2)), "::BasicObject::Taco"),
+                to_bar_pack(file, Some((4, 2)), "::Kernel::SALSA"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
 /// A reference from `packs/foo` to a constant that `packs/bar` keeps private,
 /// which breaks the same two rules as `bar_from_foo`. `None` is a position in
 /// ERB.

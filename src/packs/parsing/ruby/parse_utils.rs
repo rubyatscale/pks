@@ -212,6 +212,17 @@ pub fn get_reference_from_active_record_association(
     }
 }
 
+/// Whether an association names its class, as `class_name: "Taco"`
+pub fn names_its_class(node: &CallNode) -> bool {
+    node.arguments().is_some_and(|arguments| {
+        arguments.arguments().iter().any(|argument| {
+            argument.as_keyword_hash_node().is_some_and(|kwargs| {
+                extract_class_name_from_kwargs(&kwargs).is_some()
+            })
+        })
+    })
+}
+
 fn extract_class_name_from_kwargs(kwargs: &KeywordHashNode) -> Option<String> {
     for pair_node in kwargs.elements().iter() {
         if let Some(pair) = pair_node.as_assoc_node() {
@@ -289,7 +300,8 @@ pub fn is_plain_call(node: &CallNode) -> bool {
 /// The `Visit` methods for the nodes that assign a constant, for an
 /// `impl<'pr> Visit<'pr>` whose type has a `define_constant(name, location)`
 /// method. They visit only the value assigned, so neither the constant nor its
-/// scope is a reference.
+/// scope is a reference. With `except_writes`, they leave out `Foo = 1` and
+/// `Foo::Bar = 1`, for a type that visits those itself.
 macro_rules! visit_constant_assignments {
     () => {
         fn visit_constant_write_node(
@@ -320,6 +332,11 @@ macro_rules! visit_constant_assignments {
             self.visit(&node.value());
         }
 
+        $crate::packs::parsing::ruby::parse_utils::visit_constant_assignments!(
+            except_writes
+        );
+    };
+    (except_writes) => {
         fn visit_constant_or_write_node(
             &mut self,
             node: &ruby_prism::ConstantOrWriteNode<'pr>,

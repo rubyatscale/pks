@@ -51,9 +51,7 @@ pub fn process_file(
         // method should make sure we never get any files we can't handle.
         Ok(ProcessedFile {
             absolute_path: path.to_path_buf(),
-            unresolved_references: vec![],
-            definitions: vec![], // TODO
-            syntax_error: None,
+            ..ProcessedFile::default()
         })
     };
 
@@ -113,6 +111,37 @@ pub struct UnresolvedReference {
     pub name: String,
     pub namespace_path: Vec<String>,
     pub location: Range,
+}
+
+/// An association, as `has_many :tacos`, in a class or module. Rails looks
+/// up its class from the name of the model that declares it, which in a
+/// module, as a concern's `included` block, is that of each model that
+/// includes the module, so the experimental parser leaves it to be looked up
+/// once every file is read.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+pub struct UnresolvedAssociation {
+    /// The class's name, as `Taco`
+    pub name: String,
+    /// The fully qualified name of the class or module it's declared in
+    pub model: String,
+    pub in_module: bool,
+    /// `belongs_to`, which in a controller is inherited_resources'
+    pub belongs_to: bool,
+    /// Whether it names its class, as `class_name: "Taco"`
+    pub names_its_class: bool,
+    pub location: Range,
+}
+
+/// `include Taggable` or `prepend Taggable` in the class or module `includer`
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
+pub struct Inclusion {
+    /// The fully qualified name of the class or module that includes it
+    pub includer: String,
+    pub includer_is_module: bool,
+    /// The module's name as written, as `Taggable`
+    pub name: String,
+    /// The namespaces it's written in
+    pub namespace_path: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Default)]

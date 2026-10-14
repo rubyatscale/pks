@@ -66,6 +66,82 @@ Without `--experimental-parser`, pks still looks up a constant written inside
 `class ::Foo` as packwerk does, so `Bar` written there is never `::Foo::Bar`.
 It's missed, or taken for a top-level `::Bar`.
 
+#### `--experimental-parser` looks up an association from its model's name
+
+With `--experimental-parser`, pks looked up the class of an association, as
+`has_many :tacos`, as Ruby looks up a constant written where it's declared.
+Rails looks it up from the model's name: in `class Outer::Foo`, as
+`Outer::Foo::Taco`, `Outer::Taco`, then `Taco`, and in `class ::Foo` inside
+`module Outer`, as `Foo::Taco`, then `Taco`. pks now does too, so in
+`class Outer::Foo` it finds `Outer::Taco` where it found `Taco`, and in
+`class ::Foo` it no longer takes `Outer::Taco` for the class.
+
+When the class has the model's own name, as `has_many :tacos` in `class Taco`
+inside `module Outer`, Rails tries `::Taco` first, and where there's none, looks
+it up from the model's name, as `Outer::Taco::Taco`. pks now does too, where it
+found the model itself.
+
+In a module, as a concern's `included` block, Rails looks up the class from the
+name of each model that includes the module, directly or through other
+modules. pks now finds those models from the `include` and `prepend` calls in
+the app's classes and modules, and looks up the class from each one's name, so
+one association can reference a class for each model. Where no class in the
+app includes the module, pks looks it up from the module's name, as before. In
+a controller, inherited_resources looks up the class of `belongs_to :taco` from
+the controller's namespaces, and one given as `class_name:` from the top level,
+and pks now does too, where it looked in the controller itself first.
+
+A `package_todo.yml` entry for a violation that moves is stale until you run
+`pks update`.
+
+#### `--experimental-parser` names a constant written through `Object`
+
+The constants of `Object` are the top level's, so `class Object::Bar` inside
+`module CoreExt` defines `::Bar`, as does `class Bar` inside a `class Object`
+at the top level of a file. With `--experimental-parser`, pks named these
+`::CoreExt::Object::Bar` and `::Object::Bar`. It now names them as Ruby does:
+`::Bar`, or, where the app defines an `Object` in a namespace around it, as
+`CoreExt::Object`, `::CoreExt::Object::Bar`. A reference written
+`::Object::Bar` now resolves to `::Bar` too, as does one written `Object::Bar`
+where no namespace around it defines an `Object`. A `class Object` inside a
+namespace is still the namespace's own, as in Ruby.
+
+#### `--experimental-parser` finds the constants of `Kernel` and `BasicObject`
+
+`Object` includes `Kernel` and inherits from `BasicObject`, so Ruby finds a
+constant that either defines, as `class BasicObject::Foo` or `FOO = 1` in
+`module Kernel`, from anywhere, as `Foo` or `::Foo`, after the top level's own.
+With `--experimental-parser`, pks now does too, except where Rails looks up the
+class of an association from its model's name, which takes only a class of the
+very name it looks for.
+
+#### pks finds what packwerk finds around a name written from the top level
+
+Without `--experimental-parser`, pks differed from packwerk in three cases,
+and now matches it:
+
+- In `module Outer; class ::Burrito`, packwerk names the class
+  `::Outer::::Burrito` and finds no constant for it. pks took it for a
+  reference to `Outer`, in the pack that defines `Outer`. In
+  `module Aa; module Bb; class ::Cee`, packwerk takes `::Aa::Bb::::Cee` for a
+  reference to `Aa`, where pks took it for one to `Aa::Bb`.
+- After `class ::Taco` or `::Taco = 1` at the top level of a file, packwerk
+  counts a `Taco` or `::Taco` written anywhere else in the file, inside the
+  class too, as a reference, since it names the definition `::::Taco`. pks took
+  it for the file's own, as it did a constant defined in the class, as
+  `Taco::Shell` after `class ::Taco; class Shell`.
+- packwerk names a class or module defined in a `class_eval` block, or in a
+  `Class.new` or `Module.new` block assigned to a constant, inside the block's
+  receiver or the constant. It takes `class Cee` in
+  `module Aa; Bb.class_eval do` for a reference to `::Aa::Bb::Cee`, and
+  `class ::Cee` there for one to `::Aa::Bb::::Cee`, whose parent is `Aa`. pks
+  left out `Bb`. As in packwerk, a class defined in a block passed with `&.`
+  or to `super` is now no reference.
+
+So `pks check` may report a violation it didn't, or no longer report one, and a
+`package_todo.yml` entry for one it no longer reports is stale until you run
+`pks update`.
+
 ## 0.7.0
 
 ### Features
