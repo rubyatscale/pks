@@ -260,13 +260,13 @@ impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
     }
 }
 
-/// The name of a class, module or constant as defined, with `Object::Foo` taken
-/// for `::Foo`. Ruby looks `Object` up as it does any constant, so a namespace
-/// could define an `Object` of its own, but pks can't look it up here, and takes
-/// it that none does.
+/// The name of a class, module or constant as defined, with `Object::Foo`
+/// taken for `::Foo`. Ruby looks `Object` up as it does any constant, so a
+/// namespace could define an `Object` of its own, but pks can't look it up
+/// here, and takes it that none does.
 fn defined_name(name: String) -> String {
     match name.strip_prefix("Object::") {
-        Some(name) => format!("::{}", name),
+        Some(rest) => format!("::{}", rest),
         None => name,
     }
 }

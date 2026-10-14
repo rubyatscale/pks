@@ -422,19 +422,30 @@ fn test_list_references_inside_a_class_defined_from_the_top_level(
 }
 
 #[test]
-fn test_list_references_after_a_class_defined_from_the_top_level(
+fn test_list_references_to_a_class_defined_from_the_top_level_in_a_namespace(
 ) -> Result<(), Box<dyn Error>> {
     let fixture = common::Fixture::new("simple_app");
+    for (path, contents) in [
+        ("outer.rb", "module Outer\nend\n"),
+        ("aa.rb", "module Aa\nend\n"),
+        ("aa/bb.rb", "module Aa::Bb\nend\n"),
+    ] {
+        let path = fixture.path(&format!("packs/bar/app/services/{}", path));
+        fs::create_dir_all(path.parent().unwrap())?;
+        fs::write(path, contents)?;
+    }
+    // As in packwerk, `::Outer::::Burrito` has no parent, so it isn't a
+    // reference to `Outer`, and the parent of `::Aa::Bb::::Cee` is `::Aa`, not
+    // `::Aa::Bb`
+    let outer = "packs/foo/app/services/foo_outer.rb";
     fs::write(
-        fixture.path("packs/bar/app/services/taco.rb"),
-        "class Taco\n  def self.make; end\nend\n",
+        fixture.path(outer),
+        "module Outer\n  class ::Burrito\n  end\nend\n",
     )?;
-    let file = "packs/foo/app/services/foo_taco.rb";
-    // As in packwerk, which names this class `::::Taco`, the `Taco` and
-    // `::Taco` after it aren't the file's own
+    let aa = "packs/foo/app/services/foo_aa.rb";
     fs::write(
-        fixture.path(file),
-        "class ::Taco\n  def self.local; end\nend\nTaco.make\n::Taco.make\n",
+        fixture.path(aa),
+        "module Aa\n  module Bb\n    class ::Cee\n    end\n  end\nend\n",
     )?;
 
     assert_eq!(
@@ -443,8 +454,71 @@ fn test_list_references_after_a_class_defined_from_the_top_level(
             "references": [
                 bar_from_foo(),
                 baz_from_foo(),
-                to_bar_pack(file, Some((4, 0)), "::Taco"),
+                to_bar_pack(aa, Some((1, 7)), "::Aa"),
+                to_bar_pack(aa, Some((2, 9)), "::Aa::Bb"),
+                to_bar_pack(aa, Some((3, 10)), "::Aa::Bb::::Cee"),
+                to_bar_pack(outer, Some((1, 7)), "::Outer"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_after_a_class_defined_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in packwerk, which names this class `::::Taco`, the `Taco` inside it
+    // and the `Taco` and `::Taco` after it aren't the file's own
+    fs::write(
+        fixture.path(file),
+        "class ::Taco\n  def self.local; end\n  Taco.make\nend\n\
+         Taco.make\n::Taco.make\n",
+    )?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((3, 2)), "::Taco"),
                 to_bar_pack(file, Some((5, 0)), "::Taco"),
+                to_bar_pack(file, Some((6, 0)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_after_a_constant_assigned_from_the_top_level(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "class Taco\n  def self.make; end\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    // As in packwerk, which names this constant `::::Taco`, the `Taco` and
+    // `::Taco` after it aren't the file's own
+    fs::write(fixture.path(file), "::Taco = 1\nTaco.make\n::Taco.make\n")?;
+
+    assert_eq!(
+        list_references(&fixture, &["list-references"]),
+        json!({
+            "references": [
+                bar_from_foo(),
+                baz_from_foo(),
+                to_bar_pack(file, Some((2, 0)), "::Taco"),
+                to_bar_pack(file, Some((3, 0)), "::Taco"),
             ]
         })
     );
@@ -535,6 +609,45 @@ fn test_list_references_from_associations_in_namespaced_models(
                 bar_from_foo(),
                 to_bar_pack(nested, Some((3, 4)), "::Outer::Taco"),
                 to_bar_pack(through_object, Some((3, 4)), "::Taco"),
+            ]
+        })
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_list_references_to_constants_defined_through_object(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("simple_app");
+    // The experimental parser names these `::Taco`, `::Salsa` and `::GUAC`,
+    // not `::CoreExt::Object::Taco` and so on
+    fs::write(
+        fixture.path("packs/bar/app/services/taco.rb"),
+        "module CoreExt\n  class Object::Taco\n    def self.make; end\n  end\n\
+         \n  module Object::Salsa\n    def self.pour; end\n  end\n\
+         \n  Object::GUAC = 1\nend\n",
+    )?;
+    let file = "packs/foo/app/services/foo_taco.rb";
+    fs::write(
+        fixture.path(file),
+        "Taco.make\n::Object::Salsa.pour\nObject::GUAC\n",
+    )?;
+    let template = "packs/foo/app/views/foo_taco.erb";
+    fs::write(fixture.path(template), "<%= ::Object::Taco.make %>\n")?;
+
+    assert_eq!(
+        list_references(
+            &fixture,
+            &["--experimental-parser", "list-references"]
+        ),
+        json!({
+            "references": [
+                bar_from_foo(),
+                to_bar_pack(file, Some((1, 0)), "::Taco"),
+                to_bar_pack(file, Some((2, 0)), "::Salsa"),
+                to_bar_pack(file, Some((3, 0)), "::GUAC"),
+                to_bar_pack(template, None, "::Taco"),
             ]
         })
     );

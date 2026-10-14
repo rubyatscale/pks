@@ -113,8 +113,9 @@ impl ZeitwerkConstantResolver {
                 // In this case, we'd try to resolve `::Foo::Bar` instead of `::Foo::Bar::Boo`
                 let mut split_const =
                     const_name.split("::").collect::<Vec<&str>>();
-                // As in packwerk, whose `String#split` drops the empty names
-                // at the end, so `Outer::::Foo`'s parent `Outer::` has none
+                // As in packwerk's constant_resolver, whose `String#split`
+                // drops the empty names at the end, so `Outer::::Foo`'s
+                // parent `Outer::` has none
                 while split_const.last() == Some(&"") {
                     split_const.pop();
                 }

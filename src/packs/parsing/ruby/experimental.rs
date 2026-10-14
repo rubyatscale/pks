@@ -466,6 +466,20 @@ end
                 "module CoreExt; class ::Object; BAR = 1; end; end",
                 &["::BAR"],
             ),
+            ("module CoreExt; ::Object::Object::BAR = 1; end", &["::BAR"]),
+            (
+                "module CoreExt; module Object::Bar; BAZ = 1; end; end",
+                &["::Bar::BAZ"],
+            ),
+            (
+                "module CoreExt; class Object::Bar; BAZ = 1; end; end",
+                &["::Bar::BAZ"],
+            ),
+            ("class Object; def a; end; end", &["::Object"]),
+            (
+                "class ObjectSpace::Bar; def a; end; end",
+                &["::ObjectSpace::Bar"],
+            ),
             // A class written `Object` in a namespace is the namespace's own
             (
                 "module CoreExt; class Object; BAR = 1; end; end",

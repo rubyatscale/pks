@@ -97,14 +97,16 @@ is still the namespace's own, as in Ruby.
 Without `--experimental-parser`, pks differed from packwerk in two cases, and
 now matches it:
 
-- packwerk names `class ::Burrito` inside `module Outer` `::Outer::::Burrito`,
-  and finds no constant for it. pks took it for a reference to `Outer`, in the
-  pack that defines `Outer`. And where packwerk takes `::Aa::Bb::::Cee`, in
-  `module Aa; module Bb; class ::Cee`, for a reference to `Aa`, pks took it for
-  one to `Aa::Bb`.
+- In `module Outer; class ::Burrito`, packwerk names the class
+  `::Outer::::Burrito` and finds no constant for it. pks took it for a
+  reference to `Outer`, in the pack that defines `Outer`. In
+  `module Aa; module Bb; class ::Cee`, packwerk takes `::Aa::Bb::::Cee` for a
+  reference to `Aa`, where pks took it for one to `Aa::Bb`.
 - After `class ::Taco` or `::Taco = 1` at the top level of a file, packwerk
-  counts a `Taco` or `::Taco` written later in the file as a reference, since
-  it names the definition `::::Taco`. pks took it for the file's own.
+  counts a `Taco` or `::Taco` written anywhere else in the file, inside the
+  class too, as a reference, since it names the definition `::::Taco`. pks took
+  it for the file's own, as it did a constant defined in the class, as
+  `Taco::Shell` after `class ::Taco; class Shell`.
 
 So `pks check` may report a violation it didn't, or no longer report one, and a
 `package_todo.yml` entry for one it no longer reports is stale until you run

@@ -226,6 +226,12 @@ mod tests {
         for (constants, name, resolved) in [
             (&["::Bar"][..], "Object::Bar", "::Bar"),
             (&["::Bar"], "::Object::Bar", "::Bar"),
+            (&["::Bar"], "::Object::Object::Bar", "::Bar"),
+            (
+                &["::ObjectSpace::Bar"],
+                "::ObjectSpace::Bar",
+                "::ObjectSpace::Bar",
+            ),
             // `Object` is looked up as Ruby looks up any constant
             (
                 &["::Bar", "::CoreExt::Object::Bar"],
