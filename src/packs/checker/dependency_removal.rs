@@ -290,6 +290,74 @@ mod tests {
     }
 
     #[test]
+    fn handles_inline_comments_on_keys_and_values() {
+        let before = "\
+enforce_privacy: true # why
+dependencies: # deps
+  - packs/a  # used by A
+  - packs/b  # unused
+ignored_dependencies: # note
+  - packs/b # would cycle
+layer: utilities # layer note
+";
+        assert_removes(
+            before,
+            &["packs/b"],
+            "\
+enforce_privacy: true # why
+dependencies: # deps
+  - packs/a  # used by A
+ignored_dependencies: # note
+  - packs/b # would cycle
+layer: utilities # layer note
+",
+        );
+        assert_removes(
+            before,
+            &["packs/a", "packs/b"],
+            "\
+enforce_privacy: true # why
+ignored_dependencies: # note
+  - packs/b # would cycle
+layer: utilities # layer note
+",
+        );
+    }
+
+    #[test]
+    fn ignores_names_and_syntax_inside_inline_comments() {
+        assert_removes(
+            "dependencies: # a: b, [c]\n- packs/a # packs/b\n- packs/b # - packs/c\n- packs/c\n",
+            &["packs/b"],
+            "dependencies: # a: b, [c]\n- packs/a # packs/b\n- packs/c\n",
+        );
+        assert_removes(
+            "dependencies:\n- \"packs/a\" # see \"packs/b\"\n- 'packs/b' # don't\n",
+            &["packs/b"],
+            "dependencies:\n- \"packs/a\" # see \"packs/b\"\n",
+        );
+        assert_removes(
+            "dependencies: #\n- packs/a #\n- packs/b #\n",
+            &["packs/a"],
+            "dependencies: #\n- packs/b #\n",
+        );
+    }
+
+    #[test]
+    fn handles_inline_comments_after_tabs_and_before_crlf() {
+        assert_removes(
+            "dependencies:\t# k\n- packs/a\t# a\n- packs/b\t# b\n",
+            &["packs/b"],
+            "dependencies:\t# k\n- packs/a\t# a\n",
+        );
+        assert_removes(
+            "dependencies: # k\r\n- packs/a # a\r\n- packs/b # b\r\n",
+            &["packs/b"],
+            "dependencies: # k\r\n- packs/a # a\r\n",
+        );
+    }
+
+    #[test]
     fn handles_blank_lines_inside_the_list() {
         assert_removes(
             "dependencies:\n- packs/a\n\n- packs/b\n\nlayer: utilities\n",
@@ -411,6 +479,20 @@ ignored_dependencies:
         );
         assert_eq!(
             remove("dependencies:\n-\tpacks/a\n- packs/b\n", &["packs/b"]),
+            None
+        );
+        assert_eq!(
+            remove(
+                "dependencies: &deps # anchored\n- packs/a\n- packs/b\n",
+                &["packs/b"]
+            ),
+            None
+        );
+        assert_eq!(
+            remove(
+                "dependencies: !!seq # tagged\n- packs/a\n- packs/b\n",
+                &["packs/b"]
+            ),
             None
         );
     }

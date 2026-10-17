@@ -176,6 +176,31 @@ ignored_dependencies:
 }
 
 #[test]
+fn test_auto_correct_preserves_inline_comments_on_keys_and_values() {
+    let before = "\
+enforce_dependencies: true # enforced since the split
+enforce_privacy: true # see the privacy docs
+dependencies: # keep sorted
+- packs/bar # used by Foo
+- packs/baz # unused: was used by Foo's old job
+ignored_dependencies: # cycles we accept for now
+- packs/bop # would cycle with packs/baz
+";
+    let expected = "\
+enforce_dependencies: true # enforced since the split
+enforce_privacy: true # see the privacy docs
+dependencies: # keep sorted
+- packs/bar # used by Foo
+ignored_dependencies: # cycles we accept for now
+- packs/bop # would cycle with packs/baz
+";
+
+    let (after, stderr) = auto_correct_foo_package_yml(before);
+    assert_eq!(after, expected);
+    assert_eq!(stderr, "");
+}
+
+#[test]
 fn test_auto_correct_falls_back_to_rewriting_layouts_it_cannot_edit() {
     let before = "\
 # This comment is lost by the rewrite.
