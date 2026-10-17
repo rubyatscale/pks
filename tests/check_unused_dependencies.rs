@@ -165,7 +165,6 @@ enforce_privacy: true
 dependencies: # keep sorted
   # Comment inside the dependencies block.
   - \"packs/bar\"
-
 ignored_dependencies:
   # Deliberately ignored: bop would cycle.
   - packs/bop

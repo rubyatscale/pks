@@ -26,9 +26,10 @@ fn is_exact_removal(original: &str, edited: &str, names: &[String]) -> bool {
 }
 
 /// Drops each matching item. A comment covers the items below it, up to the
-/// next blank line or comment, and is dropped only when all of them are,
-/// unless it holds a commented-out entry. If no items are left, the whole
-/// block goes, as serializing the pack would do. Everything else is verbatim.
+/// next blank line or comment, and is dropped only when all of them are. A
+/// commented-out entry, and any comment directly above one, is kept. If no
+/// items are left, the whole block goes, as serializing the pack would do.
+/// Everything else is verbatim.
 fn remove_dependency_lines(contents: &str, names: &[String]) -> String {
     let lines: Vec<&str> = contents.split_inclusive('\n').collect();
     let Some(key) = lines.iter().position(|line| is_dependencies_key(line))
@@ -44,9 +45,13 @@ fn remove_dependency_lines(contents: &str, names: &[String]) -> String {
     }) {
         block_end += 1;
     }
-    // Comments directly above the next key belong to the key.
+    // Unindented comments directly above the next key belong to the key,
+    // except a commented-out entry, which belongs to the list.
     let mut tail = block_end;
-    while tail > key + 1 && lines[tail - 1].trim_start().starts_with('#') {
+    while tail > key + 1
+        && lines[tail - 1].starts_with('#')
+        && !is_commented_out_item(lines[tail - 1])
+    {
         tail -= 1;
     }
 
@@ -80,13 +85,17 @@ fn edit_block<'a>(lines: &[&'a str], names: &[String]) -> Option<Vec<&'a str>> {
         let vanished = group.flush(&mut out, names, &mut kept_items);
         if trimmed.starts_with('#') {
             group.comments.push(line);
-        } else if !(vanished && out.last().is_some_and(|l| l.trim().is_empty()))
+        } else if !(vanished && out.last().is_none_or(|l| l.trim().is_empty()))
         {
-            // Skipped when a removed group sat between two blank lines.
+            // Skipped when a removed group sat between a blank line and
+            // another blank line or the start of the list.
             out.push(line);
         }
     }
-    group.flush(&mut out, names, &mut kept_items);
+    let vanished = group.flush(&mut out, names, &mut kept_items);
+    if vanished && out.last().is_some_and(|l| l.trim().is_empty()) {
+        out.pop();
+    }
     (kept_items > 0).then_some(out)
 }
 
@@ -114,11 +123,14 @@ impl<'a> Group<'a> {
             .filter(|line| !is_named_item(line, names))
             .collect();
         *kept_items += kept.len();
-        let keep_comments = !had_items
-            || !kept.is_empty()
-            || self.comments.iter().any(|line| is_commented_out_item(line));
-        if !keep_comments {
-            self.comments.clear();
+        if had_items && kept.is_empty() {
+            // Keep commented-out entries and the comments above them.
+            let last_entry = self
+                .comments
+                .iter()
+                .rposition(|line| is_commented_out_item(line));
+            self.comments
+                .truncate(last_entry.map_or(0, |index| index + 1));
         }
         let vanished = had_lines && self.comments.is_empty() && kept.is_empty();
         out.append(&mut self.comments);
@@ -360,7 +372,7 @@ ignored_dependencies:
         assert_removes(
             "dependencies:\n# Keep this list sorted.\n- packs/baz\n- packs/bar\n\n- packs/bop\n",
             &["packs/baz", "packs/bar"],
-            "dependencies:\n\n- packs/bop\n",
+            "dependencies:\n- packs/bop\n",
         );
     }
 
@@ -397,5 +409,114 @@ ignored_dependencies:
             remove("dependencies:\n- \"packs/\\u0061\"\n", &["packs/a"]),
             None
         );
+        assert_eq!(
+            remove("dependencies:\n-\tpacks/a\n- packs/b\n", &["packs/b"]),
+            None
+        );
+    }
+
+    #[test]
+    fn removes_a_trailing_commented_out_entry_with_the_block() {
+        assert_removes(
+            "dependencies:\n- packs/a\n# - packs/old\nlayer: utilities\n",
+            &["packs/a"],
+            "layer: utilities\n",
+        );
+        assert_removes(
+            "dependencies:\n  - packs/a\n  # - packs/old\n",
+            &["packs/a"],
+            "",
+        );
+    }
+
+    #[test]
+    fn keeps_an_unindented_comment_at_the_end_of_the_file() {
+        assert_removes(
+            "dependencies:\n- packs/a\n# Footer.\n",
+            &["packs/a"],
+            "# Footer.\n",
+        );
+    }
+
+    #[test]
+    fn keeps_a_comment_directly_above_a_commented_out_entry() {
+        assert_removes(
+            "dependencies:\n- packs/a\n# Re-add after the migration:\n# - packs/old\n- packs/b\n",
+            &["packs/b"],
+            "dependencies:\n- packs/a\n# Re-add after the migration:\n# - packs/old\n",
+        );
+    }
+
+    #[test]
+    fn a_commented_out_entry_does_not_keep_a_comment_below_it() {
+        assert_removes(
+            "dependencies:\n- packs/a\n# - packs/old\n# Needed for B.\n- packs/b\n",
+            &["packs/b"],
+            "dependencies:\n- packs/a\n# - packs/old\n",
+        );
+    }
+
+    #[test]
+    fn removes_a_blank_line_left_at_either_end_of_the_list() {
+        assert_removes(
+            "dependencies:\n- packs/a\n\n- packs/b\n",
+            &["packs/a"],
+            "dependencies:\n- packs/b\n",
+        );
+        assert_removes(
+            "dependencies:\n- packs/a\n\n- packs/b\nlayer: utilities\n",
+            &["packs/b"],
+            "dependencies:\n- packs/a\nlayer: utilities\n",
+        );
+    }
+
+    #[test]
+    fn leaves_document_markers_alone() {
+        assert_removes(
+            "---\ndependencies:\n- packs/a\n- packs/b\n...\n",
+            &["packs/a"],
+            "---\ndependencies:\n- packs/b\n...\n",
+        );
+    }
+
+    #[test]
+    fn removing_one_at_a_time_matches_removing_together() {
+        let before = "\
+enforce_dependencies: true
+dependencies:
+# Keep sorted.
+- packs/a
+- packs/b
+# - packs/old
+# Needed for C.
+- packs/c  # trailing
+
+# Needed for D and E.
+- packs/d
+- packs/e
+# Re-add after the migration:
+# - packs/older
+- packs/f
+# About the layer.
+layer: utilities
+";
+        let all = [
+            "packs/a", "packs/b", "packs/c", "packs/d", "packs/e", "packs/f",
+        ];
+        for mask in 1..1u32 << all.len() {
+            let names: Vec<&str> = (0..all.len())
+                .filter(|bit| mask & (1 << bit) != 0)
+                .map(|bit| all[bit])
+                .collect();
+            let together = remove(before, &names).unwrap();
+            for order in [names.clone(), names.iter().rev().copied().collect()]
+            {
+                let one_at_a_time =
+                    order.iter().fold(before.to_string(), |text, name| {
+                        remove(&text, &[name]).unwrap()
+                    });
+                assert_eq!(one_at_a_time, together, "removing {order:?}");
+            }
+        }
     }
 }
