@@ -2,6 +2,236 @@
 
 ## Unreleased
 
+### Changes
+
+#### pks parses Ruby with Prism
+
+pks now parses Ruby with [Prism](https://github.com/ruby/prism), the parser
+Ruby itself has used since 3.4, in place of lib-ruby-parser, which supports
+Ruby syntax only up to 3.1 and is no longer maintained. Files that use newer
+syntax, such as Ruby 3.2's anonymous argument forwarding (`def foo(*) =
+bar(*)`), no longer fail to parse, so pks finds their references and no longer
+warns about them.
+
+On files that lib-ruby-parser could parse, the references and definitions pks
+finds are the same, except where newer Rubies read code differently, since
+Prism reads Ruby as its newest version does. In a block that names no
+parameters, `it` is the block's parameter, not a method call, so with
+`--experimental-parser` it no longer makes a class count as defined. pks also
+warns about syntax that newer Rubies reject, such as `a[k: 1] = v`.
+
+The syntax errors it warns about read as Prism words them, and a reference in
+a file with an error can be found where it wasn't before, since Prism recovers
+more of the file.
+
+Building pks from source now needs a C compiler and libclang.
+
+#### No Intel macOS binary
+
+Releases no longer include a binary for Intel Macs (`x86_64-apple-darwin`),
+and the Apple Silicon binary is built on macOS 26.
+
+#### pks doesn't descend into a symlinked directory
+
+pks walks the app with [dua-core](https://crates.io/crates/dua-core) in place
+of jwalk, which is no longer maintained, and which followed symlinks. Like
+packwerk's globs, pks still reads a symlink to a file, but no longer descends
+into a symlinked directory, so it no longer finds the files or packs in one. A
+link to a directory that contains it, such as `loop -> ..`, made pks list the
+same files and packs over and over, and no longer does.
+
+### Fixes
+
+#### `--experimental-parser` names a class written from the top level
+
+With `--experimental-parser`, pks gave a class or module written from the top
+level, as `class ::Foo`, the name `::::Foo`, or `::Outer::::Foo` inside
+`module Outer`, and gave the constants defined in it the same prefix. A
+constant assigned from the top level, as `::BAR = 1` inside `module Outer`,
+was `::Outer::::BAR`. A reference to one was found only from inside another
+`class ::Foo` written the same way, and then under that name, as
+`::::Foo::BAR`. Others were missed, as was a reference written inside
+`class ::Foo` to a constant that `class Foo::Bar` defines. pks now names them
+as Ruby does, `::Foo` and `::Foo::BAR`, so it may find new references and
+violations. A violation that a `package_todo.yml` records under a `::::` name
+is reported again under the new name, and the old entry as stale, until you
+run `pks update`.
+
+A class reopened this way, as `class ::String` inside `module CoreExt`, now
+counts as defined in its pack, as a `class String` at the top level of a file
+does. So `expose-monkey-patches` lists it, and a reference to `String` from
+another pack is a reference to that pack.
+
+Without `--experimental-parser`, pks still looks up a constant written inside
+`class ::Foo` as packwerk does, so `Bar` written there is never `::Foo::Bar`.
+It's missed, or taken for a top-level `::Bar`.
+
+#### `--experimental-parser` looks up an association from its model's name
+
+With `--experimental-parser`, pks looked up the class of an association, as
+`has_many :tacos`, as Ruby looks up a constant written where it's declared.
+Rails looks it up from the model's name: in `class Outer::Foo`, as
+`Outer::Foo::Taco`, `Outer::Taco`, then `Taco`, and in `class ::Foo` inside
+`module Outer`, as `Foo::Taco`, then `Taco`. pks now does too, so in
+`class Outer::Foo` it finds `Outer::Taco` where it found `Taco`, and in
+`class ::Foo` it no longer takes `Outer::Taco` for the class.
+
+When the class has the model's own name, as `has_many :tacos` in `class Taco`
+inside `module Outer`, Rails tries `::Taco` first, and where there's none, looks
+it up from the model's name, as `Outer::Taco::Taco`. pks now does too, where it
+found the model itself.
+
+In a module, as a concern's `included` block, Rails looks up the class from the
+name of each model that includes the module, directly or through other
+modules. pks now finds those models from the `include` and `prepend` calls in
+the app's classes and modules, and looks up the class from each one's name, so
+one association can reference a class for each model. Where no class in the
+app includes the module, pks looks it up from the module's name, as before. In
+a controller, inherited_resources looks up the class of `belongs_to :taco` from
+the controller's namespaces, and one given as `class_name:` from the top level,
+and pks now does too, where it looked in the controller itself first.
+
+A `package_todo.yml` entry for a violation that moves is stale until you run
+`pks update`.
+
+#### `--experimental-parser` names a constant written through `Object`
+
+The constants of `Object` are the top level's, so `class Object::Bar` inside
+`module CoreExt` defines `::Bar`, as does `class Bar` inside a `class Object`
+at the top level of a file. With `--experimental-parser`, pks named these
+`::CoreExt::Object::Bar` and `::Object::Bar`. It now names them as Ruby does:
+`::Bar`, or, where the app defines an `Object` in a namespace around it, as
+`CoreExt::Object`, `::CoreExt::Object::Bar`. A reference written
+`::Object::Bar` now resolves to `::Bar` too, as does one written `Object::Bar`
+where no namespace around it defines an `Object`. A `class Object` inside a
+namespace is still the namespace's own, as in Ruby.
+
+#### `--experimental-parser` finds the constants of `Kernel` and `BasicObject`
+
+`Object` includes `Kernel` and inherits from `BasicObject`, so Ruby finds a
+constant that either defines, as `class BasicObject::Foo` or `FOO = 1` in
+`module Kernel`, from anywhere, as `Foo` or `::Foo`, after the top level's own.
+With `--experimental-parser`, pks now does too, except where Rails looks up the
+class of an association from its model's name, which takes only a class of the
+very name it looks for.
+
+#### pks finds what packwerk finds around a name written from the top level
+
+Without `--experimental-parser`, pks differed from packwerk in three cases,
+and now matches it:
+
+- In `module Outer; class ::Burrito`, packwerk names the class
+  `::Outer::::Burrito` and finds no constant for it. pks took it for a
+  reference to `Outer`, in the pack that defines `Outer`. In
+  `module Aa; module Bb; class ::Cee`, packwerk takes `::Aa::Bb::::Cee` for a
+  reference to `Aa`, where pks took it for one to `Aa::Bb`.
+- After `class ::Taco` or `::Taco = 1` at the top level of a file, packwerk
+  counts a `Taco` or `::Taco` written anywhere else in the file, inside the
+  class too, as a reference, since it names the definition `::::Taco`. pks took
+  it for the file's own, as it did a constant defined in the class, as
+  `Taco::Shell` after `class ::Taco; class Shell`.
+- packwerk names a class or module defined in a `class_eval` block, or in a
+  `Class.new` or `Module.new` block assigned to a constant, inside the block's
+  receiver or the constant. It takes `class Cee` in
+  `module Aa; Bb.class_eval do` for a reference to `::Aa::Bb::Cee`, and
+  `class ::Cee` there for one to `::Aa::Bb::::Cee`, whose parent is `Aa`. pks
+  left out `Bb`. As in packwerk, a class defined in a block passed with `&.`
+  or to `super` is now no reference.
+
+So `pks check` may report a violation it didn't, or no longer report one, and a
+`package_todo.yml` entry for one it no longer reports is stale until you run
+`pks update`.
+
+#### `check-unused-dependencies --auto-correct` keeps comments in `package.yml`
+
+Auto-correct used to rewrite every `package.yml` it touched from scratch, which
+deleted all of its comments and reordered its keys. It now removes the unused
+entries from the `dependencies:` list and leaves the rest of the file as it
+was, line endings included. A comment covers the entries below it, up to the
+next blank line or comment, and is removed only when all of those entries are.
+A commented-out entry such as `# - packs/a` is always kept, along with any
+comment directly above it. If no dependencies remain, the whole `dependencies:`
+block is removed, including the comments and blank lines inside it.
+
+If a list is written in a form that cannot be edited this way, such as
+`dependencies: [packs/a, packs/b]`, the file is rewritten as before and a
+warning names the file and the dependencies removed.
+
+## 0.7.0
+
+### Features
+
+#### `pks list-references` lists the references between packs
+
+`pks list-references` prints, as JSON, every reference from one pack to a
+constant that another pack defines, with any violations `pks check` finds in
+it, recorded or not. Each violation says whether a `package_todo.yml` records
+it and whether the pack enforcing it is strict. A reference that the packs'
+rules allow, such as one covered by a declared dependency, is listed with no
+violations. So this shows how other packs use a pack, which `package_todo.yml`
+files alone can't. Unlike `check`, it exits 0 when references have violations.
+
+`--defining-pack` and `--referencing-pack` limit the list to references to or
+from the packs they name, and each can be given more than once. Given both, a
+reference must match both. With `--referencing-pack`, pks reads only those
+packs' files, so it takes less time and memory in a large app.
+
+pks keeps no source positions in ERB, so a reference in an ERB file has a null
+`line` and `column`, and the file's references to one constant are listed once.
+`schema/list-references-output.json` describes the output.
+
+### Fixes
+
+#### pks warns about files it can't parse
+
+A file that pks couldn't parse gave it some or none of its references, and
+nothing said so, so `pks check` could pass with violations in that file. pks
+now warns on stderr, naming the file and its first syntax error, with the line
+in a Ruby file. A file with a syntax error isn't cached, so the warning comes
+back on every run until the file is fixed.
+
+pks's parser can't read some newer Ruby syntax, such as Ruby 3.2's anonymous
+argument forwarding (`def foo(*) = bar(*)`), so files that use it get this
+warning too.
+
+#### References after a `<%==` tag are no longer missed
+
+pks read Rails' `<%== %>` tag, which outputs without escaping, as Ruby that
+starts with `=`. That doesn't parse, so in an ERB file with one, the tag's
+references and every reference after it were missed. `<%==` is now read like
+`<%=`, so `pks check` can report violations it missed before.
+
+#### `--print-files` no longer breaks JSON output
+
+`-p` printed its "Started processing" and "Finished processing" lines to
+stdout, ahead of the JSON from `check -o json` and `list-references`, so the
+output didn't parse. They now go to stderr.
+
+## 0.6.0
+
+### Features
+
+#### `pks rm` removes a pack
+
+`pks rm packs/foo` deletes the pack's directory, after removing every mention of
+it from other packs: their `dependencies`, `ignored_dependencies` and
+`visible_to` lists, and the violations their `package_todo.yml` files record on
+it. A todo file with nothing left in it is deleted. Like `add-dependency`, it
+rewrites each `package.yml` it changes, which drops the file's comments and puts
+its keys in pks's order.
+
+By default it won't remove a pack that other packs may still use. It first
+looks for references from other packs to the pack's constants and lists any it
+finds, because once the pack is gone `pks check` can no longer see them. It also
+won't remove a pack with Ruby files under `lib/` that are outside the autoload
+roots, since pks can't see references to the constants those files define. The
+experimental parser reads definitions from every file, so with
+`--experimental-parser` that check is skipped. `--force` removes the pack anyway
+and leaves any remaining references for you to fix.
+
+The root pack can't be removed. Neither can a pack with other packs inside it,
+until those are removed.
+
 ### Fixes
 
 #### ERB comments no longer hide or invent references
@@ -83,20 +313,21 @@ longer found, so `pks check` reports it as stale until you run `pks update`. For
 the same reason, `check-unused-dependencies` may now report a dependency that
 only such an association used. packwerk still reports these references.
 
-#### `check-unused-dependencies --auto-correct` keeps comments in `package.yml`
+### Performance
 
-Auto-correct used to rewrite every `package.yml` it touched from scratch, which
-deleted all of its comments and reordered its keys. It now removes the unused
-entries from the `dependencies:` list and leaves the rest of the file as it
-was, line endings included. A comment covers the entries below it, up to the
-next blank line or comment, and is removed only when all of those entries are.
-A commented-out entry such as `# - packs/a` is always kept, along with any
-comment directly above it. If no dependencies remain, the whole `dependencies:`
-block is removed, including the comments and blank lines inside it.
+#### A warm `pks check` skips reading files that haven't changed
 
-If a list is written in a form that cannot be edited this way, such as
-`dependencies: [packs/a, packs/b]`, the file is rewritten as before and a
-warning names the file and the dependencies removed.
+The cache now records each file's modification time and size along with its
+digest, and serves a file whose time and size both still match without reading
+it. On a 51,000-file application this made a warm `pks check` 1.43 times as
+fast. When either has changed, pks reads the file and compares digests as
+before. On a filesystem that records times only to the second, where a
+same-size edit within a second can keep both, it never takes the shortcut.
+
+A tool that restores file times, such as `rsync -t`, `tar -p` or `cp -p`, can
+put back different contents with the same size and time, and pks then serves
+the old cached result. `touch` the file, or run with `--no-cache`, to check it
+again.
 
 ## 0.5.0
 

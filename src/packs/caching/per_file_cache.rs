@@ -252,6 +252,8 @@ mod tests {
                     }
                 }],
                 definitions: vec![],
+                syntax_error: None,
+                ..ProcessedFile::default()
             }
         };
 
@@ -306,6 +308,8 @@ mod tests {
             absolute_path: path.clone(),
             unresolved_references: vec![],
             definitions: vec![],
+            syntax_error: None,
+            ..ProcessedFile::default()
         };
 
         let CacheResult::Miss(empty_cache_entry) = cache.get(&path)? else {

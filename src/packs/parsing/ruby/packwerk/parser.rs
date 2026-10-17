@@ -4,19 +4,23 @@ use crate::packs::{
         ruby::{
             namespace_calculator::possible_fully_qualified_constants,
             parse_utils::{
-                fetch_const_const_name, fetch_const_name, fetch_node_location,
-                get_constant_assignment_definition, get_definition_from,
-                get_reference_from_active_record_association, loc_to_range,
+                constant_name, fetch_const_name, fetch_const_path_name,
+                first_syntax_error, get_constant_assignment_definition,
+                get_definition_from,
+                get_reference_from_active_record_association, is_plain_call,
+                loc_to_range, visit_constant_assignments, ParseError,
             },
         },
         ParsedDefinition, Range, UnresolvedReference,
     },
     Configuration, ProcessedFile,
 };
-use lib_ruby_parser::{
-    nodes, traverse::visitor::Visitor, Node, Parser, ParserOptions,
-};
 use line_col::LineColLookup;
+use ruby_prism::{
+    BlockNode, CallNode, ClassNode, ConstantId, ConstantPathNode,
+    ConstantPathWriteNode, ConstantReadNode, ConstantWriteNode,
+    ForwardingSuperNode, Location, ModuleNode, Node, SuperNode, Visit,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
 
@@ -30,81 +34,26 @@ struct ReferenceCollector<'a> {
     pub references: Vec<UnresolvedReference>,
     pub definitions: Vec<ParsedDefinition>,
     pub current_namespaces: Vec<String>,
+    /// The names that packwerk's `parent_module_name` puts before a class or
+    /// module's own: those of the classes and modules around it, and `Foo` in
+    /// `Foo.class_eval do` or `Foo = Class.new do`. An error where packwerk
+    /// can't name it.
+    pub definition_namespaces: Vec<Result<String, ParseError>>,
     pub line_col_lookup: LineColLookup<'a>,
     pub in_superclass: bool,
     pub superclasses: Vec<SuperclassReference>,
     pub custom_associations: Vec<String>,
 }
 
-impl Visitor for ReferenceCollector<'_> {
-    fn on_class(&mut self, node: &nodes::Class) {
-        // We're not collecting definitions, so no need to visit the class definitioname);
-        let namespace_result = fetch_const_name(&node.name);
-        // For now, we simply exit and stop traversing if we encounter an error when fetching the constant name of a class
-        // We can iterate on this if this is different than the packwerk implementation
-        if namespace_result.is_err() {
-            return;
-        }
-
-        let namespace = namespace_result.unwrap();
-
-        if let Some(inner) = node.superclass.as_ref() {
-            self.in_superclass = true;
-            self.visit(inner);
-            self.in_superclass = false;
-        }
-        let definition_loc = fetch_node_location(&node.name).unwrap();
-        let location = loc_to_range(definition_loc, &self.line_col_lookup);
-
-        let definition = get_definition_from(
-            &namespace,
-            &self.current_namespaces,
-            &location,
-        );
-
-        let name = definition.fully_qualified_name.to_owned();
-        let namespace_path = self.current_namespaces.to_owned();
-        self.definitions.push(definition);
-
-        // Packwerk also considers a definition to be a "reference"
-        self.references.push(UnresolvedReference {
-            name,
-            namespace_path,
-            location,
-        });
-
-        // Note – is there a way to use lifetime specifiers to get rid of this and
-        // just keep current namespaces as a vector of string references or something else
-        // more efficient?
-        self.current_namespaces.push(namespace);
-
-        if let Some(inner) = &node.body {
-            self.visit(inner);
-        }
-
-        self.current_namespaces.pop();
-        self.superclasses.pop();
-    }
-
-    fn on_send(&mut self, node: &nodes::Send) {
-        let association_reference =
-            get_reference_from_active_record_association(
-                node,
-                &self.current_namespaces,
-                &self.line_col_lookup,
-                &self.custom_associations,
-            );
-
-        if let Some(association_reference) = association_reference {
-            self.references.push(association_reference);
-        }
-
-        lib_ruby_parser::traverse::visitor::visit_send(self, node);
-    }
-
-    fn on_casgn(&mut self, node: &nodes::Casgn) {
+impl ReferenceCollector<'_> {
+    fn define_constant(
+        &mut self,
+        name: Result<String, ParseError>,
+        location: &Location,
+    ) {
         let definition = get_constant_assignment_definition(
-            node,
+            name,
+            location,
             self.current_namespaces.to_owned(),
             &self.line_col_lookup,
         );
@@ -112,53 +61,14 @@ impl Visitor for ReferenceCollector<'_> {
         if let Some(definition) = definition {
             self.definitions.push(definition);
         }
-
-        if let Some(v) = node.value.to_owned() {
-            self.visit(&v);
-        } else {
-            // We don't handle constant assignments as part of a multi-assignment yet,
-            // e.g. A, B = 1, 2
-            // See the documentation for nodes::Casgn#value for more info.
-        }
     }
 
-    fn on_module(&mut self, node: &nodes::Module) {
-        let namespace = fetch_const_name(&node.name)
-            .expect("We expect no parse errors in class/module definitions");
-        let definition_loc = fetch_node_location(&node.name).unwrap();
-        let location = loc_to_range(definition_loc, &self.line_col_lookup);
-
-        let definition = get_definition_from(
-            &namespace,
-            &self.current_namespaces,
-            &location,
-        );
-
-        let name = definition.fully_qualified_name.to_owned();
-        let namespace_path = self.current_namespaces.to_owned();
-        self.definitions.push(definition);
-
-        // Packwerk also considers a definition to be a "reference"
-        self.references.push(UnresolvedReference {
-            name,
-            namespace_path,
-            location,
-        });
-
-        // Note – is there a way to use lifetime specifiers to get rid of this and
-        // just keep current namespaces as a vector of string references or something else
-        // more efficient?
-        self.current_namespaces.push(namespace);
-
-        if let Some(inner) = &node.body {
-            self.visit(inner);
-        }
-
-        self.current_namespaces.pop();
-    }
-
-    fn on_const(&mut self, node: &nodes::Const) {
-        let Ok(name) = fetch_const_const_name(node) else {
+    fn reference_constant(
+        &mut self,
+        name: Result<String, ParseError>,
+        location: &Location,
+    ) {
+        let Ok(name) = name else {
             return;
         };
 
@@ -195,8 +105,296 @@ impl Visitor for ReferenceCollector<'_> {
         self.references.push(UnresolvedReference {
             name,
             namespace_path,
-            location: loc_to_range(&node.expression_l, &self.line_col_lookup),
+            location: loc_to_range(location, &self.line_col_lookup),
         })
+    }
+
+    /// The name of the class or module `name` defined here, as packwerk names
+    /// the reference it counts there, or `None` if it can't
+    fn definition_reference_name(&self, name: &str) -> Option<String> {
+        let mut names = self
+            .definition_namespaces
+            .iter()
+            .map(|namespace| namespace.as_deref().ok())
+            .collect::<Option<Vec<&str>>>()?;
+        names.push(name);
+        Some(format!("::{}", names.join("::")))
+    }
+
+    /// Runs `visit` with `namespace`, if any, in `definition_namespaces`
+    fn visit_in_definition_namespace(
+        &mut self,
+        namespace: Option<Result<String, ParseError>>,
+        visit: impl FnOnce(&mut Self),
+    ) {
+        let Some(namespace) = namespace else {
+            return visit(self);
+        };
+        self.definition_namespaces.push(namespace);
+        visit(self);
+        self.definition_namespaces.pop();
+    }
+
+    /// packwerk names a class or module defined in `Foo = Class.new do` as one
+    /// in `Foo`
+    fn visit_assigned_value(
+        &mut self,
+        name: Result<String, ParseError>,
+        value: &Node,
+    ) {
+        let namespace = creates_module(value).then_some(name);
+        self.visit_in_definition_namespace(namespace, |collector| {
+            collector.visit(value)
+        });
+    }
+}
+
+/// A block that takes no parameters, or named ones. packwerk's parser makes
+/// one that takes `_1` or `it` a `numblock` or `itblock`, which packwerk
+/// doesn't take for a block.
+fn is_plain_block(block: &BlockNode) -> bool {
+    block.parameters().is_none_or(|parameters| {
+        parameters.as_block_parameters_node().is_some()
+    })
+}
+
+/// What packwerk puts before the name of a class or module defined in a block
+/// passed to `call`: `Foo` for `Foo.class_eval do`, and nothing for most other
+/// calls. It can't name one in a block passed with `&.`.
+fn block_namespace(call: &CallNode) -> Option<Result<String, ParseError>> {
+    let block = call.block()?.as_block_node()?;
+    if !is_plain_block(&block) {
+        return None;
+    }
+    if call.is_safe_navigation() {
+        return Some(Err(ParseError::Metaprogramming));
+    }
+    if call.name().as_slice() != b"class_eval" {
+        return None;
+    }
+    let receiver = call.receiver()?;
+    if let Some(constant) = receiver.as_constant_read_node() {
+        return Some(Ok(constant_name(&constant.name())));
+    }
+    let path = receiver.as_constant_path_node()?;
+    Some(packwerk_const_path_name(path.parent(), path.name()))
+}
+
+/// `Class.new` or `Module.new`, with or without a block, as packwerk sees it
+fn creates_module(node: &Node) -> bool {
+    let Some(call) = node.as_call_node() else {
+        return false;
+    };
+    let class_or_module = call
+        .receiver()
+        .and_then(|receiver| receiver.as_constant_read_node())
+        .is_some_and(|receiver| {
+            matches!(receiver.name().as_slice(), b"Class" | b"Module")
+        });
+    let block = call.block().and_then(|block| block.as_block_node());
+    class_or_module
+        && call.name().as_slice() == b"new"
+        && !call.is_safe_navigation()
+        && block.is_none_or(|block| is_plain_block(&block))
+}
+
+/// As `fetch_const_path_name`, but naming a path from `self` from the top
+/// level, as packwerk does, so `self::Foo` is `::Foo`
+fn packwerk_const_path_name(
+    parent: Option<Node>,
+    name: Option<ConstantId>,
+) -> Result<String, ParseError> {
+    let name = name.ok_or(ParseError::Metaprogramming)?;
+    let parent_namespace = match parent {
+        Some(parent) if parent.as_self_node().is_some() => String::new(),
+        Some(parent) => match parent.as_constant_path_node() {
+            Some(path) => packwerk_const_path_name(path.parent(), path.name())?,
+            None => fetch_const_name(&parent)?,
+        },
+        None => String::new(),
+    };
+    Ok(format!("{}::{}", parent_namespace, constant_name(&name)))
+}
+
+impl<'pr> Visit<'pr> for ReferenceCollector<'_> {
+    fn visit_class_node(&mut self, node: &ClassNode<'pr>) {
+        let namespace_result = fetch_const_name(&node.constant_path());
+        // For now, we simply exit and stop traversing if we encounter an error when fetching the constant name of a class
+        // We can iterate on this if this is different than the packwerk implementation
+        if namespace_result.is_err() {
+            return;
+        }
+
+        let namespace = namespace_result.unwrap();
+
+        if let Some(inner) = node.superclass() {
+            self.in_superclass = true;
+            self.visit(&inner);
+            self.in_superclass = false;
+        }
+        let location = loc_to_range(
+            &node.constant_path().location(),
+            &self.line_col_lookup,
+        );
+
+        let definition = get_definition_from(
+            &namespace,
+            &self.current_namespaces,
+            &location,
+        );
+
+        let namespace_path = self.current_namespaces.to_owned();
+        self.definitions.push(definition);
+
+        // Packwerk also considers a definition to be a "reference"
+        if let Some(name) = self.definition_reference_name(&namespace) {
+            self.references.push(UnresolvedReference {
+                name,
+                namespace_path,
+                location,
+            });
+        }
+
+        // Note – is there a way to use lifetime specifiers to get rid of this and
+        // just keep current namespaces as a vector of string references or something else
+        // more efficient?
+        self.definition_namespaces.push(Ok(namespace.clone()));
+        self.current_namespaces.push(namespace);
+
+        if let Some(inner) = node.body() {
+            self.visit(&inner);
+        }
+
+        self.current_namespaces.pop();
+        self.definition_namespaces.pop();
+        self.superclasses.pop();
+    }
+
+    fn visit_call_node(&mut self, node: &CallNode<'pr>) {
+        if is_plain_call(node) {
+            let association_reference =
+                get_reference_from_active_record_association(
+                    node,
+                    &self.current_namespaces,
+                    &self.line_col_lookup,
+                    &self.custom_associations,
+                );
+
+            if let Some(association_reference) = association_reference {
+                self.references.push(association_reference);
+            }
+        }
+
+        // In packwerk's tree, the block holds the call, so a class defined in
+        // the receiver or arguments is in the block too
+        self.visit_in_definition_namespace(
+            block_namespace(node),
+            |collector| ruby_prism::visit_call_node(collector, node),
+        );
+    }
+
+    // packwerk can't name a class or module defined in a block passed to
+    // `super`
+    fn visit_super_node(&mut self, node: &SuperNode<'pr>) {
+        let block = node.block().and_then(|block| block.as_block_node());
+        let namespace = block
+            .filter(is_plain_block)
+            .map(|_| Err(ParseError::Metaprogramming));
+        self.visit_in_definition_namespace(namespace, |collector| {
+            ruby_prism::visit_super_node(collector, node)
+        });
+    }
+
+    fn visit_forwarding_super_node(&mut self, node: &ForwardingSuperNode<'pr>) {
+        let namespace = node
+            .block()
+            .filter(is_plain_block)
+            .map(|_| Err(ParseError::Metaprogramming));
+        self.visit_in_definition_namespace(namespace, |collector| {
+            ruby_prism::visit_forwarding_super_node(collector, node)
+        });
+    }
+
+    visit_constant_assignments!(except_writes);
+
+    fn visit_constant_write_node(&mut self, node: &ConstantWriteNode<'pr>) {
+        let name = constant_name(&node.name());
+        self.define_constant(Ok(name.clone()), &node.location());
+        self.visit_assigned_value(Ok(name), &node.value());
+    }
+
+    fn visit_constant_path_write_node(
+        &mut self,
+        node: &ConstantPathWriteNode<'pr>,
+    ) {
+        let target = node.target();
+        self.define_constant(
+            fetch_const_path_name(target.parent(), target.name()),
+            &node.location(),
+        );
+        self.visit_assigned_value(
+            packwerk_const_path_name(target.parent(), target.name()),
+            &node.value(),
+        );
+    }
+
+    fn visit_module_node(&mut self, node: &ModuleNode<'pr>) {
+        // A module whose name isn't a constant, as `module self::Foo`, or one
+        // in a file that doesn't parse
+        let Ok(namespace) = fetch_const_name(&node.constant_path()) else {
+            return;
+        };
+        let location = loc_to_range(
+            &node.constant_path().location(),
+            &self.line_col_lookup,
+        );
+
+        let definition = get_definition_from(
+            &namespace,
+            &self.current_namespaces,
+            &location,
+        );
+
+        let namespace_path = self.current_namespaces.to_owned();
+        self.definitions.push(definition);
+
+        // Packwerk also considers a definition to be a "reference"
+        if let Some(name) = self.definition_reference_name(&namespace) {
+            self.references.push(UnresolvedReference {
+                name,
+                namespace_path,
+                location,
+            });
+        }
+
+        // Note – is there a way to use lifetime specifiers to get rid of this and
+        // just keep current namespaces as a vector of string references or something else
+        // more efficient?
+        self.definition_namespaces.push(Ok(namespace.clone()));
+        self.current_namespaces.push(namespace);
+
+        if let Some(inner) = node.body() {
+            self.visit(&inner);
+        }
+
+        self.current_namespaces.pop();
+        self.definition_namespaces.pop();
+    }
+
+    fn visit_constant_read_node(&mut self, node: &ConstantReadNode<'pr>) {
+        self.reference_constant(
+            Ok(constant_name(&node.name())),
+            &node.location(),
+        );
+    }
+
+    // Not visiting the parent: `Foo::Bar` is one reference, and in
+    // `foo(Bar)::Baz`, neither constant is one
+    fn visit_constant_path_node(&mut self, node: &ConstantPathNode<'pr>) {
+        self.reference_constant(
+            fetch_const_path_name(node.parent(), node.name()),
+            &node.location(),
+        );
     }
 }
 
@@ -213,31 +411,35 @@ pub(crate) fn process_from_contents(
     path: &Path,
     configuration: &Configuration,
 ) -> ProcessedFile {
-    let options = ParserOptions {
-        buffer_name: "".to_string(),
-        ..Default::default()
-    };
+    // Rails runs a Builder template, as it does an ERB one, as a method body
+    let template = path.extension().is_some_and(|ext| ext == "builder");
+    process(contents, path, configuration, template)
+}
 
+/// For the Ruby that pks makes from an ERB template
+pub(crate) fn process_from_template_contents(
+    contents: String,
+    path: &Path,
+    configuration: &Configuration,
+) -> ProcessedFile {
+    process(contents, path, configuration, true)
+}
+
+fn process(
+    contents: String,
+    path: &Path,
+    configuration: &Configuration,
+    template: bool,
+) -> ProcessedFile {
     let lookup = LineColLookup::new(&contents);
-    let parser = Parser::new(contents.clone(), options);
-    let parse_result = parser.do_parse();
-
-    let ast_option: Option<Box<Node>> = parse_result.ast;
-
-    let ast = match ast_option {
-        Some(some_ast) => some_ast,
-        None => {
-            return ProcessedFile {
-                absolute_path: path.to_owned(),
-                unresolved_references: vec![],
-                definitions: vec![],
-            }
-        }
-    };
+    let parse_result = ruby_prism::parse(contents.as_bytes());
+    let syntax_error =
+        first_syntax_error(parse_result.errors(), &lookup, template);
 
     let mut collector = ReferenceCollector {
         references: vec![],
         current_namespaces: vec![],
+        definition_namespaces: vec![],
         definitions: vec![],
         line_col_lookup: lookup,
         in_superclass: false,
@@ -245,7 +447,7 @@ pub(crate) fn process_from_contents(
         custom_associations: configuration.custom_associations.clone(),
     };
 
-    collector.visit(&ast);
+    collector.visit(&parse_result.node());
 
     let mut definition_to_location_map: HashMap<String, Range> = HashMap::new();
 
@@ -283,10 +485,8 @@ pub(crate) fn process_from_contents(
             let possible_constants =
                 possible_fully_qualified_constants(&namespace_path, &r.name);
             for constant_name in possible_constants {
-                if let Some(location) = definition_to_location_map
-                    .get(&constant_name)
-                    .or(definition_to_location_map
-                        .get(&format!("::{}", constant_name)))
+                if let Some(location) =
+                    definition_to_location_map.get(&constant_name)
                 {
                     let reference_is_definition = location.start_row
                         == r.location.start_row
@@ -311,5 +511,7 @@ pub(crate) fn process_from_contents(
         absolute_path,
         unresolved_references,
         definitions,
+        syntax_error,
+        ..ProcessedFile::default()
     }
 }

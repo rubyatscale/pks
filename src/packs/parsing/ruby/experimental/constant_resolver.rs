@@ -7,7 +7,7 @@ use std::{
 
 use crate::packs::{
     constant_resolver::{ConstantDefinition, ConstantResolver},
-    parsing::ruby::namespace_calculator::combine_namespace_with_constant_name,
+    parsing::ruby::namespace_calculator::nest_constant_name,
 };
 
 #[derive(Default, Debug)]
@@ -36,7 +36,24 @@ impl ConstantResolver for ExperimentalConstantResolver {
                 (namespace_path, fully_or_partially_qualified_constant)
             };
 
-        Some(self.resolve_traversing_namespace_path(const_name, namespace_path))
+        let definitions =
+            self.resolve_traversing_namespace_path(const_name, namespace_path);
+        if !definitions.is_empty() {
+            return Some(definitions);
+        }
+        // Then, as the top level's constants are `Object`'s, those of its
+        // ancestors, as `BasicObject::Foo` for `Foo`, from anywhere
+        let top_level = nest_constant_name(&[], const_name);
+        for ancestor in ["::Kernel", "::BasicObject"] {
+            let definitions = self.constant_for_fully_qualified_name(&format!(
+                "{}{}",
+                ancestor, top_level
+            ));
+            if !definitions.is_empty() {
+                return Some(definitions);
+            }
+        }
+        Some(vec![])
     }
 
     fn fully_qualified_constant_name_to_constant_definition_map(
@@ -126,17 +143,19 @@ impl ExperimentalConstantResolver {
     // ::Foo::Boo
     // ::Boo
     //
+    // A namespace written from the top level starts the name again, so in
+    // `module Foo; class ::Bar`, the path is ['Foo', '::Bar'], and `Boo` could
+    // be ::Bar::Boo, ::Foo::Boo or ::Boo, the order of `Module.nesting`.
+    //
     // We need to check each of these possibilities in order, and return the first one that exists
-    // If none of them exist, return None
+    // If none of them exist, return no definitions
     fn resolve_traversing_namespace_path<'a>(
         &'a self,
         const_name: &'a str,
         current_namespace_path: &'a [&str],
     ) -> Vec<ConstantDefinition> {
-        let fully_qualified_name_guess = combine_namespace_with_constant_name(
-            current_namespace_path,
-            const_name,
-        );
+        let fully_qualified_name_guess =
+            nest_constant_name(current_namespace_path, const_name);
 
         let definitions =
             self.constant_for_fully_qualified_name(&fully_qualified_name_guess);
@@ -169,6 +188,86 @@ impl ExperimentalConstantResolver {
         match ret {
             Some(constant_definitions) => constant_definitions.to_owned(),
             None => vec![],
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resolved_names(
+        constants: &[&str],
+        name: &str,
+        namespace_path: &[&str],
+    ) -> Vec<String> {
+        let constants = constants
+            .iter()
+            .map(|constant| ConstantDefinition {
+                fully_qualified_name: (*constant).to_owned(),
+                absolute_path_of_definition: PathBuf::from("/app/foo.rb"),
+            })
+            .collect();
+        ExperimentalConstantResolver::create(
+            constants,
+            Path::new("/app"),
+            &HashMap::new(),
+        )
+        .resolve(name, namespace_path)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|definition| definition.fully_qualified_name)
+        .collect()
+    }
+
+    #[test]
+    fn resolve_in_a_namespace_from_the_top_level() {
+        // In `module Outer; class ::Foo; end; end`, as Ruby looks them up
+        for (name, resolved) in [("Bar", "::Foo::Bar"), ("Baz", "::Outer::Baz")]
+        {
+            assert_eq!(
+                resolved_names(
+                    &["::Foo::Bar", "::Outer::Baz"],
+                    name,
+                    &["Outer", "::Foo"]
+                ),
+                [resolved],
+                "{}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_through_object() {
+        for (constants, name, resolved) in [
+            (&["::Bar"][..], "Object::Bar", "::Bar"),
+            (&["::Bar"], "::Object::Bar", "::Bar"),
+            (&["::Bar"], "::Object::Object::Bar", "::Bar"),
+            (
+                &["::ObjectSpace::Bar"],
+                "::ObjectSpace::Bar",
+                "::ObjectSpace::Bar",
+            ),
+            // `Object` is looked up as Ruby looks up any constant
+            (
+                &["::Bar", "::CoreExt::Object::Bar"],
+                "Object::Bar",
+                "::CoreExt::Object::Bar",
+            ),
+            (
+                &["::Bar", "::CoreExt::Object::Bar"],
+                "::Object::Bar",
+                "::Bar",
+            ),
+        ] {
+            assert_eq!(
+                resolved_names(constants, name, &["CoreExt"]),
+                [resolved],
+                "{} among {:?}",
+                name,
+                constants
+            );
         }
     }
 }

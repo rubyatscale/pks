@@ -3,7 +3,7 @@ use crate::packs;
 use crate::packs::file_utils::get_absolute_path;
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_derive::Args;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::debug;
 
 use super::logger::install_logger;
@@ -83,6 +83,18 @@ enum Command {
 
     #[clap(about = "Create a new pack")]
     Create { name: String },
+
+    #[clap(
+        about = "Delete a pack and remove references to it from other packs"
+    )]
+    Rm {
+        /// The pack to delete
+        pack: String,
+
+        /// Delete the pack even if other packs may still use its constants
+        #[arg(short, long)]
+        force: bool,
+    },
 
     #[clap(about = "Look for violations in the codebase")]
     Check {
@@ -173,6 +185,19 @@ enum Command {
         about = "List the constants that packs sees and where it sees them (for debugging purposes)"
     )]
     ListDefinitions(ListDefinitionsArgs),
+
+    #[clap(
+        about = "List references between packs as JSON, with any violations they make"
+    )]
+    ListReferences {
+        /// List only references to this pack's constants (can be repeated)
+        #[arg(long, value_name = "PACK")]
+        defining_pack: Vec<String>,
+
+        /// List only references from this pack's files (can be repeated)
+        #[arg(long, value_name = "PACK")]
+        referencing_pack: Vec<String>,
+    },
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
@@ -221,6 +246,12 @@ impl Args {
     }
 }
 
+/// Prism and the walk of its tree recurse, so a few thousand levels of nesting
+/// overflow a thread's default 2 MiB stack, which aborts pks. In a release
+/// build, 16 MiB holds the 10,000 levels after which Prism stops nesting most
+/// constructs.
+const STACK_SIZE: usize = 16 * 1024 * 1024;
+
 pub fn run() -> anyhow::Result<()> {
     let args = Args::parse();
     let absolute_root = args.absolute_project_root().map_err(|e| {
@@ -229,7 +260,21 @@ pub fn run() -> anyhow::Result<()> {
 
     install_logger(args.debug);
 
-    let mut configuration = packs::configuration::get(&absolute_root)?;
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(STACK_SIZE)
+        .build_global()?;
+
+    // rayon parses a lone file, as `check-contents` has, on the thread that
+    // asks rather than the pool's, so the command gets as much stack too
+    std::thread::Builder::new()
+        .stack_size(STACK_SIZE)
+        .spawn(move || run_command(args, &absolute_root))?
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+}
+
+fn run_command(args: Args, absolute_root: &Path) -> anyhow::Result<()> {
+    let mut configuration = packs::configuration::get(absolute_root)?;
 
     if args.print_files {
         configuration.print_files = true;
@@ -325,6 +370,14 @@ pub fn run() -> anyhow::Result<()> {
             let ambiguous = args.ambiguous;
             packs::list_definitions(&configuration, ambiguous)
         }
+        Command::ListReferences {
+            defining_pack,
+            referencing_pack,
+        } => packs::list_references(
+            &configuration,
+            &defining_pack,
+            &referencing_pack,
+        ),
         Command::ExposeMonkeyPatches(args) => packs::expose_monkey_patches(
             &configuration,
             &args.rubydir,
@@ -334,5 +387,8 @@ pub fn run() -> anyhow::Result<()> {
             packs::lint_package_yml_files(&configuration)
         }
         Command::Create { name } => packs::create(&configuration, name),
+        Command::Rm { pack, force } => {
+            packs::remove(&configuration, pack, force)
+        }
     }
 }

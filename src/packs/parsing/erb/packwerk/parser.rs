@@ -1,11 +1,12 @@
 use crate::packs::file_utils::file_read_contents;
 use crate::packs::{
-    file_utils::convert_erb_to_ruby_without_sourcemaps, parsing::Range,
+    file_utils::convert_erb_to_ruby_without_sourcemaps,
+    parsing::{Range, SyntaxError},
     Configuration, ProcessedFile, UnresolvedReference,
 };
 use std::path::Path;
 
-use crate::packs::parsing::ruby::packwerk::parser::process_from_contents as process_from_ruby_contents;
+use crate::packs::parsing::ruby::packwerk::parser::process_from_template_contents;
 
 pub(crate) fn process_from_path(
     path: &Path,
@@ -22,7 +23,7 @@ pub(crate) fn process_from_contents(
 ) -> ProcessedFile {
     let ruby_contents = convert_erb_to_ruby_without_sourcemaps(contents);
     let processed_file =
-        process_from_ruby_contents(ruby_contents, path, configuration);
+        process_from_template_contents(ruby_contents, path, configuration);
     let references = processed_file.unresolved_references;
     // let references_without_range = references
     let references_without_range = references
@@ -40,5 +41,10 @@ pub(crate) fn process_from_contents(
         absolute_path: path.to_path_buf(),
         unresolved_references: references_without_range,
         definitions: vec![],
+        syntax_error: processed_file.syntax_error.map(|error| SyntaxError {
+            line: None,
+            ..error
+        }),
+        ..ProcessedFile::default()
     }
 }

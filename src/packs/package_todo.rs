@@ -1,3 +1,4 @@
+use anyhow::Context;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -135,7 +136,7 @@ pub fn write_violations_to_disk(
     configuration: &Configuration,
     violations: HashSet<Violation>,
     recorded_violations: &HashSet<ViolationIdentifier>,
-) {
+) -> anyhow::Result<()> {
     debug!("Starting writing violations to disk");
     // First we need to group the violations by the responsible pack, which today is always the referencing pack
     // Later if we change where a violation shows up, we should delegate to the checker
@@ -168,7 +169,7 @@ pub fn write_violations_to_disk(
         package_todos_for_pack_name(violations_by_responsible_pack);
 
     let all_packs = &configuration.pack_set.packs;
-    all_packs.par_iter().for_each(|p| {
+    all_packs.par_iter().try_for_each(|p| {
         let package_todo = package_todos_by_pack_name.get(&p.name);
         match package_todo {
             Some(package_todo) => write_package_todo_to_disk(
@@ -178,9 +179,10 @@ pub fn write_violations_to_disk(
             ),
             None => delete_package_todo_from_disk(p),
         }
-    });
+    })?;
 
     debug!("Finished writing violations to disk");
+    Ok(())
 }
 
 fn serialize_package_todo(
@@ -197,20 +199,16 @@ fn serialize_package_todo(
     header + &package_todo_yml
 }
 
-fn write_package_todo_to_disk(
+pub(crate) fn write_package_todo_to_disk(
     responsible_pack: &Pack,
     package_todo: &PackageTodo,
     packs_first_mode: bool,
-) {
+) -> anyhow::Result<()> {
     let package_todo_yml_absolute_filepath = responsible_pack
         .yml
         .parent()
         .unwrap()
         .join("package_todo.yml");
-
-    if !package_todo_yml_absolute_filepath.exists() {
-        std::fs::File::create(&package_todo_yml_absolute_filepath).unwrap();
-    }
 
     let package_todo_yml = serialize_package_todo(
         &responsible_pack.name,
@@ -218,11 +216,18 @@ fn write_package_todo_to_disk(
         packs_first_mode,
     );
 
-    std::fs::write(package_todo_yml_absolute_filepath, package_todo_yml)
-        .unwrap();
+    std::fs::write(&package_todo_yml_absolute_filepath, package_todo_yml)
+        .with_context(|| {
+            format!(
+                "Failed to write {}",
+                package_todo_yml_absolute_filepath.display()
+            )
+        })
 }
 
-fn delete_package_todo_from_disk(responsible_pack: &Pack) {
+pub(crate) fn delete_package_todo_from_disk(
+    responsible_pack: &Pack,
+) -> anyhow::Result<()> {
     let package_todo_yml_absolute_filepath = responsible_pack
         .yml
         .parent()
@@ -230,9 +235,15 @@ fn delete_package_todo_from_disk(responsible_pack: &Pack) {
         .join("package_todo.yml");
 
     if package_todo_yml_absolute_filepath.exists() {
-        // Delete package_todo_yml_absolute_filepath
-        std::fs::remove_file(package_todo_yml_absolute_filepath).unwrap();
+        std::fs::remove_file(&package_todo_yml_absolute_filepath)
+            .with_context(|| {
+                format!(
+                    "Failed to delete {}",
+                    package_todo_yml_absolute_filepath.display()
+                )
+            })?;
     }
+    Ok(())
 }
 
 fn header(responsible_pack_name: &String, packs_first_mode: bool) -> String {

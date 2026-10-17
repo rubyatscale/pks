@@ -1,7 +1,8 @@
+use dua_core::{DirectoryId, Entry, Options, Order};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use jwalk::WalkDirGeneric;
 use std::{
     collections::{HashMap, HashSet},
+    ffi::OsStr,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -17,15 +18,39 @@ pub struct WalkDirectoryResult {
     pub owning_package_yml_for_file: HashMap<PathBuf, PathBuf>,
 }
 
-#[derive(Debug, Default, Clone)]
-struct ProcessReadDirState {
-    current_package_yml: PathBuf,
+/// packwerk's globs don't match a name that starts with a dot
+fn is_hidden(file_name: &OsStr) -> bool {
+    file_name.to_str().is_some_and(|name| name.starts_with('.'))
 }
 
-impl jwalk::ClientState for ProcessReadDirState {
-    type ReadDirState = ProcessReadDirState;
+/// A directory the walk found, by `DirectoryId::index`
+struct Directory {
+    id: usize,
+    parent: Option<usize>,
+    depth: usize,
+}
 
-    type DirEntryState = ProcessReadDirState;
+/// The package.yml the files in each directory belong to: the directory's
+/// own, or else its parent's. The walk can yield a directory before its parent.
+fn package_ymls_of_directories(
+    mut directories: Vec<Directory>,
+    package_ymls_in_directories: &HashMap<usize, PathBuf>,
+) -> HashMap<usize, PathBuf> {
+    // By depth, so each directory's parent has its package.yml first
+    directories.sort_unstable_by_key(|directory| directory.depth);
+    let mut package_ymls: HashMap<usize, PathBuf> =
+        HashMap::with_capacity(directories.len());
+    for directory in directories {
+        let package_yml = match package_ymls_in_directories.get(&directory.id) {
+            Some(package_yml) => package_yml.clone(),
+            None => match directory.parent {
+                Some(parent) => package_ymls[&parent].clone(),
+                None => PathBuf::from("package.yml"),
+            },
+        };
+        package_ymls.insert(directory.id, package_yml);
+    }
+    package_ymls
 }
 
 /// Locates the global gitignore file from git config (`core.excludesFile`).
@@ -90,20 +115,18 @@ pub fn build_gitignore_matcher(
     Ok(builder.build()?)
 }
 
-// We use jwalk to walk directories in parallel and compare them to the `include` and `exclude` patterns
+// We use dua-core to walk directories in parallel and compare them to the `include` and `exclude` patterns
 // specified in the `RawConfiguration`
-// https://docs.rs/jwalk/0.8.1/jwalk/struct.WalkDirGeneric.html#method.process_read_dir
+// https://docs.rs/dua-core/4.1.0/dua_core/fn.walk.html
 // We only walk the directory once and pull all of the information we need from it,
 // which is faster than walking the directory multiple times.
 // Likely, we can organize this better by moving each piece of logic into its own function so this function
 // allows for a sort of "visitor pattern" for different things that need to walk the directory.
 //
 // Note: `ignore::WalkBuilder` (used by ripgrep) handles gitignore natively and supports
-// parallel traversal via `build_parallel()`. We keep jwalk here because its
-// `ProcessReadDirState` mechanism lets us propagate `current_package_yml` state from parent
-// to child directories in a single pass. WalkBuilder's visitor pattern has no equivalent
-// hook, so implementing that tracking would require per-file ancestor walks — an O(depth)
-// regression for large repos.
+// parallel traversal via `build_parallel()`. We use dua-core here because each entry it
+// yields names the directory it's in by id, so once the walk is done each file gets its
+// directory's package.yml without walking its ancestors.
 pub(crate) fn walk_directory(
     absolute_root: PathBuf,
     raw: &RawConfiguration,
@@ -112,8 +135,6 @@ pub(crate) fn walk_directory(
 
     let mut included_files: HashSet<PathBuf> = HashSet::new();
     let mut included_packs: HashSet<Pack> = HashSet::new();
-    let mut owning_package_yml_for_file: HashMap<PathBuf, PathBuf> =
-        HashMap::new();
 
     // Create this vector outside of the closure to avoid reallocating it
     let default_excluded_dirs = [
@@ -161,73 +182,61 @@ pub(crate) fn walk_directory(
     // TODO: Pull directory walker into separate module. Allow it to be called with implementations of a trait
     // so separate concerns can each be in their own place.
     //
-    // WalkDirGeneric allows you to customize the directory walk, such as skipping directories,
+    // The walk asks before it reads each directory, which lets us skip directories,
     // which we do as a performance optimization.
     //
     // Specifically – if an exclude glob matches an entire directory, we don't need to continue to
     // explore it. For example, instead of asking every file in `vendor/bundle/**/` if it should be excluded,
     // we'll save a lot of time by just skipping the entire directory.
-    //
-    // For more information, check out the docs: https://docs.rs/jwalk/0.8.1/jwalk/#extended-example
-    let current_package_yml = PathBuf::from("package.yml");
+    let read_directory = move |entry: &Entry| {
+        if entry.depth == 0 {
+            return true;
+        }
+        if is_hidden(&entry.file_name) {
+            return false;
+        }
 
-    let walk_dir = WalkDirGeneric::<ProcessReadDirState>::new(&absolute_root)
-        .follow_links(true)
-        .root_read_dir_state(ProcessReadDirState {
-            current_package_yml,
-        })
-        .process_read_dir(
-            move |_depth, absolute_dirname, read_dir_state, children| {
-                // We need to let the compiler know that we are using a reference and not the value itself.
-                // We need to then clone the Arc to get a new reference, which is a new pointer to the value/data
-                // (with an increase to the reference count).
-                let cloned_excluded_dirs = excluded_dirs_ref.clone();
-                let cloned_absolute_root = absolute_root_ref.clone();
-                let cloned_gitignore = gitignore_ref.clone();
-                let package_yml = absolute_dirname.join("package.yml");
+        let absolute_dirname = entry.path();
+        // dua-core's workers don't catch a panic, so one here would hang pks
+        let Ok(relative_path) =
+            absolute_dirname.strip_prefix(absolute_root_ref.as_ref())
+        else {
+            return false;
+        };
 
-                // Even if the parent has set this on children, the existence of a new
-                // package.yml file should override it.
-                if package_yml.exists() {
-                    read_dir_state.current_package_yml = package_yml;
-                }
+        // Check gitignore for directories (optimization: prune ignored directory trees early)
+        // Files are checked separately in the main file processing loop below
+        if let Some(gitignore) = gitignore_ref.as_ref() {
+            if gitignore.matched(relative_path, true).is_ignore() {
+                return false;
+            }
+        }
 
-                children.iter_mut().for_each(|child_dir_entry_result| {
-                    if let Ok(child_dir_entry) = child_dir_entry_result {
-                        let child_absolute_dirname = child_dir_entry.path();
-                        child_dir_entry
-                            .client_state
-                            .current_package_yml
-                            .clone_from(&read_dir_state.current_package_yml);
+        !excluded_dirs_ref.is_match(relative_path)
+    };
 
-                        let relative_path = child_absolute_dirname
-                            .strip_prefix(cloned_absolute_root.as_ref())
-                            .unwrap();
+    let walk = dua_core::walk(
+        &absolute_root,
+        // As many threads as rayon's, so RAYON_NUM_THREADS limits the walk too
+        rayon::current_num_threads(),
+        Order::Completion,
+        // With dua-core's default of 2, the workers stop each time this loop
+        // parses a package.yml (https://github.com/Byron/dua-cli/pull/413)
+        Options::default()
+            .skip_metadata()
+            .queued_batches_per_worker(128),
+        read_directory,
+    );
 
-                        // Check gitignore for directories only (optimization: prune ignored directory trees early)
-                        // Files are checked separately in the main file processing loop below
-                        if let Some(gitignore) = cloned_gitignore.as_ref() {
-                            let is_dir = child_dir_entry.file_type.is_dir();
-                            if is_dir
-                                && gitignore
-                                    .matched(relative_path, true)
-                                    .is_ignore()
-                            {
-                                child_dir_entry.read_children_path = None;
-                            }
-                        }
+    // A file can come before the directory it's in, and before the
+    // package.yml there, so which package.yml each file belongs to is
+    // settled once the walk is done
+    let mut directories: Vec<Directory> = Vec::new();
+    let mut package_ymls_in_directories: HashMap<usize, PathBuf> =
+        HashMap::new();
+    let mut included_files_in_directories: Vec<(PathBuf, usize)> = Vec::new();
 
-                        // Then check explicit exclusions
-                        if cloned_excluded_dirs.as_ref().is_match(relative_path)
-                        {
-                            child_dir_entry.read_children_path = None;
-                        }
-                    }
-                });
-            },
-        );
-
-    for entry in walk_dir {
+    for entry in walk {
         // I was using this to explore what directories were being walked to potentially
         // find performance improvements.
         // Write the entry out to a log file:
@@ -239,21 +248,44 @@ pub(crate) fn walk_directory(
         //     .unwrap();
         // writeln!(file, "{:?}", entry).unwrap();
 
-        let unwrapped_entry = entry;
-        if let Err(_e) = unwrapped_entry {
-            // Encountered an invalid symlink. Being consistent with packwerk, which swallows this error and continues
+        let Ok(entry) = entry else {
+            // Couldn't read a directory or entry. Being consistent with packwerk, which swallows this error and continues
+            continue;
+        };
+
+        // Every directory, hidden or not, so that any file's directory has a
+        // package.yml to look up
+        let parent = entry.parent_directory_id.map(DirectoryId::index);
+        if let Some(id) = entry.directory_id {
+            directories.push(Directory {
+                id: id.index(),
+                parent,
+                depth: entry.depth,
+            });
             continue;
         }
-        let unwrapped_entry = unwrapped_entry.unwrap();
-
-        // Note that we could also get the dir from absolute_path.is_dir()
-        // However, this data appears to be cached on the FileType struct, so we'll use that instead,
-        // which is much faster!
-        if unwrapped_entry.file_type.is_dir() {
+        if is_hidden(&entry.file_name) {
             continue;
         }
 
-        let absolute_path = unwrapped_entry.path();
+        let absolute_path = entry.path();
+
+        // The walk doesn't follow symlinks, and packwerk's globs don't
+        // descend into a symlinked directory either. A symlink to a file
+        // counts as the file.
+        if entry.file_type.is_symlink() && !absolute_path.is_file() {
+            continue;
+        }
+
+        // Only the root isn't in a directory, and only when it's a file
+        let Some(directory) = parent else {
+            continue;
+        };
+        let is_package_yml = entry.file_name == "package.yml";
+        if is_package_yml {
+            package_ymls_in_directories
+                .insert(directory, absolute_path.clone());
+        }
 
         let relative_path = absolute_path
             .strip_prefix(&absolute_root)
@@ -267,10 +299,7 @@ pub(crate) fn walk_directory(
             }
         }
 
-        let current_package_yml =
-            &unwrapped_entry.client_state.current_package_yml;
-
-        if &absolute_path == current_package_yml
+        if is_package_yml
             // Ideally, we don't need the second part of this conditional, but it's here
             // because there is a bug where the root pack doesn't match package_paths.
             // We know we always want the root pack to be registered, since it's the catch-all pack for
@@ -286,8 +315,7 @@ pub(crate) fn walk_directory(
         if includes_set.is_match(&relative_path) {
             if !excludes_set.is_match(&relative_path) {
                 included_files.insert(absolute_path.clone());
-                owning_package_yml_for_file
-                    .insert(absolute_path, current_package_yml.clone());
+                included_files_in_directories.push((absolute_path, directory));
             } else {
                 // println!("file excluded: {}", relative_path.display())
             }
@@ -300,6 +328,15 @@ pub(crate) fn walk_directory(
         }
     }
 
+    let package_ymls =
+        package_ymls_of_directories(directories, &package_ymls_in_directories);
+    let owning_package_yml_for_file = included_files_in_directories
+        .into_iter()
+        .map(|(absolute_path, directory)| {
+            (absolute_path, package_ymls[&directory].clone())
+        })
+        .collect();
+
     debug!("Finished directory walk");
 
     Ok(WalkDirectoryResult {
@@ -311,13 +348,53 @@ pub(crate) fn walk_directory(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashMap, path::PathBuf};
 
     use crate::packs::{
         raw_configuration::RawConfiguration, walk_directory::walk_directory,
     };
 
-    use super::{build_gitignore_matcher, get_global_gitignore};
+    use super::{
+        build_gitignore_matcher, get_global_gitignore,
+        package_ymls_of_directories, Directory,
+    };
+
+    #[test]
+    fn test_package_ymls_of_directories_yielded_before_their_parents() {
+        // packs/a and packs/a/b/c have a package.yml, but the root and
+        // packs/a/b don't
+        let directories = [(4, 3), (3, 2), (2, 1), (1, 0)]
+            .into_iter()
+            .map(|(id, parent)| Directory {
+                id,
+                parent: Some(parent),
+                depth: id,
+            })
+            .chain([Directory {
+                id: 0,
+                parent: None,
+                depth: 0,
+            }])
+            .collect();
+        let package_ymls_in_directories = HashMap::from([
+            (2, PathBuf::from("packs/a/package.yml")),
+            (4, PathBuf::from("packs/a/b/c/package.yml")),
+        ]);
+
+        assert_eq!(
+            package_ymls_of_directories(
+                directories,
+                &package_ymls_in_directories
+            ),
+            HashMap::from([
+                (0, PathBuf::from("package.yml")),
+                (1, PathBuf::from("package.yml")),
+                (2, PathBuf::from("packs/a/package.yml")),
+                (3, PathBuf::from("packs/a/package.yml")),
+                (4, PathBuf::from("packs/a/b/c/package.yml")),
+            ])
+        );
+    }
 
     #[test]
     fn test_walk_directory() -> anyhow::Result<()> {

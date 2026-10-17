@@ -23,3 +23,34 @@ fn test_expose_monkey_patches() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_expose_monkey_patches_warns_only_about_the_apps_syntax_errors(
+) -> Result<(), Box<dyn Error>> {
+    let fixture = common::Fixture::new("app_with_monkey_patches");
+    // Ruby's and gems' sources aren't the app's to fix, so they don't warn
+    let broken = "class Broken\n  def a(\nend\n";
+    std::fs::write(fixture.path("rubydir_stub/broken.rb"), broken)?;
+    std::fs::write(fixture.path("gemdir_stub/rails/broken.rb"), broken)?;
+    std::fs::write(fixture.path("app/services/broken.rb"), broken)?;
+
+    let rubydir = fixture.path("rubydir_stub");
+    let gemdir = fixture.path("gemdir_stub");
+    common::pks(
+        &fixture,
+        &[
+            "--experimental-parser",
+            "expose-monkey-patches",
+            &format!("--rubydir={}", rubydir.display()),
+            &format!("--gemdir={}", gemdir.display()),
+        ],
+    )
+    .success()
+    .stderr(
+        "Warning: `app/services/broken.rb` has a syntax error at line 3 \
+         (unexpected 'end'; expected a `)` to close the parameters), so pks \
+         may have missed references in it.\n",
+    );
+
+    Ok(())
+}

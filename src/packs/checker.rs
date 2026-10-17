@@ -452,7 +452,7 @@ pub(crate) fn update(configuration: &Configuration) -> anyhow::Result<()> {
         configuration,
         violations,
         recorded_violations,
-    );
+    )?;
     println!("Successfully updated package_todo.yml files!");
 
     Ok(())
@@ -570,7 +570,7 @@ fn get_all_violations(
     violations
 }
 
-fn get_checkers(
+pub(crate) fn get_checkers(
     configuration: &Configuration,
 ) -> Vec<Box<dyn CheckerInterface + Send + Sync>> {
     vec![

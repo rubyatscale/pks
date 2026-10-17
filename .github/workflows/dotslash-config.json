@@ -7,11 +7,6 @@
           "path": "pks-aarch64-apple-darwin/pks",
           "format": "tar.xz"
         },
-        "macos-x86_64": {
-          "name": "pks-x86_64-apple-darwin.tar.xz",
-          "path": "pks-x86_64-apple-darwin/pks",
-          "format": "tar.xz"
-        },
         "linux-aarch64": {
           "name": "pks-aarch64-unknown-linux-gnu.tar.xz",
           "path": "pks-aarch64-unknown-linux-gnu/pks",

@@ -1,3 +1,5 @@
+use assert_cmd::{assert::Assert, cargo::cargo_bin_cmd};
+use jsonschema::Validator;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -60,6 +62,39 @@ impl Fixture {
     pub fn path(&self, relative: &str) -> PathBuf {
         self.root.join(relative)
     }
+}
+
+/// Runs `pks` against the fixture. `RUST_LOG` would make pks log to stderr,
+/// which tests often expect to be empty, so it is removed.
+#[allow(dead_code)]
+pub fn pks(fixture: &Fixture, args: &[&str]) -> Assert {
+    cargo_bin_cmd!("pks")
+        .env_remove("RUST_LOG")
+        .arg("--project-root")
+        .arg(fixture.root())
+        .args(args)
+        .assert()
+}
+
+/// Panics, listing every error, unless `output` matches the schema
+#[allow(dead_code)]
+pub fn validate_schema(schema_path: &str, output: &serde_json::Value) {
+    let schema = fs::read_to_string(schema_path)
+        .unwrap_or_else(|e| panic!("Could not read {}: {}", schema_path, e));
+    let schema: serde_json::Value =
+        serde_json::from_str(&schema).expect("Schema should be valid JSON");
+    let validator =
+        Validator::new(&schema).expect("Schema should be valid JSON Schema");
+    let errors: Vec<String> = validator
+        .iter_errors(output)
+        .map(|e| format!("  - {}", e))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "JSON output does not match {}:\n{}",
+        schema_path,
+        errors.join("\n")
+    );
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {

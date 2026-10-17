@@ -18,6 +18,8 @@ pub(crate) mod monkey_patch_detection;
 pub(crate) mod pack;
 pub(crate) mod parsing;
 pub(crate) mod raw_configuration;
+pub(crate) mod reference_lister;
+pub(crate) mod remover;
 pub(crate) mod template;
 pub(crate) mod text;
 pub mod walk_directory;
@@ -37,9 +39,12 @@ pub(crate) use self::checker::Violation;
 use self::creator::CreateResult;
 pub(crate) use self::pack_set::PackSet;
 pub(crate) use self::parsing::process_files_with_cache;
-pub(crate) use self::parsing::ruby::experimental::get_experimental_constant_resolver;
+pub(crate) use self::parsing::ruby::experimental::process_files as process_files_experimental;
 pub(crate) use self::parsing::ruby::zeitwerk::get_zeitwerk_constant_resolver;
+pub(crate) use self::parsing::Inclusion;
 pub(crate) use self::parsing::ParsedDefinition;
+pub(crate) use self::parsing::SyntaxError;
+pub(crate) use self::parsing::UnresolvedAssociation;
 pub(crate) use self::parsing::UnresolvedReference;
 use anyhow::bail;
 use cli::ColorChoice;
@@ -73,6 +78,22 @@ pub fn create(
         }
     }
     Ok(())
+}
+
+pub fn remove(
+    configuration: &Configuration,
+    name: String,
+    force: bool,
+) -> anyhow::Result<()> {
+    remover::remove(configuration, &name, force)
+}
+
+pub fn list_references(
+    configuration: &Configuration,
+    defining_packs: &[String],
+    referencing_packs: &[String],
+) -> anyhow::Result<()> {
+    reference_lister::list(configuration, defining_packs, referencing_packs)
 }
 
 /// Determine whether to use colors based on the color choice
@@ -253,11 +274,31 @@ pub fn delete_cache(configuration: Configuration) {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
 pub struct ProcessedFile {
     pub absolute_path: PathBuf,
     pub unresolved_references: Vec<UnresolvedReference>,
     pub definitions: Vec<ParsedDefinition>,
+    /// With `--experimental-parser`, the associations in a class or module,
+    /// whose references depend on the rest of the app
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub associations: Vec<UnresolvedAssociation>,
+    /// With `--experimental-parser`
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inclusions: Vec<Inclusion>,
+    /// With `--experimental-parser`, whether the file defines a constant
+    /// through `Object` inside a namespace, as `class Object::Bar` in
+    /// `module CoreExt`, which is named for the namespace's own `Object` where
+    /// the app defines one
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub object_in_a_namespace: bool,
+    /// With `--experimental-parser`, the namespaces' own `Object`s that the
+    /// file opens, as `::CoreExt::Object`, whatever they define
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub namespace_objects: Vec<String>,
+    /// Never cached, since a file with a syntax error isn't
+    #[serde(skip)]
+    pub syntax_error: Option<SyntaxError>,
 }
 
 #[derive(
@@ -273,17 +314,11 @@ pub(crate) fn list_definitions(
     ambiguous: bool,
 ) -> anyhow::Result<()> {
     let constant_resolver = if configuration.experimental_parser {
-        let processed_files: Vec<ProcessedFile> = process_files_with_cache(
+        process_files_experimental(
             &configuration.included_files,
-            configuration.get_cache(),
             configuration,
-        )?;
-
-        get_experimental_constant_resolver(
-            &configuration.absolute_root,
-            &processed_files,
-            &configuration.ignored_definitions,
-        )
+        )?
+        .1
     } else {
         if ambiguous {
             bail!("Ambiguous mode is not supported for the Zeitwerk parser");
