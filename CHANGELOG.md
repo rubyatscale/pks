@@ -142,6 +142,21 @@ So `pks check` may report a violation it didn't, or no longer report one, and a
 `package_todo.yml` entry for one it no longer reports is stale until you run
 `pks update`.
 
+#### `check-unused-dependencies --auto-correct` keeps comments in `package.yml`
+
+Auto-correct used to rewrite every `package.yml` it touched from scratch, which
+deleted all of its comments and reordered its keys. It now removes the unused
+entries from the `dependencies:` list and leaves the rest of the file as it
+was, line endings included. A comment covers the entries below it, up to the
+next blank line or comment, and is removed only when all of those entries are.
+A commented-out entry such as `# - packs/a` is always kept, along with any
+comment directly above it. If no dependencies remain, the whole `dependencies:`
+block is removed, including the comments and blank lines inside it.
+
+If a list is written in a form that cannot be edited this way, such as
+`dependencies: [packs/a, packs/b]`, the file is rewritten as before and a
+warning names the file and the dependencies removed.
+
 ## 0.7.0
 
 ### Features
