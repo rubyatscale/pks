@@ -49,7 +49,7 @@ anyhow = { version = "1.0.75", features = [] }                         # for err
 clap = { version = "4.2.1", features = ["derive"] }                    # cli
 clap_derive = "4.2.0"                                                  # cli
 csv = "1.3.0"                                                          # csv de/serialize
-dua-core = "4.2.0"                                                     # for walking the file tree
+dua-core = "5.0.1"                                                     # for walking the file tree
 itertools = "0.15.0"                                                   # tools for iterating over iterable things
 path-clean = "1.0.1"                                                   # Pathname#cleaname in Ruby
 rayon = "1.10.0"                                                       # for parallel iteration
@@ -61,7 +61,7 @@ tracing = "0.1.37"                                                     # logging
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] } # logging
 glob = "0.3.1"                                                         # globbing
 globset = "0.4"                                                        # globbing
-ruby-prism = "1.9.0"                                                   # ruby parser
+ruby-prism = "2.0.0"                                                   # ruby parser
 md5 = "0.8.1"                                                          # md5 hashing to take and compare md5 digests of file contents to ensure cache validity
 line-col = "0.2.1"                                                     # for creating source maps of violations
 ruby_inflector = '0.0.10'                                               # for inflecting strings, e.g. turning `has_many :companies` into `Company`
@@ -72,7 +72,7 @@ ignore = "0.4"     # for gitignore pattern matching
 
 [dev-dependencies]
 assert_cmd = "2.1.1"        # testing CLI
-jsonschema = "0.58"         # JSON schema validation
+jsonschema = "0.60"         # JSON schema validation
 rusty-hook = "^0.11.2"      # git hooks
 predicates = "3.0.2"        # kind of like rspec assertions
 pretty_assertions = "1.3.0" # Shows a more readable diff when comparing objects
