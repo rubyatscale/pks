@@ -77,6 +77,36 @@ fn test_check_warns_about_an_error_whose_message_isnt_utf_8(
 }
 
 #[test]
+fn test_check_reads_ruby_4_0_syntax() -> Result<(), Box<dyn Error>> {
+    // Prism's default is the syntax of Ruby 4.1, which isn't released yet. It
+    // allows `&nil` and a trailing comma in parameters, and rejects `break` in
+    // an `END` block, where Ruby 4.0 does the reverse.
+    let warnings = [
+        "Warning: `packs/foo/app/services/no_block.rb` has a syntax error at \
+         line 1 (unexpected 'nil'; expected a `)` to close the parameters), \
+         so pks may have missed references in it.",
+        "Warning: `packs/foo/app/services/trailing_comma.rb` has a syntax \
+         error at line 1 (unexpected `,` in parameters), so pks may have \
+         missed references in it.",
+    ];
+    for args in [&[][..], &["--experimental-parser"]] {
+        let fixture = fixture_app()?;
+        let services = fixture.path("packs/foo/app/services");
+        fs::write(services.join("no_block.rb"), "def a(&nil)\nend\n")?;
+        fs::write(services.join("trailing_comma.rb"), "def b(x,)\nend\n")?;
+        fs::write(services.join("at_exit.rb"), "END { break }\n")?;
+
+        // Each file's warning comes as it's parsed, in no set order
+        let stderr = check_stderr(&fixture, args)?;
+        let mut lines: Vec<&str> = stderr.lines().collect();
+        lines.sort();
+        assert_eq!(lines, warnings);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_check_allows_yield_in_templates() -> Result<(), Box<dyn Error>> {
     // Rails runs a template as the body of a method, so `yield` is no error
     for args in [&[][..], &["--experimental-parser"]] {

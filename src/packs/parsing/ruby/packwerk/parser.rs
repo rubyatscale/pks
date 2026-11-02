@@ -8,7 +8,8 @@ use crate::packs::{
                 first_syntax_error, get_constant_assignment_definition,
                 get_definition_from,
                 get_reference_from_active_record_association, is_plain_call,
-                loc_to_range, visit_constant_assignments, ParseError,
+                loc_to_range, parse_options, visit_constant_assignments,
+                ParseError,
             },
         },
         ParsedDefinition, Range, UnresolvedReference,
@@ -432,7 +433,9 @@ fn process(
     template: bool,
 ) -> ProcessedFile {
     let lookup = LineColLookup::new(&contents);
-    let parse_result = ruby_prism::parse(contents.as_bytes());
+    let options = parse_options();
+    let parse_result =
+        ruby_prism::parse_with_options(contents.as_bytes(), &options);
     let syntax_error =
         first_syntax_error(parse_result.errors(), &lookup, template);
 

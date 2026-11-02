@@ -64,7 +64,7 @@ jobs:
   build:
     # dist builds releases on these runners, the ones its plan picks for the
     # targets in dist-workspace.toml, but only when releasing. Prism is C, so
-    # each needs a C compiler and the libclang that bindgen uses.
+    # each needs a C compiler.
     name: Build (${{ matrix.target }})
     strategy:
       fail-fast: false

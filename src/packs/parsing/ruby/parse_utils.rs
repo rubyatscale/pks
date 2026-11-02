@@ -1,9 +1,9 @@
-use std::{cell::Cell, collections::HashSet, sync::Once};
+use std::collections::HashSet;
 
 use line_col::LineColLookup;
 use ruby_prism::{
     CallNode, ConstantId, Diagnostic, Diagnostics, KeywordHashNode, Location,
-    Node,
+    Node, Options, ParseOptions, Version,
 };
 
 use crate::packs::parsing::{
@@ -41,6 +41,13 @@ pub fn get_definition_from(
     }
 }
 
+/// Ruby 4.0's syntax, the newest Ruby's. Prism's own default is the syntax of
+/// Ruby 4.1, which isn't released until December 2026. `CRuby3_5` is 4.0, the
+/// name Ruby 4.0 had before its release.
+pub fn parse_options() -> ParseOptions {
+    Options::default().version(Version::CRuby3_5).build()
+}
+
 /// The first error Prism reports, which is where it lost its way. Errors that
 /// follow from it can sit earlier in the file. A template's `yield` is no
 /// error, since Rails runs a template as the body of a method.
@@ -53,40 +60,21 @@ pub fn first_syntax_error(
         !(template && error_message(error).as_deref() == Some("Invalid yield"))
     });
     error.map(|error| SyntaxError {
-        line: Some(lookup.get(error.location().start_offset()).0),
+        line: Some(lookup.get(error.location().start() as usize).0),
         message: error_message(&error)
             .unwrap_or_else(|| String::from("its message isn't UTF-8")),
     })
 }
 
-/// Some of Prism's messages quote the file, and `Diagnostic::message` panics on
-/// a quote that ends mid-character, as one can when a magic comment names an
-/// encoding other than UTF-8. The crate gives no other way to read a message.
+/// Some of Prism's messages quote the file in its own encoding, so a quote can
+/// end mid-character when a magic comment names an encoding other than UTF-8
 fn error_message(error: &Diagnostic) -> Option<String> {
-    // The default hook would print that panic, which pks recovers from
-    static QUIET_HOOK: Once = Once::new();
-    QUIET_HOOK.call_once(|| {
-        let hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            if !READING_MESSAGE.get() {
-                hook(info);
-            }
-        }));
-    });
-
-    READING_MESSAGE.set(true);
-    let message = std::panic::catch_unwind(|| error.message().to_owned()).ok();
-    READING_MESSAGE.set(false);
-    message
-}
-
-thread_local! {
-    static READING_MESSAGE: Cell<bool> = const { Cell::new(false) };
+    std::str::from_utf8(error.message()).ok().map(str::to_owned)
 }
 
 pub fn loc_to_range(loc: &Location, lookup: &LineColLookup) -> Range {
-    let (start_row, start_col) = lookup.get(loc.start_offset());
-    let (end_row, end_col) = lookup.get(loc.end_offset());
+    let (start_row, start_col) = lookup.get(loc.start() as usize);
+    let (end_row, end_col) = lookup.get(loc.end() as usize);
 
     Range {
         start_row,
@@ -449,40 +437,3 @@ macro_rules! visit_constant_assignments {
     };
 }
 pub(crate) use visit_constant_assignments;
-
-#[cfg(test)]
-mod tests {
-    use std::process::Command;
-
-    use super::error_message;
-
-    const CHILD: &str = "PKS_TEST_PANIC_HOOK_CHILD";
-
-    // The panic hook is the process's, so the test runs in a child of the
-    // test binary
-    #[test]
-    fn test_a_panic_after_a_recovered_one_is_still_printed() {
-        if std::env::var_os(CHILD).is_some() {
-            // Read as Windows-31J, the heredoc's name ends mid-character
-            let parsed = ruby_prism::parse(
-                "# encoding: windows-31j\nx = <<~あ\n".as_bytes(),
-            );
-            let error = parsed.errors().next().expect("a syntax error");
-            assert_eq!(error_message(&error), None);
-            panic!("an unrelated panic");
-        }
-
-        let output = Command::new(std::env::current_exe().unwrap())
-            .args([
-                "test_a_panic_after_a_recovered_one_is_still_printed",
-                "--nocapture",
-            ])
-            .env(CHILD, "1")
-            .output()
-            .unwrap();
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        assert!(stderr.contains("an unrelated panic"), "{stderr}");
-        assert!(!stderr.contains("allows only UTF-8"), "{stderr}");
-    }
-}
